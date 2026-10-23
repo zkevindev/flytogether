@@ -314,6 +314,9 @@ main { padding-top: 12px; }
 .prop-targets p { font-size: 11px; color: #526b7d; line-height: 1.6; }
 .prop-target { min-height: 44px; width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #c2d7df; border-radius: 8px; background: #edf6f7; color: #244d58; text-align: left; font-size: 13px; }
 .voice-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; font-size: 11px; color: #476a66; }
+.auto-voice-setting { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 12px; color: #476a66; cursor: pointer; }
+.auto-voice-setting input { accent-color: #376e58; width: 17px; height: 17px; }
+.voice-connection-error { color: #9c4a3f; font-size: 12px; line-height: 1.6; margin: 10px 0; }
 .voice-examples strong { width: 100%; }
 .voice-examples span { padding: 5px 7px; border-radius: 6px; background: #edf5ef; }
 .dice-modal { width: min(440px,calc(100% - 32px)); padding: 32px 24px 24px; overflow: visible; border: 1px solid #e0e8e7; border-radius: 26px; background: radial-gradient(ellipse at 50% 38%,#fff 0,#eff8f4 72%); color: #284c42; text-align: center; box-shadow: 0 24px 100px #102b3b55; }

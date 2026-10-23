@@ -37,11 +37,19 @@ export class VoiceClient {
     this.onState('connecting');
     try {
       const audio = this.audio = new AudioContext();
-      await audio.resume();
-      if (epoch !== this.epoch) return;
+      // Start an unlock attempt during a click, but don't block the microphone
+      // permission prompt when an automatic connection has no user gesture.
+      void audio.resume().catch(() => {});
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       if (epoch !== this.epoch) { stream.getTracks().forEach(track => track.stop()); return; }
       this.stream = stream;
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('浏览器需要一次点击来启用声音，请点击下方的语音按钮')), 2500);
+        this.cancelConnect = () => { clearTimeout(timeout); reject(new DOMException('语音连接已取消', 'AbortError')); };
+        audio.resume().then(resolve, reject).finally(() => clearTimeout(timeout));
+      });
+      this.cancelConnect = undefined;
+      if (epoch !== this.epoch) return;
       await audio.audioWorklet.addModule('/pcm-capture.js');
       if (epoch !== this.epoch) return;
       this.source = audio.createMediaStreamSource(stream);

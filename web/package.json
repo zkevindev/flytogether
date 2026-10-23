@@ -11,7 +11,9 @@
     "test:voice": "node --test scripts/voice-lifecycle.test.mjs",
     "test:presentation": "node --experimental-strip-types --test scripts/presentation.test.mjs",
     "test:scene": "node --experimental-strip-types --test scripts/scene.test.mjs",
-    "test:scene:browser": "node scripts/scene-browser.mjs"
+    "test:scene:browser": "node scripts/scene-browser.mjs",
+    "test:auto-voice:browser": "node scripts/auto-voice-browser.mjs",
+    "test:voice:realtime": "node scripts/realtime-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

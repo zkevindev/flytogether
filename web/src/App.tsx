@@ -56,6 +56,9 @@ export default function App() {
   const [voiceSaving, setVoiceSaving] = useState(false);
   const [options, setOptions] = useState<Options>(defaults);
   const [voiceState, setVoiceState] = useState('disconnected');
+  const [autoVoice, setAutoVoice] = useState(() => localStorage.getItem('fly-auto-voice') !== 'off');
+  const [autoVoiceError, setAutoVoiceError] = useState('');
+  const autoVoiceAttempt = useRef('');
   const [speech, setSpeech] = useState({ text: '', who: '' });
   const [sound, setSound] = useState(() => localStorage.getItem('fly-sound') !== 'off');
   const voice = useRef<VoiceClient | undefined>(undefined);
@@ -194,13 +197,39 @@ export default function App() {
     catch (error) { setToast(error instanceof Error ? error.message : '开局失败'); }
     finally { locked.current = false; setBusy(false); }
   };
-  const connectVoice = async () => {
-    if (!room || voiceState === 'connecting') return;
+  const connectVoice = useCallback(async () => {
+    const r = roomRef.current;
+    if (!r || r.status !== 'playing') return;
+    autoVoiceAttempt.current = r.id + ':' + r.state.id;
+    setAutoVoiceError('');
     voice.current?.disconnect();
-    const client = new VoiceClient(room.id, setVoiceState, (text, who) => setSpeech({ text, who }), setToast);
+    const client = new VoiceClient(r.id, setVoiceState, (text, who) => setSpeech({ text, who }), message => {
+      setAutoVoiceError(message); setToast(message);
+    });
     voice.current = client;
-    try { await client.connect(); } catch (error) { setToast(error instanceof Error ? error.message : '语音连接失败'); }
+    try { await client.connect(); } catch (error) {
+      if (voice.current !== client) return;
+      const message = error instanceof Error ? error.message : '语音连接失败';
+      setAutoVoiceError(message); setToast(message);
+    }
+  }, []);
+  const changeAutoVoice = (enabled: boolean) => {
+    localStorage.setItem('fly-auto-voice', enabled ? 'on' : 'off');
+    autoVoiceAttempt.current = '';
+    setAutoVoice(enabled); setAutoVoiceError('');
+    if (!enabled) voice.current?.disconnect();
   };
+  useEffect(() => {
+    if (!autoVoice || !config?.voice_configured || room?.status !== 'playing' || room.state.phase === 'finished') {
+      autoVoiceAttempt.current = '';
+      if (room?.state.phase === 'finished') voice.current?.disconnect();
+      return;
+    }
+    const key = room.id + ':' + room.state.id;
+    if (autoVoiceAttempt.current === key) return;
+    autoVoiceAttempt.current = key;
+    void connectVoice();
+  }, [autoVoice, config?.voice_configured, room?.id, room?.state.id, room?.status, room?.state.phase, connectVoice]);
 
   const saveVoiceSettings = async () => {
     if (!room) return;
@@ -214,8 +243,10 @@ export default function App() {
       const next = await api<Room>('/api/rooms/' + room.id + '/voice-settings', settings);
       accept(next);
       localStorage.setItem('fly-voice-settings', JSON.stringify(next.voice_settings));
+      autoVoiceAttempt.current = '';
+      if (autoVoice && next.status === 'playing') void connectVoice();
       setModal(null); setSpeech({ text: '', who: '' });
-      setToast('语音设置已保存，点击开启语音即可使用');
+      setToast(autoVoice ? '语音设置已保存，正在自动待唤醒' : '语音设置已保存，可开启自动语音');
     } catch (error) { setToast(error instanceof Error ? error.message : '语音设置保存失败'); }
     finally { setVoiceSaving(false); }
   };
@@ -278,13 +309,15 @@ export default function App() {
             <section className="voice-panel">
               <div className="voice-heading"><span className="voice-icon"><Waveform size={24} /></span><div><h2>灵矽，陪你一起飞</h2><p>你的家庭游戏搭子</p></div><span className="voice-spark"><Sparkle size={22} weight="duotone" /></span></div>
               <button className="wake-setting" onClick={() => { setVoiceOptions(voiceSettings); setModal('voice'); }} aria-label="编辑语音唤醒设置"><span>{voiceSettings.wake_enabled ? `唤醒词：${voiceSettings.wake_word}` : '自由对话模式'}</span><span>编辑 <GearSix size={13} /></span></button>
+              <label className="auto-voice-setting"><input type="checkbox" checked={autoVoice} onChange={e => changeAutoVoice(e.target.checked)} />自动连接语音，随时呼唤</label>
               <div className="voice-bubble" aria-live="polite">{speech.text ? <><span className="speech-label">{speech.who === 'you' ? '你刚刚说' : '灵矽'}</span>{speech.text}</> : <><span className="bubble-quote">“</span>{voiceSettings.wake_enabled ? <>先叫我“{voiceSettings.wake_word}”，<br />再说：「我要六点」或「好」。</> : <>喊一个点数，或者说「好」，<br />我来掷。</>}</>}</div>
               <div className="voice-status"><span className={'status-dot ' + (voiceState === 'ready' ? 'online' : '')} />{config?.voice_configured ? voiceLabels[effectiveVoice] || '等待连接' : '语音待配置 · 点击玩法已就绪'}</div>
-              {voiceState === 'disconnected' || voiceState === 'connecting' ? <button className="voice-button" disabled={lifecycle !== 'playing' || !!winner || !config?.voice_configured || voiceState === 'connecting'} onClick={() => void connectVoice()}><Microphone size={20} />{lifecycle === 'paused' ? '继续游戏后开启语音' : lifecycle === 'ended' ? '新开一局后开启语音' : lifecycle !== 'playing' ? '开始游戏后开启语音' : voiceState === 'connecting' ? '连接灵矽中…' : config?.voice_configured ? (voiceSettings.wake_enabled ? '开启语音唤醒' : '开启实时语音') : '语音暂未开启'}</button> :
-                <button className={'voice-button ' + (effectiveVoice === 'listening' ? 'listening' : '')} onClick={() => voice.current?.disconnect()}><Microphone size={21} />断开实时语音</button>}
+              {voiceState === 'disconnected' || voiceState === 'connecting' ? <button className="voice-button" disabled={lifecycle !== 'playing' || !!winner || !config?.voice_configured || voiceState === 'connecting'} onClick={() => { changeAutoVoice(true); void connectVoice(); }}><Microphone size={20} />{lifecycle === 'paused' ? '继续游戏后自动待唤醒' : lifecycle === 'ended' ? '新开一局后自动待唤醒' : lifecycle !== 'playing' ? '开始游戏后自动待唤醒' : voiceState === 'connecting' ? '正在准备麦克风…' : config?.voice_configured ? (autoVoiceError ? '点击启用麦克风并重试' : '开启自动语音') : '语音暂未开启'}</button> :
+                <button className={'voice-button ' + (effectiveVoice === 'listening' ? 'listening' : '')} onClick={() => changeAutoVoice(false)}><Microphone size={21} />关闭语音与麦克风</button>}
+              {autoVoiceError && <p className="voice-connection-error" role="alert">{autoVoiceError}</p>}
               {effectiveVoice === 'speaking' && <button className="stop-speech" onClick={() => voice.current?.stopPlayback()}>停止播报</button>}
               {voiceSettings.wake_enabled && voiceState !== 'disconnected' && voiceState !== 'connecting' && effectiveVoice !== 'standby' && <button className="stop-speech" onClick={() => voice.current?.standby()}>回到待唤醒</button>}
-              <div className="voice-examples"><strong>试着跟我说</strong><span>“我要六点”</span><span>“好”</span><span>“撞爸爸”</span><span>“你来走”</span></div><p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : voiceSettings.wake_enabled ? '唤醒后可连续对话 30 秒。轮到你时我会先说一句，回「好」就按那句做；喊点数会马上掷，点数仍是随机的。' : '连接后可以说「我要六点」「好」或「撞爸爸」。'}</p>
+              <div className="voice-examples"><strong>试着跟我说</strong><span>“我要六点”</span><span>“好”</span><span>“撞爸爸”</span><span>“你来走”</span></div><p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : voiceSettings.wake_enabled ? `${autoVoice ? '开始游戏后自动待唤醒' : '开启自动语音后'}，直接说「${voiceSettings.wake_word}」。首次需允许麦克风；待唤醒期间音频会发送给灵矽识别。唤醒后可连续对话 30 秒。` : '开始游戏后自动连接。可以说「我要六点」「好」或「撞爸爸」，点数仍是随机的。'}</p>
             </section>
             <section className="log-panel"><div className="log-heading"><h2>飞行小记</h2><DotsThree size={22} /></div><ol>{state.history.slice(-4).reverse().map((event, i) => <li key={event.id}><span className={'log-dot ' + (i === 0 ? 'latest' : '')} /><p>{event.text}</p></li>)}</ol></section>
           </aside>

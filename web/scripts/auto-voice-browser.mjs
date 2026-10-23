@@ -1,0 +1,96 @@
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+assert.ok(process.env.QA_BASE_URL, 'Set QA_BASE_URL');
+const browser = await chromium.launch({ channel: process.env.QA_BROWSER_CHANNEL || 'chrome', headless: true, args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : [])] });
+try {
+  const context = await browser.newContext({ baseURL: process.env.QA_BASE_URL, permissions: ['microphone'] });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(() => {
+    window.__mic = { calls: 0, tracks: [] };
+    const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async constraints => {
+      window.__mic.calls++;
+      const stream = await original(constraints);
+      window.__mic.tracks.push(...stream.getTracks());
+      return stream;
+    };
+  });
+  let connections = 0, frames = 0, latest;
+  await page.routeWebSocket('**/ws/voice?*', socket => {
+    connections++; latest = socket;
+    socket.onMessage(value => { if (typeof value !== 'string') frames++; });
+    socket.send(JSON.stringify({ type: 'hello' }));
+    socket.send(JSON.stringify({ type: 'wake_state', wake_enabled: true, awake: false }));
+  });
+  await page.goto(process.env.QA_BASE_URL, { waitUntil: 'networkidle' });
+  assert.equal(connections, 0, 'a waiting room must not capture microphone');
+  let room = (await (await page.request.get('/api/session')).json()).room;
+  const options = { names: ['小朋友', '爸爸'], board: 'cross', mode: 'quick', ai: false, props: true, waiting: false };
+  room = await (await page.request.post('/api/rooms/' + room.id + '/matches', { data: options })).json();
+  await page.getByRole('button', { name: '关闭语音与麦克风', exact: true }).waitFor({ state: 'visible' });
+  await page.waitForFunction(() => window.__mic.tracks.some(t => t.readyState === 'live'));
+  await new Promise(resolve => setTimeout(resolve, 150));
+  assert.equal(connections, 1); assert.ok(frames > 0, 'real AudioWorklet must send microphone PCM');
+  console.log('PASS: auto-connect without a voice-button click; microphone + worklet PCM active under default Chrome autoplay policy');
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: '关闭语音与麦克风', exact: true }).waitFor({ state: 'visible' });
+  assert.equal(connections, 2, 'refresh a playing game auto-connects once');
+  await page.getByRole('button', { name: '关闭语音与麦克风', exact: true }).click();
+  await page.waitForFunction(() => window.__mic.tracks.every(t => t.readyState === 'ended'));
+  await page.reload({ waitUntil: 'networkidle' });
+  assert.equal(connections, 2, 'manual off persists through reload');
+  assert.equal(await page.getByRole('checkbox', { name: '自动连接语音，随时呼唤' }).isChecked(), false);
+  await page.getByRole('checkbox', { name: '自动连接语音，随时呼唤' }).check();
+  await page.getByRole('button', { name: '关闭语音与麦克风', exact: true }).waitFor({ state: 'visible' });
+  assert.equal(connections, 3);
+  const command = async action => {
+    room = (await (await page.request.get('/api/session')).json()).room;
+    const response = await page.request.post('/api/rooms/' + room.id + '/commands', { data: { command_id: crypto.randomUUID(), game_id: room.state.id, expected_version: room.state.version, action } });
+    assert.equal(response.status(), 200); room = await response.json();
+  };
+  await command('pause');
+  await page.waitForFunction(() => window.__mic.tracks.every(t => t.readyState === 'ended'));
+  await command('resume');
+  await page.getByRole('button', { name: '关闭语音与麦克风', exact: true }).waitFor({ state: 'visible' });
+  assert.equal(connections, 4);
+  const oldGameID = room.state.id;
+  const fresh = await page.request.post('/api/rooms/' + room.id + '/matches', { data: options });
+  assert.equal(fresh.status(), 200); room = await fresh.json(); assert.notEqual(room.state.id, oldGameID);
+  await page.waitForFunction(id => document.querySelector('.flight-board')?.dataset.gameId === id, room.state.id);
+  await page.getByRole('button', { name: '关闭语音与麦克风', exact: true }).waitFor({ state: 'visible' });
+  await page.waitForFunction(() => window.__mic.tracks.length >= 3 && window.__mic.tracks.slice(0, -1).every(t => t.readyState === 'ended'));
+  assert.equal(connections, 5, 'a new match closes the old capture and connects once');
+  latest.close({ code: 1011, reason: 'QA connection loss' });
+  await page.getByRole('button', { name: '点击启用麦克风并重试', exact: true }).waitFor({ state: 'visible' });
+  await page.waitForFunction(() => window.__mic.tracks.every(t => t.readyState === 'ended'));
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  assert.equal(connections, 5, 'a failed connection must not cause a reconnect storm');
+  await page.getByRole('button', { name: '点击启用麦克风并重试', exact: true }).click();
+  await page.getByRole('button', { name: '关闭语音与麦克风', exact: true }).waitFor({ state: 'visible' });
+  assert.equal(connections, 6);
+  await command('end');
+  await page.waitForFunction(() => window.__mic.tracks.every(t => t.readyState === 'ended'));
+  console.log('PASS: reload, persisted off, toggle on, pause/resume, socket failure cleanup/manual retry, end cleanup');
+  await context.close();
+
+  const deniedContext = await browser.newContext({ baseURL: process.env.QA_BASE_URL });
+  const denied = await deniedContext.newPage();
+  let permissionCalls = 0;
+  await denied.exposeBinding('permissionCalled', () => permissionCalls++);
+  await denied.addInitScript(() => {
+    navigator.mediaDevices.getUserMedia = async () => { await window.permissionCalled(); throw new DOMException('Permission denied', 'NotAllowedError'); };
+  });
+  await denied.goto(process.env.QA_BASE_URL, { waitUntil: 'networkidle' });
+  let deniedRoom = (await (await denied.request.get('/api/session')).json()).room;
+  const created = await denied.request.post('/api/rooms/' + deniedRoom.id + '/matches', { data: options }); assert.equal(created.status(), 200);
+  await denied.getByRole('button', { name: '点击启用麦克风并重试', exact: true }).waitFor({ state: 'visible' });
+  await denied.getByRole('alert').filter({ hasText: '麦克风权限未开启' }).waitFor({ state: 'visible' });
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  assert.equal(permissionCalls, 1, 'permission rejection must not loop');
+  assert.equal(await denied.locator('.roll-button').isEnabled(), true, 'click play stays available');
+  await deniedContext.close();
+  assert.deepEqual(errors, []);
+  console.log('PASS: denied permission clearly explains recovery; no repeat prompt; click play unaffected');
+} finally { await browser.close(); }

@@ -85,3 +85,34 @@ test('host line still plays while waiting for the wake word', async () => {
 test('socket failure after hello releases resources and offers manual reconnect',async()=>{
  const {client,ws,states,errors}=await connected();ws.onerror();assert.equal(track.stopped,true);assert.equal(states.at(-1),'disconnected');assert.match(errors[0],/重新开启/);client.disconnect();
 });
+
+test('automatic connect requests the microphone even while audio autoplay is suspended, and cancel releases it',async()=>{
+ const original=AudioMock.prototype.resume;
+ AudioMock.prototype.resume=()=>new Promise(()=>{});
+ try {
+  let requested=false;const t=setup(async()=>{requested=true;return {getTracks:()=>[track]};});
+  const pending=t.client.connect();await tick();
+  assert.equal(requested,true);assert.equal(sockets.length,0);
+  t.client.disconnect();await pending;
+  assert.equal(track.stopped,true);assert.equal(contexts[0].closed,true);
+ }finally{AudioMock.prototype.resume=original;}
+});
+test('blocked audio autoplay times out clearly and releases the acquired microphone',async t=>{
+ const original=AudioMock.prototype.resume;
+ AudioMock.prototype.resume=()=>new Promise(()=>{});
+ t.mock.timers.enable({apis:['setTimeout']});
+ try {
+  const state=setup();const rejected=assert.rejects(state.client.connect(),/需要一次点击/);await tick();
+  t.mock.timers.tick(2600);await rejected;
+  assert.equal(track.stopped,true);assert.equal(contexts[0].closed,true);assert.equal(sockets.length,0);
+ }finally{AudioMock.prototype.resume=original;t.mock.timers.reset();}
+});
+test('denied microphone permission does not get stuck behind an unresolved audio unlock',async()=>{
+ const original=AudioMock.prototype.resume;
+ AudioMock.prototype.resume=()=>new Promise(()=>{});
+ try {
+  const t=setup(async()=>{throw new DOMException('Permission denied','NotAllowedError');});
+  await assert.rejects(t.client.connect(),/麦克风权限未开启/);
+  assert.equal(contexts[0].closed,true);assert.equal(sockets.length,0);
+ }finally{AudioMock.prototype.resume=original;}
+});
