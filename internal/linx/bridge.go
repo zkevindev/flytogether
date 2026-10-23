@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/zkevindev/flytogether/internal/game"
 	"github.com/zkevindev/flytogether/internal/room"
 )
 
@@ -322,7 +323,31 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 			if e := sendBrowser(map[string]any{"type": "stt", "text": body.Transcript}); e != nil {
 				return e
 			}
-			if e := sendUp(map[string]any{"type": "response.create"}); e != nil {
+			response := map[string]any{"type": "response.create"}
+			if action, handled := planVoiceAction(r, gate.commandText(body.Transcript)); handled {
+				args, _ := json.Marshal(map[string]string{"piece_id": action.PieceID})
+				if action.Name != "move_piece" {
+					args = []byte(`{}`)
+				}
+				call := functionCall{Type: "function_call", Name: action.Name, CallID: "voice-" + game.ID(), Arguments: string(args), Grant: currentToken}
+				output := ""
+				if action.Notice != "" {
+					output = actionOutput(r, action.Notice)
+				} else {
+					output = b.executeTool(r, call)
+				}
+				// Commit explicit commands before requesting any success narration.
+				for _, item := range []any{
+					call,
+					map[string]any{"type": "function_call_output", "call_id": call.CallID, "output": output},
+				} {
+					if e := sendUp(map[string]any{"type": "conversation.item.create", "item": item}); e != nil {
+						return errors.New("游戏操作结果没有送回灵矽")
+					}
+				}
+				response["response"] = map[string]any{"tool_choice": "none", "instructions": "只根据本轮工具结果简短回答。结果含error或notice时没有执行操作，按真实棋局回答问题、解释原因或追问选择，不能宣称已操作成功。本轮不要再调用工具。不要朗读内部ID和技术字段。"}
+			}
+			if e := sendUp(response); e != nil {
 				return e
 			}
 			continue

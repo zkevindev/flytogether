@@ -219,7 +219,9 @@ Resolving 是服务端一次原子动作内部的瞬态；前端可以还在播�
 
 ### 9.3 游戏工具和动作授权
 
-实时会话声明 `get_game_state`、`roll_dice`、`move_piece` 三个项目工具。灵矽在 Realtime 响应中返回 function call；Go 在 `response.done` 后执行对应工具，将 function call output 写回会话并请求模型继续回复。
+实时会话声明 `get_game_state`、`roll_dice`、`move_piece` 三个项目工具。明确的中文掷骰和选子指令由 Go 根据当前棋局先执行，再把服务端生成的 function call 与实际结果写回会话，请求灵矽只播报结果且禁止再次调用工具。这避免模型只说“起飞了”却没有执行动作。多个合法候选时追问，否定、规则询问和已起飞飞机的重复起飞不执行动作。
+
+其余对话仍可由灵矽返回 function call；Go 在 `response.done` 后执行对应工具，将 function call output 写回会话并请求模型继续回复。所有写操作共用同一个房间规则入口和单轮授权。
 
 Go 不接受模型提供的房间 ID、骰子点数、游戏版本或动作 token。语音转写通过唤醒判断后，Go 为当前局和状态版本生成一次性授权；服务端根据响应绑定的授权执行工具，并通过 room 服务校验回合、合法走法和去重。取消或迟到响应不能执行旧动作。每轮语音最多完成一个改变棋局的动作。读操作返回的棋局状态与可走方案来自 Go。
 
@@ -254,16 +256,17 @@ sequenceDiagram
     P->>W: 开启实时语音并自然说话
     W->>V: 持续发送 PCM 音频帧
     V->>L: Realtime 音频追加事件
-    L-->>V: VAD、转写和响应事件
-    V-->>W: 转写与音频增量
-    L->>V: response.done 中的游戏 function call
-    V->>T: 按工具名和参数执行
+    L-->>V: VAD、转写
+    V->>V: 校验唤醒并解析明确指令
+    V-->>W: 已接受的转写
+    V->>T: 指定棋子的移动指令
     T->>G: 使用单轮授权校验并提交动作
     G-->>W: 新快照与动画事件
     G-->>T: 实际执行结果
     T-->>V: function_call_output
-    V->>L: response.create
+    V->>L: 写入真实工具结果，response.create 禁止二次操作
     L-->>V: 回复语音
+    V-->>W: 音频增量
 ~~~
 
 如果小熊号不合法，工具返回原因，棋局不变；如果昵称匹配多个候选，先询问，不执行移动。
