@@ -252,7 +252,7 @@ func TestLuckyDiceVoiceAndNarrationUseOnlyNewRollEvents(t *testing.T) {
 		t.Fatal("historical die could be narrated as a new roll")
 	}
 	state.History = append(state.History, game.Event{ID: "new", Kind: "rolled", Text: "幸运骰掷出2和5，取5点", DiceRolls: []int{2, 5}})
-	if text := narrationFacts(*state, "past"); strings.Contains(text, "上次掷出了6点") || !strings.Contains(text, "2和5") {
+	if text := narrationFacts(*state, "past"); strings.Contains(text, "上次掷出了6点") || !strings.Contains(text, "2和5") || !strings.Contains(text, "必须首先完整播报") {
 		t.Fatal("narration mixed old and current dice")
 	}
 }

@@ -675,12 +675,16 @@ func narrationFacts(state game.State, after string) string {
 	events := eventsAfter(state.History, after)
 	var facts []string
 	rolled := false
+	rollLine := ""
 	for _, event := range events {
 		facts = append(facts, event.Text)
 		rolled = rolled || event.Kind == "rolled"
+		if event.Kind == "rolled" {
+			rollLine = event.Text
+		}
 	}
 	if !rolled {
 		return "本轮没有发生新的掷骰，不得声称刚投出了几点；棋局中的dice可能是历史点数。只能说明本轮实际操作、历史结果或当前阶段。"
 	}
-	return "本轮已提交的真实事件（点数只取这些新事件，不取历史结果）：" + strings.Join(facts, "；") + "。"
+	return "本轮已提交的真实事件（点数只取这些新事件，不取历史结果）：" + strings.Join(facts, "；") + "。必须首先完整播报这句真实结果，不得只说已生效或省略点数：“" + rollLine + "”。"
 }

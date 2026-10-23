@@ -21,7 +21,7 @@ try {
   const Original=WebSocket;
   window.WebSocket=class extends Original{constructor(url,...args){super(url,...args);if(String(url).includes('/ws/voice?'))this.addEventListener('message',e=>{
    if(typeof e.data!=='string')return;let m;try{m=JSON.parse(e.data);}catch{return;}
-   const record={at:performance.now(),type:m.type,response_id:m.response_id||m.response?.id,text:m.text||m.transcript,status:m.response?.status};
+   const record={at:performance.now(),type:m.type,response_id:m.response_id||m.response?.id,text:m.text||m.transcript||m.delta,status:m.response?.status};
    if(m.type.endsWith('audio.delta'))record.audio_bytes=Math.floor((m.delta||'').length*3/4);
    window.__qa.events.push(record);if(!m.type.endsWith('.delta'))void window.qaEvent(record);
   });}};
@@ -70,6 +70,13 @@ try {
  }
  const replies=await page.evaluate(()=>window.__qa.events.filter(e=>e.type.endsWith('audio_transcript.done')||e.type==='response.output_text.done').map(e=>({at:e.at,text:e.text})));
  log({phase:'actual_spoken_replies',replies});
+ if(lucky){
+  const dice=(await state()).dice_rolls;
+  const transcript=replies.map(r=>r.text||'').join('');
+  const numerals=['零','一','二','三','四','五','六'];
+  assert.ok(transcript.includes('幸运骰')&&transcript.includes('取'),'lucky narration must state both real dice and the chosen value');
+  for(const value of dice)assert.ok(transcript.includes(String(value))||transcript.includes(numerals[value]),'spoken lucky result must contain actual dice values');
+ }
  const metrics=await page.evaluate(()=>{
   const events=window.__qa.events;return events.filter(e=>e.type==='stt').map(e=>{
    const start=events.indexOf(e);const end=events.slice(start+1).find(x=>x.type==='stt');

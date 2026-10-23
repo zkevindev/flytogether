@@ -439,7 +439,6 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 				}
 				if state, _, ok := roomGame(r); ok {
 					seenEvent = lastEventID(state)
-					instructions += narrationFacts(state, before)
 					if action.Notice == "" {
 						instructions += "先说这次真实发生了什么，再说：" + hostCue(state) + "。"
 					}
@@ -452,6 +451,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 					case "roll":
 						instructions += "当前正在等待掷骰。不能邀请玩家直接移动飞机。"
 					}
+					instructions += narrationFacts(state, before)
 				}
 				response["response"] = map[string]any{"tool_choice": "none", "instructions": instructions}
 			}
