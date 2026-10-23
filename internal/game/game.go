@@ -90,6 +90,7 @@ type Event struct {
 type State struct {
 	ID           string    `json:"id"`
 	Ruleset      string    `json:"ruleset"`
+	Difficulty   string    `json:"difficulty"`
 	Board        BoardSpec `json:"board"`
 	Mode         string    `json:"mode"`
 	Demo         bool      `json:"demo"`
@@ -109,12 +110,15 @@ type State struct {
 }
 
 type Options struct {
-	Mode  string   `json:"mode"`
-	Board string   `json:"board"`
-	Names []string `json:"names"`
-	AI    bool     `json:"ai"`
-	Demo  bool     `json:"demo"`
-	Props bool     `json:"props"`
+	RoomName   string   `json:"room_name"`
+	Difficulty string   `json:"difficulty"`
+	Waiting    bool     `json:"waiting"`
+	Mode       string   `json:"mode"`
+	Board      string   `json:"board"`
+	Names      []string `json:"names"`
+	AI         bool     `json:"ai"`
+	Demo       bool     `json:"demo"`
+	Props      bool     `json:"props"`
 }
 
 func ID() string {
@@ -125,15 +129,20 @@ func ID() string {
 	return hex.EncodeToString(b)
 }
 
-func RandomDie() int {
-	n, err := rand.Int(rand.Reader, big.NewInt(6))
+func RandomDie() int { return randomIndex(6) + 1 }
+
+func randomIndex(count int) int {
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(count)))
 	if err != nil {
 		panic(err)
 	}
-	return int(n.Int64()) + 1
+	return int(n.Int64())
 }
 
 func New(o Options) *State {
+	if o.Difficulty != "easy" && o.Difficulty != "hard" {
+		o.Difficulty = "normal"
+	}
 	if o.Mode != "classic" {
 		o.Mode = "quick"
 	}
@@ -145,7 +154,7 @@ func New(o Options) *State {
 	if !ok {
 		board, _ = FindBoard("cross")
 	}
-	s := &State{ID: ID(), Ruleset: "family-v1", Board: board, Mode: o.Mode, Demo: o.Demo, Version: 1,
+	s := &State{ID: ID(), Ruleset: "family-v1", Difficulty: o.Difficulty, Board: board, Mode: o.Mode, Demo: o.Demo, Version: 1,
 		Turn: 1, Phase: "roll", Legal: []Move{}, History: []Event{}, Players: []Player{}, PropsEnabled: o.Props, DiceRolls: []int{}}
 	if o.Props {
 		s.Ruleset = "family-props-v2"
@@ -414,4 +423,11 @@ func (s *State) BestMove() Move {
 		return Move{}
 	}
 	return moves[0]
+}
+
+func (s *State) AIMove() Move {
+	if s.Difficulty == "easy" && len(s.Legal) > 0 {
+		return s.Legal[randomIndex(len(s.Legal))]
+	}
+	return s.BestMove()
 }

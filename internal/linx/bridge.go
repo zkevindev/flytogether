@@ -112,14 +112,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 				errCh <- errors.New("语音控制消息无效")
 				return
 			}
-			if control.Type == "abort" {
-				if e = sendUp(map[string]any{"type": "response.cancel"}); e != nil {
-					errCh <- e
-					return
-				}
-			} else if control.Type == "sleep" {
+			if control.Type == "abort" || control.Type == "sleep" {
 				select {
-				case controls <- "sleep":
+				case controls <- control.Type:
 				case <-ctx.Done():
 					return
 				}
@@ -249,9 +244,20 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 				return nil
 			}
 			return errors.New("灵矽实时会话已断开")
-		case <-controls:
-			if e := sleep(); e != nil {
-				return e
+		case control := <-controls:
+			if control == "sleep" {
+				if e := sleep(); e != nil {
+					return e
+				}
+			} else {
+				if inFlight {
+					_ = sendUp(map[string]any{"type": "response.cancel"})
+				}
+				currentToken, inFlight = "", false
+				idle()
+				if e := sendWake(); e != nil {
+					return e
+				}
 			}
 			continue
 		case now := <-ticker.C:

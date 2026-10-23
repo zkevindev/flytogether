@@ -46,7 +46,8 @@ P1：页面重启后的本机存档、更多主持风格、完整动画细节、
 ### 3.1 开始一局
 
 1. 家长打开网页，创建本地家庭房间。
-2. 选择棋盘路线、2～4 个席位、昵称、棋子颜色与图案；决定是否加入 AI。
+2. 设置房间名、棋盘路线、2～4 个席位和昵称；决定是否加入 AI，并选择轻松、普通或挑战难度。
+3. 进入准备阶段，显式点击“开始游戏”；可暂停、继续或结束当前局。
 3. 选择完整模式或快速模式，查看固定规则摘要。
 4. 同意浏览器麦克风权限并测试一次说话；也可以直接点击试玩。
 5. 开局后突出显示当前玩家、掷骰按钮和可选棋子。
@@ -194,7 +195,7 @@ flowchart LR
 | CommandResult | command_id、accepted、version、snapshot、events、error |
 | VoiceBinding | browser_session_id、linx_session_id、room_id、game_id、binding_epoch |
 
-Room 和 Match 分开：同一家庭房间可以重新开局，每局使用新的 game_id。客户端引用旧局、旧回合或旧版本的写操作全部拒绝。
+Room 和 Match 分开：同一家庭房间可以重新开局，每局使用新的 game_id。客户端引用旧局的写操作全部拒绝。掷骰、移动和用道具还需匹配版本；暂停和结束允许作用于同一局的最新版本，避免 AI 刚走一步导致用户无法暂停。
 
 ### 8.2 回合状态
 
@@ -303,9 +304,10 @@ sequenceDiagram
 | 接口 | 用途 |
 | --- | --- |
 | POST /api/rooms | 创建房间与本地操作者会话 |
-| GET /api/rooms/{room_id} | 返回最新完整快照 |
-| POST /api/rooms/{room_id}/matches | 根据固定模式开始新局 |
-| POST /api/rooms/{room_id}/commands | 点击动作的唯一写入口 |
+| POST /api/rooms/new | 替换当前浏览器房间，旧房间结束，新房间进入准备阶段 |
+| GET /api/session | 返回当前会话的房间完整快照 |
+| POST /api/rooms/{room_id}/matches | 重新准备一局，新的 game_id 与库存 |
+| POST /api/rooms/{room_id}/commands | roll/move/prop 及 start/pause/resume/end 的统一写入口 |
 | POST /api/rooms/{room_id}/voice-settings | 保存本房间的唤醒模式和自定义唤醒词 |
 | GET /ws/game?room_id=... | 完整快照、游戏事件和语音 UI 状态 |
 | GET /ws/voice?room_id=... | 浏览器 PCM 音频帧、Realtime 事件与播放增量 |
@@ -508,3 +510,11 @@ flytogether/
 ### 掷骰展示
 
 `rolled` 事件携带该次独立的 `dice_rolls`，防止连续 AI 回合的最终快照覆盖前次点数。网页按事件 ID 去重并排队展示 3D 弹窗；点击、语音和 AI 使用同一事件链路。动画仅展示结果，不决定随机数；支持减少动态效果偏好。
+
+### 家庭房间状态与难度（#8）
+
+Room 提供 `name` 和 `status`：`waiting → playing ↔ paused → ended`；waiting 也可直接结束。正常胜负使用棋局 `phase=finished`，保留冠军信息，用户仍可结束或重新准备。网页创建和重新准备均传 `waiting=true`，服务端准备后才允许写棋；旧 API 调用省略时保留原兼容行为。
+
+控制命令沿用 Cookie、game_id、command_id 去重和房间锁。暂停、结束同步撤销语音授权、清除 busy 并停止 AI；继续不恢复旧授权，也不自动开启麦克风。客户端断开待建立连接时，晚到的麦克风流立即停止，旧连接事件不会重建语音。握手提前断开会立即报错，停止播报后丢弃旧 response_id 的音频和字幕。上述连接行为通过模拟 WebAudio/WebSocket 自动回归；真实麦克风和声学回声仍待独立验收。
+
+`difficulty=easy` 在合法走法中随机选子，不用道具；`normal` 使用走法评分和辅助道具；`hard` 使用评分及真实目标的攻防道具。所有难度共用随机骰子与合法走法，没有修改点数或真人规则。当前为家庭同屏房间，跨设备邀请仍属后续范围。

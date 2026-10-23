@@ -18,7 +18,7 @@ export function DiceRollModal({ roll, onClose }: { roll: { text: string; values:
   const value = Math.max(...roll.values);
   return <dialog ref={ref} className="dice-modal" aria-label="3D 掷骰结果" onCancel={e => { e.preventDefault(); close.current(); }}>
     <div className="dice-modal-kicker"><Sparkle weight="fill" /> {roll.values.length === 2 ? '幸运双骰' : '好运降落中'}</div>
-    <h2>{landed ? `${value} 点！${value === 6 ? '再来一次' : '准备出发'}` : '骰子转呀转…'}</h2>
+    <h2>{landed ? `${value} 点！${value === 6 ? '好运降落' : '准备出发'}` : '骰子转呀转…'}</h2>
     <div className="dice-stage" aria-hidden="true">{roll.values.map((result, i) => <div key={i} className="cube-perspective"><div className={'dice-cube ' + (!landed ? 'tumbling' : 'landed')} style={{ '--landing': rotations[result] } as React.CSSProperties}>
       {[1, 2, 3, 4, 5, 6].map(face => <div key={face} className={'cube-face face-' + face}>{Array.from({ length: 9 }, (_, n) => <i key={n} className={pips[face].includes(n) ? 'cube-pip visible' : 'cube-pip'} />)}</div>)}
     </div></div>)}</div>

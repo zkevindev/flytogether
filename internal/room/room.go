@@ -14,6 +14,8 @@ import (
 
 type View struct {
 	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Status        string          `json:"status"`
 	Seq           int             `json:"seq"`
 	State         json.RawMessage `json:"state"`
 	Voice         string          `json:"voice"`
@@ -55,6 +57,8 @@ type cached struct {
 type Room struct {
 	mu            sync.Mutex
 	ID            string
+	name          string
+	status        string
 	state         *game.State
 	seq           int
 	voice         string
@@ -70,13 +74,21 @@ type Room struct {
 }
 
 func New(o game.Options) *Room {
-	return &Room{ID: game.ID(), state: game.New(o), voice: "disconnected", voiceSettings: DefaultVoiceSettings(), cache: map[string]cached{},
+	status := "playing"
+	if o.Waiting {
+		status = "waiting"
+	}
+	name := strings.TrimSpace(o.RoomName)
+	if name == "" {
+		name = "家庭机场"
+	}
+	return &Room{name: name, status: status, ID: game.ID(), state: game.New(o), voice: "disconnected", voiceSettings: DefaultVoiceSettings(), cache: map[string]cached{},
 		listeners: map[chan []byte]bool{}, updated: time.Now()}
 }
 
 func (r *Room) view() View {
 	b, _ := json.Marshal(r.state)
-	return View{ID: r.ID, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings}
+	return View{ID: r.ID, Name: r.name, Status: r.status, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings}
 }
 
 func (r *Room) VoiceSettings() VoiceSettings {
@@ -139,6 +151,14 @@ func (r *Room) Restart(o game.Options) (View, error) {
 		return View{}, fail("VOICE_BUSY", "请等这次语音操作结束，再开始新游戏")
 	}
 	r.state = game.New(o)
+	r.status = "playing"
+	if o.Waiting {
+		r.status = "waiting"
+	}
+	if strings.TrimSpace(o.RoomName) != "" {
+		r.name = strings.TrimSpace(o.RoomName)
+	}
+	r.voice = "disconnected"
 	r.cache = map[string]cached{}
 	r.grant = ""
 	r.used = false
@@ -158,8 +178,23 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 	if c.ID == "" || len(c.ID) > 160 {
 		return View{}, fail("INVALID_COMMAND", "操作编号无效")
 	}
-	if c.GameID != r.state.ID || c.Version != r.state.Version {
+	if c.GameID != r.state.ID || (c.Version != r.state.Version && c.Action != "pause" && c.Action != "end") {
 		return View{}, fail("STALE_STATE", "棋局已经更新，请重新选择")
+	}
+	if c.Action == "start" || c.Action == "pause" || c.Action == "resume" || c.Action == "end" {
+		if voice {
+			return View{}, fail("INVALID_ACTION", "请通过房间按钮控制游戏")
+		}
+		if err := r.control(c.Action); err != nil {
+			return View{}, err
+		}
+		r.publish()
+		v := r.view()
+		r.cache[c.ID] = cached{c, v}
+		return v, nil
+	}
+	if r.status != "playing" {
+		return View{}, fail("GAME_NOT_ACTIVE", "请先开始或继续游戏，当前不能操作棋局")
 	}
 	if r.state.Phase == "finished" {
 		return View{}, fail("GAME_FINISHED", "这局已经结束，来一局新的吧")
@@ -202,17 +237,23 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 func (r *Room) AI() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.busy || r.state.Phase == "finished" || !r.state.Players[r.state.Current].AI {
+	if r.status != "playing" || r.busy || r.state.Phase == "finished" || !r.state.Players[r.state.Current].AI {
 		return
 	}
 	if r.state.Phase == "roll" {
-		if prop, target := r.state.SuggestedPropTarget(); prop != "" {
+		prop, target := "", ""
+		if r.state.Difficulty == "hard" {
+			prop, target = r.state.SuggestedPropTarget()
+		} else if r.state.Difficulty != "easy" {
+			prop = r.state.SupportProp()
+		}
+		if prop != "" {
 			_ = r.state.UsePropOn(prop, target)
 		} else {
 			_ = r.state.RollRandom()
 		}
 	} else {
-		_ = r.state.Move(r.state.BestMove().PieceID)
+		_ = r.state.Move(r.state.AIMove().PieceID)
 	}
 	r.publish()
 }
@@ -220,6 +261,9 @@ func (r *Room) AI() {
 func (r *Room) BeginSpeech() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.status != "playing" || r.state.Phase == "finished" {
+		return fail("GAME_NOT_ACTIVE", "请先开始或继续游戏，再开启语音")
+	}
 	if r.busy && r.voice == "listening" {
 		return fail("VOICE_BUSY", "上一句话还在处理，请稍等")
 	}
@@ -236,7 +280,7 @@ func (r *Room) BeginSpeech() error {
 func (r *Room) CurrentActionToken() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if !r.busy || r.used || r.grantGame != r.state.ID || r.grantVersion != r.state.Version {
+	if r.status != "playing" || !r.busy || r.used || r.grantGame != r.state.ID || r.grantVersion != r.state.Version {
 		return ""
 	}
 	return r.grant
@@ -245,6 +289,9 @@ func (r *Room) CurrentActionToken() string {
 func (r *Room) VoiceState(state string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.status != "playing" {
+		state = "disconnected"
+	}
 	r.voice = state
 	if state == "ready" || state == "standby" || state == "disconnected" || state == "error" {
 		r.busy = false
@@ -258,7 +305,7 @@ func (r *Room) Tool(name string, args map[string]string) (any, error) {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		token := ""
-		if r.busy && !r.used && r.grantGame == r.state.ID && r.grantVersion == r.state.Version {
+		if r.status == "playing" && r.busy && !r.used && r.grantGame == r.state.ID && r.grantVersion == r.state.Version {
 			token = r.grant
 		}
 		suggested, target := r.state.SuggestedPropTarget()
@@ -355,4 +402,56 @@ func (s *Store) Run(ctxDone <-chan struct{}) {
 			}
 		}
 	}
+}
+
+// control runs under the room lock and invalidates every prior speech grant.
+func (r *Room) control(action string) error {
+	next, text := "", ""
+	switch {
+	case action == "start" && r.status == "waiting":
+		next, text = "playing", "所有飞行员已就位，游戏开始！"
+	case action == "pause" && r.status == "playing" && r.state.Phase != "finished":
+		next, text = "paused", "游戏已暂停，棋盘和本次点数保留。"
+	case action == "resume" && r.status == "paused":
+		next, text = "playing", "游戏继续，从刚才的位置出发。"
+	case action == "end" && r.status != "ended":
+		next, text = "ended", "本局已结束，可以重新准备下一局。"
+	default:
+		return fail("INVALID_TRANSITION", "当前状态不能执行这个房间操作")
+	}
+	r.status, r.grant, r.busy, r.voice = next, "", false, "disconnected"
+	r.used = false
+	r.state.Version++
+	r.state.History = append(r.state.History, game.Event{ID: game.ID(), Kind: action, Text: text})
+	if len(r.state.History) > 24 {
+		r.state.History = r.state.History[len(r.state.History)-24:]
+	}
+	return nil
+}
+
+// CreateNew explicitly replaces this browser's same-screen room.
+func (s *Store) CreateNew(session string, o game.Options) (*Room, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings := DefaultVoiceSettings()
+	old := s.rooms[s.sessions[session]]
+	if old == nil && len(s.rooms) >= 256 {
+		return nil, fmt.Errorf("房间已满，请稍后再试")
+	}
+	if old != nil {
+		old.mu.Lock()
+		settings = old.voiceSettings
+		if old.status != "ended" {
+			_ = old.control("end")
+			old.publish()
+		}
+		old.mu.Unlock()
+		delete(s.rooms, old.ID)
+	}
+	o.Waiting = true
+	r := New(o)
+	r.voiceSettings = settings
+	s.rooms[r.ID] = r
+	s.sessions[session] = r.ID
+	return r, nil
 }

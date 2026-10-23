@@ -10,7 +10,7 @@ export const propCards = [
   { id: 'shield', name: '护盾', effect: '抵挡一次炸弹或撞机', Icon: ShieldCheck, color: '#25866f' },
 ];
 
-export function PropTray({ game, disabled, onUse }: { game: Game; disabled: boolean; onUse: (id: string, target?: string) => void }) {
+export function PropTray({ game, status = 'playing', disabled, onUse }: { game: Game; status?: string; disabled: boolean; onUse: (id: string, target?: string) => void }) {
   const [targeting, setTargeting] = useState('');
   if (!game.props_enabled || game.phase === 'finished') return null;
   const player = game.players[game.current];
@@ -19,7 +19,7 @@ export function PropTray({ game, disabled, onUse }: { game: Game; disabled: bool
     p.progress > 0 && p.progress <= game.board.ring_length && (id === 'bomb' ? i !== game.current : i === game.current && !p.shield)
   ).map(piece => ({ owner, piece })));
   return <section id="prop-pocket" className="prop-tray" aria-label="本回合道具">
-    <div className="prop-heading"><strong>{player.name}的道具口袋</strong><span>{active ? `${active.name}${['bomb', 'shield'].includes(active.id) ? (game.phase === 'move' ? '已生效 · 请选择飞机' : '已生效 · 请掷骰子') : game.phase === 'move' ? '生效中 · 请选择飞机' : '已就绪 · 请掷骰子'}` : '掷骰前选一张 · 每种限一次'}</span></div>
+    <div className="prop-heading"><strong>{player.name}的道具口袋</strong><span>{status !== 'playing' ? (status === 'paused' ? '游戏暂停 · 库存与效果保留' : status === 'ended' ? '本局道具记录' : '开始游戏后可使用') : active ? `${active.name}${['bomb', 'shield'].includes(active.id) ? (game.phase === 'move' ? '已生效 · 请选择飞机' : '已生效 · 请掷骰子') : game.phase === 'move' ? '生效中 · 请选择飞机' : '已就绪 · 请掷骰子'}` : '掷骰前选一张 · 每种限一次'}</span></div>
     <div className="prop-cards">{propCards.map(({ id, name, effect, Icon, color }) => {
       const count = player.props?.[id] || 0;
       const needsPlane = id === 'boost' && !player.pieces.some(p => p.progress >= 0 && p.progress < game.board.finish);
@@ -27,7 +27,7 @@ export function PropTray({ game, disabled, onUse }: { game: Game; disabled: bool
       const targeted = id === 'bomb' || id === 'shield', noTarget = targeted && !targets(id).length;
       const selected = game.active_prop === id;
       const unavailable = disabled || game.phase !== 'roll' || !!game.active_prop || count === 0 || needsPlane || noHangar || noTarget;
-      const hint = selected ? (targeted ? '已生效，请继续掷骰' : '本次掷骰生效') : count === 0 ? '已经用完' : needsPlane ? '需先有飞机起飞' : noHangar ? '飞机都已起飞' : noTarget ? '暂无可选择的航线飞机' : effect;
+      const hint = selected && status !== 'playing' ? '已选道具 · 效果保留' : selected ? (targeted ? '已生效，请继续掷骰' : '本次掷骰生效') : count === 0 ? '已经用完' : needsPlane ? '需先有飞机起飞' : noHangar ? '飞机都已起飞' : noTarget ? '暂无可选择的航线飞机' : effect;
       return <button key={id} className={'prop-card ' + (selected || targeting === id ? 'selected' : '')} disabled={unavailable} onClick={() => targeted ? setTargeting(id) : onUse(id)} aria-label={`使用${name}`} title={hint} style={{ '--prop-color': color } as React.CSSProperties}>
         <span className="prop-symbol"><Icon weight="fill" size={23} /></span><span className="prop-copy"><strong>{name}<small>{selected ? '已使用' : `×${count}`}</small></strong><span>{hint}</span></span>
       </button>;

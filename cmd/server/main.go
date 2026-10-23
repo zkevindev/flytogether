@@ -47,6 +47,7 @@ func main() {
 	})
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("POST /api/rooms", s.create)
+	mux.HandleFunc("POST /api/rooms/new", s.create)
 	mux.HandleFunc("POST /api/rooms/{id}/matches", s.restart)
 	mux.HandleFunc("POST /api/rooms/{id}/commands", s.command)
 	mux.HandleFunc("POST /api/rooms/{id}/voice-settings", s.voiceSettings)
@@ -193,6 +194,18 @@ func options(w http.ResponseWriter, r *http.Request) (game.Options, error) {
 	if len(o.Names) < 2 || len(o.Names) > 4 {
 		return o, errors.New("请选择 2 到 4 个席位")
 	}
+	o.RoomName = strings.TrimSpace(o.RoomName)
+	if utf8.RuneCountInString(o.RoomName) > 20 {
+		return o, errors.New("房间名最多 20 个字")
+	}
+	for _, c := range o.RoomName {
+		if c < 32 {
+			return o, errors.New("房间名包含不支持的字符")
+		}
+	}
+	if o.Difficulty != "" && o.Difficulty != "easy" && o.Difficulty != "normal" && o.Difficulty != "hard" {
+		return o, errors.New("游戏难度无效")
+	}
 	seen := map[string]bool{}
 	for i, name := range o.Names {
 		name = strings.TrimSpace(name)
@@ -244,7 +257,12 @@ func (s *server) create(w http.ResponseWriter, r *http.Request) {
 	if key == "" {
 		key = game.ID()
 	}
-	v, e := s.store.Create(key, o)
+	var v *room.Room
+	if r.URL.Path == "/api/rooms/new" {
+		v, e = s.store.CreateNew(key, o)
+	} else {
+		v, e = s.store.Create(key, o)
+	}
 	if e != nil {
 		failure(w, e)
 		return
@@ -333,6 +351,10 @@ func (s *server) voiceSettings(w http.ResponseWriter, r *http.Request) {
 func (s *server) voiceSocket(w http.ResponseWriter, r *http.Request) {
 	v := s.owned(w, r, r.URL.Query().Get("room_id"))
 	if v == nil {
+		return
+	}
+	if snapshot := v.Snapshot(); snapshot.Status != "playing" {
+		writeJSON(w, 409, map[string]string{"message": "请先开始或继续游戏，再开启语音"})
 		return
 	}
 	if !s.bridge.Config.Enabled() {

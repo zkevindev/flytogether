@@ -10,14 +10,14 @@ export type BoardSpec = {
   home_length: number; finish: number; jump_length: number; fly_from: number; fly_to: number;
 };
 export type Game = {
-  id: string; ruleset: string; board: BoardSpec; mode: string; demo: boolean; version: number; turn: number;
+  id: string; ruleset: string; difficulty: 'easy' | 'normal' | 'hard'; board: BoardSpec; mode: string; demo: boolean; version: number; turn: number;
   current: number; phase: 'roll' | 'move' | 'finished'; dice: number; winner?: string;
   players: Player[]; legal_moves: Move[]; history: GameEvent[]; last_move?: Move;
   props_enabled: boolean; active_prop?: string; dice_rolls: number[];
 };
 export type VoiceSettings = { wake_enabled: boolean; wake_word: string };
-export type Room = { id: string; seq: number; state: Game; voice: string; voice_settings: VoiceSettings };
-export type Options = { names: string[]; board: string; mode: string; ai: boolean; demo: boolean; props: boolean };
+export type Room = { id: string; name: string; status: 'waiting' | 'playing' | 'paused' | 'ended'; seq: number; state: Game; voice: string; voice_settings: VoiceSettings };
+export type Options = { room_name: string; difficulty: 'easy' | 'normal' | 'hard'; waiting: boolean; names: string[]; board: string; mode: string; ai: boolean; demo: boolean; props: boolean };
 export type Config = { voice_configured: boolean; version: string; ruleset: string; boards: BoardSpec[] };
 
 export class APIError extends Error {

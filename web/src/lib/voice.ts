@@ -3,6 +3,12 @@ import { socketURL } from './types';
 type RealtimeMessage = { type: string; [key: string]: any };
 
 export class VoiceClient {
+  private epoch = 0;
+  private cancelConnect?: () => void;
+  private drainTimer?: ReturnType<typeof setTimeout>;
+  private responseID = '';
+  private mutedResponses = new Set<string>();
+  private mutedUntilInput = false;
   private ws?: WebSocket;
   private audio?: AudioContext;
   private stream?: MediaStream;
@@ -20,16 +26,23 @@ export class VoiceClient {
   async connect() {
     if (!window.isSecureContext) throw new Error('麦克风需要 HTTPS 地址，或在本机 localhost 打开');
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('当前浏览器无法使用麦克风，请使用新版 Chrome 或 Edge');
+    this.disconnect();
+    const epoch = ++this.epoch;
+    this.waitingForWake = false; this.mutedUntilInput = false; this.mutedResponses.clear();
     this.onState('connecting');
     try {
-      this.audio = new AudioContext();
-      await this.audio.resume();
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      await this.audio.audioWorklet.addModule('/pcm-capture.js');
-      this.source = this.audio.createMediaStreamSource(this.stream);
-      this.capture = new AudioWorkletNode(this.audio, 'pcm-capture');
+      const audio = this.audio = new AudioContext();
+      await audio.resume();
+      if (epoch !== this.epoch) return;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      if (epoch !== this.epoch) { stream.getTracks().forEach(track => track.stop()); return; }
+      this.stream = stream;
+      await audio.audioWorklet.addModule('/pcm-capture.js');
+      if (epoch !== this.epoch) return;
+      this.source = audio.createMediaStreamSource(stream);
+      this.capture = new AudioWorkletNode(audio, 'pcm-capture');
       this.capture.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-        if (this.recording && this.ws?.readyState === WebSocket.OPEN) this.ws.send(event.data);
+        if (epoch === this.epoch && this.recording && this.ws?.readyState === WebSocket.OPEN) this.ws.send(event.data);
       };
       this.source.connect(this.capture);
       this.capture.connect(this.audio.destination);
@@ -38,12 +51,16 @@ export class VoiceClient {
       this.ws = ws;
       ws.binaryType = 'arraybuffer';
       await new Promise<void>((resolve, reject) => {
+        let ready = false;
         const timeout = setTimeout(() => reject(new Error('语音连接超时，请稍后重试')), 20000);
+        this.cancelConnect = () => { clearTimeout(timeout); reject(new DOMException('语音连接已取消', 'AbortError')); };
         ws.onmessage = event => {
+          if (epoch !== this.epoch || this.ws !== ws) return;
           if (event.data instanceof ArrayBuffer) return;
           let message: RealtimeMessage;
           try { message = JSON.parse(event.data); } catch { return; }
           if (message.type === 'hello') {
+            ready = true; this.cancelConnect = undefined;
             clearTimeout(timeout);
             this.recording = true;
             this.onState('ready');
@@ -61,36 +78,52 @@ export class VoiceClient {
             this.onError(error.message);
             this.disconnect();
           } else if (message.type === 'stt') {
+            if (this.waitingForWake) return;
+            this.mutedUntilInput = false;
             if (message.text) this.onText(message.text, 'you');
           } else if (message.type === 'response.audio.delta' || message.type === 'response.output_audio.delta') {
-            if (this.waitingForWake) return;
+            if (this.ignoreResponse(message)) return;
             this.generationDone = false;
             this.onState('speaking');
             this.playPCM(message.delta, message.sample_rate || 24000);
           } else if (message.type === 'response.audio_transcript.delta' || message.type === 'response.output_audio_transcript.delta' || message.type === 'response.output_text.delta') {
-            if (this.waitingForWake) return;
+            if (this.ignoreResponse(message)) return;
             if (message.delta) { this.assistantTranscript += message.delta; this.onText(this.assistantTranscript, 'linx'); }
           } else if (message.type === 'response.audio_transcript.done' || message.type === 'response.output_audio_transcript.done') {
+            if (this.ignoreResponse(message)) return;
             if (message.transcript) { this.assistantTranscript = message.transcript; this.onText(this.assistantTranscript, 'linx'); }
           } else if (message.type === 'response.created') {
+            this.responseID = message.response?.id || '';
+            if (this.mutedUntilInput && this.responseID) this.mutedResponses.add(this.responseID);
             this.assistantTranscript = '';
           } else if (message.type === 'input_audio_buffer.speech_started' || message.type === 'speech_started') {
+            this.muteResponse();
             this.clearPlayback();
             this.generationDone = false;
             this.onState('listening');
           } else if (message.type === 'input_audio_buffer.speech_stopped' || message.type === 'speech_stopped') {
             this.onState('thinking');
           } else if (message.type === 'response.audio.done' || message.type === 'response.output_audio.done') {
+            if (this.ignoreResponse(message)) return;
             this.generationDone = true;
             this.checkDrain();
           } else if (message.type === 'response.done') {
+            if (this.ignoreResponse(message)) return;
             this.generationDone = true;
             this.checkDrain();
           }
         };
-        ws.onerror = () => { clearTimeout(timeout); reject(new Error('语音连接失败，请稍后重试')); };
-        ws.onclose = () => {
+        ws.onerror = () => {
           clearTimeout(timeout);
+          if (epoch !== this.epoch) return;
+          const error = new Error('语音连接失败，请点击重新开启语音');
+          if (ready) { this.onError(error.message); this.disconnect(); } else reject(error);
+        };
+        ws.onclose = () => {
+          clearTimeout(timeout); this.cancelConnect = undefined;
+          if (epoch !== this.epoch) return;
+          if (!ready) reject(new Error('语音连接提前断开，请重新开启语音'));
+          else this.onError('语音连接已断开，棋局已保留，请重新开启语音');
           if (this.ws === ws) {
             this.ws = undefined;
             this.recording = false;
@@ -100,6 +133,7 @@ export class VoiceClient {
         };
       });
     } catch (error) {
+      if (epoch !== this.epoch) return;
       this.disconnect();
       if (error instanceof DOMException && error.name === 'NotAllowedError') throw new Error('麦克风权限未开启，请在浏览器地址栏允许使用麦克风');
       throw error;
@@ -141,7 +175,8 @@ export class VoiceClient {
     if (!this.generationDone || this.activeSources.size) return;
     const audio = this.audio;
     if (audio && this.schedule > audio.currentTime + .04) {
-      setTimeout(() => this.checkDrain(), Math.max(60, (this.schedule - audio.currentTime) * 1000));
+      clearTimeout(this.drainTimer);
+      this.drainTimer = setTimeout(() => this.checkDrain(), Math.max(60, (this.schedule - audio.currentTime) * 1000));
       return;
     }
     this.schedule = 0;
@@ -149,6 +184,7 @@ export class VoiceClient {
   }
 
   stopPlayback() {
+    this.muteResponse();
     this.clearPlayback();
     this.generationDone = true;
     this.send({ type: 'abort' });
@@ -156,6 +192,7 @@ export class VoiceClient {
   }
 
   standby() {
+    this.muteResponse();
     this.waitingForWake = true;
     this.clearPlayback();
     this.generationDone = true;
@@ -163,10 +200,22 @@ export class VoiceClient {
     if (this.recording) this.onState('standby');
   }
 
+  private muteResponse() {
+    this.mutedUntilInput = true;
+    if (this.responseID) this.mutedResponses.add(this.responseID);
+    if (this.mutedResponses.size > 64) this.mutedResponses.delete(this.mutedResponses.values().next().value!);
+  }
+
+  private ignoreResponse(message: RealtimeMessage) {
+    const id = message.response_id || message.response?.id || this.responseID;
+    return this.waitingForWake || this.mutedUntilInput || this.mutedResponses.has(id);
+  }
+
   private send(value: unknown) { if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(value)); }
 
   private clearPlayback() {
-    for (const source of this.activeSources) { try { source.stop(); } catch {} }
+    clearTimeout(this.drainTimer); this.drainTimer = undefined;
+    for (const source of this.activeSources) { source.onended = null; try { source.stop(); } catch {} source.disconnect(); }
     this.activeSources.clear();
     this.schedule = 0;
   }
@@ -174,12 +223,14 @@ export class VoiceClient {
   private releaseAudio() {
     this.clearPlayback();
     this.stream?.getTracks().forEach(track => track.stop()); this.stream = undefined;
-    this.capture?.disconnect(); this.capture = undefined;
+    if (this.capture) { this.capture.port.onmessage = null; this.capture.disconnect(); } this.capture = undefined;
     this.source?.disconnect(); this.source = undefined;
     void this.audio?.close().catch(() => {}); this.audio = undefined;
   }
 
   disconnect() {
+    this.epoch++;
+    this.cancelConnect?.(); this.cancelConnect = undefined;
     this.recording = false;
     const ws = this.ws;
     this.ws = undefined;

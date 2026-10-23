@@ -120,21 +120,30 @@ func (s *State) SuggestedPropTarget() (string, string) {
 			}
 		}
 	}
+	return s.SupportProp(), ""
+}
+
+// Normal difficulty uses only movement aids; hard adds targeted attack/defense.
+func (s *State) SupportProp() string {
+	if !s.PropsEnabled || s.Phase != "roll" || s.ActiveProp != "" {
+		return ""
+	}
+	p := s.Players[s.Current]
 	airborne, canBoost := false, false
 	for _, piece := range p.Pieces {
 		airborne = airborne || (piece.Progress >= 0 && piece.Progress < s.Board.Finish)
 		canBoost = canBoost || (piece.Progress >= 0 && piece.Progress < s.Board.Finish-8)
 	}
 	if !airborne && p.Props["launch"] > 0 {
-		return "launch", ""
+		return "launch"
 	}
 	if canBoost && p.Props["boost"] > 0 {
-		return "boost", ""
+		return "boost"
 	}
 	if p.Props["luck"] > 0 {
-		return "luck", ""
+		return "luck"
 	}
-	return "", ""
+	return ""
 }
 
 // PropTargets never includes hangars, launch pads or protected home lanes.
