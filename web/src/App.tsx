@@ -284,7 +284,7 @@ export default function App() {
         <section className="home-welcome">
           <p className="eyebrow"><span /> A LITTLE FAMILY ADVENTURE</p>
           <h1>叫上家人，<br />一起飞一局<span>。</span></h1>
-          <p className="home-description">一张棋盘，一句“小灵同学”。<br />让每次起飞，都有人陪你欢呼。</p>
+          <p className="home-description">一张棋盘，开口就能一起玩。<br />让每次起飞，都有人陪你欢呼。</p>
           <div className="home-actions"><button className="primary-button" onClick={() => openSetup(true)}><Plus size={21} />创建游戏<ArrowRight size={20} /></button>
             {lifecycle !== 'waiting' && <button className="outline-button" onClick={() => { navigate('play'); if (lifecycle === 'paused') void command('resume'); }}>继续当前游戏<ArrowRight size={18} /></button>}
           </div>
