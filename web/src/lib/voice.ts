@@ -55,12 +55,14 @@ export class VoiceClient {
             this.disconnect();
           } else if (message.type === 'stt') {
             if (message.text) this.onText(message.text, 'you');
-          } else if (message.type === 'response.audio.delta') {
+          } else if (message.type === 'response.audio.delta' || message.type === 'response.output_audio.delta') {
             this.generationDone = false;
             this.onState('speaking');
             this.playPCM(message.delta, message.sample_rate || 24000);
-          } else if (message.type === 'response.audio_transcript.delta' || message.type === 'response.output_text.delta') {
+          } else if (message.type === 'response.audio_transcript.delta' || message.type === 'response.output_audio_transcript.delta' || message.type === 'response.output_text.delta') {
             if (message.delta) { this.assistantTranscript += message.delta; this.onText(this.assistantTranscript, 'linx'); }
+          } else if (message.type === 'response.audio_transcript.done' || message.type === 'response.output_audio_transcript.done') {
+            if (message.transcript) { this.assistantTranscript = message.transcript; this.onText(this.assistantTranscript, 'linx'); }
           } else if (message.type === 'response.created') {
             this.assistantTranscript = '';
           } else if (message.type === 'input_audio_buffer.speech_started' || message.type === 'speech_started') {
@@ -69,7 +71,7 @@ export class VoiceClient {
             this.onState('listening');
           } else if (message.type === 'input_audio_buffer.speech_stopped' || message.type === 'speech_stopped') {
             this.onState('thinking');
-          } else if (message.type === 'response.audio.done') {
+          } else if (message.type === 'response.audio.done' || message.type === 'response.output_audio.done') {
             this.generationDone = true;
             this.checkDrain();
           } else if (message.type === 'response.done') {

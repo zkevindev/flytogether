@@ -2,7 +2,7 @@
 
 - 版本：0.1
 - 日期：2026-10-23（Asia/Shanghai）
-- 状态：第一版网页和 Go 游戏服务已实现并部署；灵矽 Realtime 仍待凭据和真实联调
+- 状态：网页与 Go 服务已部署；真实灵矽 Realtime 的合成语音查询、掷骰与音频回复已验证；真实麦克风和家庭试玩待验收
 - 约束：一人开发，比赛三天两晚，无专用硬件，后端 Go
 
 ## 1. 项目名称与定位
@@ -84,7 +84,7 @@ P1：页面重启后的本机存档、更多主持风格、完整动画细节、
 
 事实来源：[WebSocket 与 Realtime 协议](https://linx.qiniu.com/docs/xrobot/platform/websocket)。
 
-服务端 API Key 与浏览器会话分开管理。浏览器只连接本项目的 Go 网关；Go 通过 WebSocket 子协议完成上游授权，API Key 不下发到页面。Realtime 模型名和凭据由本机或服务器环境配置。
+服务端 API Key 与浏览器会话分开管理。浏览器只连接本项目的 Go 网关；Go 通过 `Authorization: Bearer` 请求头完成上游授权，WebSocket 子协议使用 `realtime`，API Key 不下发到页面。Realtime 模型名和凭据由本机或服务器环境配置。
 
 ## 5. 总体架构与技术选择
 
@@ -215,7 +215,7 @@ Resolving 是服务端一次原子动作内部的瞬态；前端可以还在播�
 
 浏览器 AudioWorklet 采集麦克风，转换为 16 kHz、单声道、signed PCM16 小帧。Go 把帧编码为 Realtime `input_audio_buffer.append` 事件。服务端 VAD 负责检测说话起止并生成回答，启用语音打断；无需手动录音按钮控制每句话的提交。
 
-灵矽返回 24 kHz PCM 音频增量事件。Go 原样转发语音事件，浏览器解码 PCM 并通过 Web Audio 排程播放。VAD 检测到新输入时，浏览器立即清除旧播放队列；已提交的棋步不会因此回滚。
+会话输出模式设置为 `["audio"]`。灵矽返回 24 kHz PCM 音频增量及关联字幕；Go 和浏览器同时兼容 `response.output_audio.*` 与旧版 `response.audio.*` 事件。浏览器解码 PCM 并通过 Web Audio 排程播放。VAD 检测到新输入时，浏览器立即清除旧播放队列；已提交的棋步不会因此回滚。
 
 ### 9.3 游戏工具和动作授权
 
@@ -229,7 +229,7 @@ Go 不接受模型提供的房间 ID、骰子点数、游戏版本或动作 toke
 
 Realtime 连接断开时，Go 关闭当前上游会话并清除该轮写授权；网页提示语音断开，可点击继续游戏。真人操作和 AI 轮次只在 Go 中执行，不依赖语音在线。
 
-需要真实联调的项目包括：灵矽账号上的模型名与 API Key、Realtime 子协议授权、输入与输出 PCM 事件、服务端 VAD、工具调用事件顺序、语音打断和实际延迟。代码构建成功不等于这些平台链路已验收。
+已通过真实平台验证的项目包括：`lingxi-realtime` 模型、Bearer 鉴权、会话初始化，以及合成中文音频输入后的 VAD、转写、棋局查询工具和 PCM 语音回复。浏览器真实麦克风、扬声器回声、语音打断和家庭试玩仍需独立验收；合成音频联调不代表这些体验已通过。
 
 协议依据：[灵矽 WebSocket 文档](https://linx.qiniu.com/docs/xrobot/platform/websocket)。
 

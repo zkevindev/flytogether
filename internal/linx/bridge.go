@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -45,7 +46,10 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 		return errors.New("灵矽实时语音地址或模型配置无效")
 	}
 	dialCtx, stop := context.WithTimeout(ctx, 12*time.Second)
-	up, _, err := websocket.Dial(dialCtx, endpoint, &websocket.DialOptions{Subprotocols: []string{"realtime", "openai-insecure-api-key." + b.Config.APIKey}})
+	up, _, err := websocket.Dial(dialCtx, endpoint, &websocket.DialOptions{
+		Subprotocols: []string{"realtime"},
+		HTTPHeader:   http.Header{"Authorization": []string{"Bearer " + b.Config.APIKey}},
+	})
 	stop()
 	if err != nil {
 		return errors.New("灵矽实时连接失败，请检查服务器上的 API Key 和模型配置")
@@ -223,7 +227,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 				responseHasTools = true
 				pendingCalls = append(pendingCalls, body.Item)
 			}
-		case "response.audio.delta":
+		case "response.audio.delta", "response.output_audio.delta":
 			if r.Snapshot().Voice != "speaking" {
 				r.VoiceState("speaking")
 			}
@@ -297,8 +301,8 @@ func realtimeURL(raw, model string) (string, error) {
 
 func realtimeSessionUpdate(model string) map[string]any {
 	return map[string]any{"type": "session.update", "session": map[string]any{
-		"type": "realtime", "model": model, "output_modalities": []string{"audio", "text"},
-		"instructions": "你是一起飞家庭飞行棋的语音搭子。用简短、亲切的中文交流。棋局状态和规则以工具结果为准；掷骰或移动必须先查询状态，并且只能按玩家明确指令操作。棋子不明确时先追问。一次话语最多执行一个会改变棋局的动作。操作成功后根据工具返回播报结果，不得声称未执行的动作成功。",
+		"type": "realtime", "model": model, "output_modalities": []string{"audio"},
+		"instructions": "你是一起飞家庭飞行棋的语音搭子。用简短、亲切的中文交流。只用玩家昵称、棋子昵称或序号与玩家交流，不朗读内部ID、工具名和技术字段。棋局状态和规则以工具结果为准；掷骰或移动必须先查询状态，并且只能按玩家明确指令操作。棋子不明确时先追问。一次话语最多执行一个会改变棋局的动作。操作成功后根据工具返回播报结果，不得声称未执行的动作成功。",
 		"audio": map[string]any{
 			"input": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 16000}, "transcription": map[string]any{},
 				"turn_detection": map[string]any{"type": "server_vad", "create_response": true, "interrupt_response": true}},
@@ -339,6 +343,7 @@ func (b *Bridge) executeTool(r *room.Room, call functionCall) string {
 func shouldForward(event string) bool {
 	switch event {
 	case "response.audio.delta", "response.audio.done", "response.audio_transcript.delta", "response.audio_transcript.done",
+		"response.output_audio.delta", "response.output_audio.done", "response.output_audio_transcript.delta", "response.output_audio_transcript.done",
 		"response.output_text.delta", "response.output_text.done", "conversation.item.input_audio_transcription.completed",
 		"input_audio_buffer.speech_started", "input_audio_buffer.speech_stopped", "response.created", "response.done":
 		return true

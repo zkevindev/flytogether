@@ -1,7 +1,7 @@
 # 一起飞 · 项目进展
 
 - 更新日期：2026-10-23（Asia/Shanghai）
-- 当前阶段：MVP 源码已同步到 main；Web 棋局、三种棋盘和公网部署完成；灵矽 Realtime 等待真实凭据联调
+- 当前阶段：源码在 main；真实灵矽平台的合成中文语音查询、掷骰与音频回复已通过；真实麦克风与家庭试玩待验收
 - 比赛安排：三天两晚，一人开发
 - 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
 
@@ -9,11 +9,11 @@
 
 | 阶段 | Issue | 当前状态 | 关联 PR |
 | --- | --- | --- | --- |
-| M1：Realtime 语音接入 | [#1](https://github.com/zkevindev/flytogether/issues/1) | 桥接代码已同步到 main 并部署；等待凭据及平台联调 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
+| M1：Realtime 语音接入 | [#1](https://github.com/zkevindev/flytogether/issues/1) | 已验证 Bearer 鉴权、会话初始化、合成中文语音查询和掷骰 | 直接提交 main，未创建 PR |
 | M2：家庭飞行棋玩法 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 点击玩法和三种棋盘已同步到 main；实际浏览器演示通过 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
 | M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | HTTPS 部署及线上棋盘演示已完成；源码在 main，家庭试玩和真实语音演示待完成 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
 
-PR 按功能和验收边界分批提交；每个 PR 创建后在对应 Issue 的“关联 PR”清单中记录，不把无关改动捆成一次性提交。
+当前按要求只推送 main；Issue 持续记录提交、验证和待办。如有相关 PR，在对应 Issue 中回链。
 
 ## 完成情况
 
@@ -25,20 +25,20 @@ PR 按功能和验收边界分批提交；每个 PR 创建后在对应 Issue 的
 | 经典十字、长航线和环形棋盘 | 已实现并浏览器演示 | 棋盘设置；长航线 84 格，环形路线保留 |
 | 实际浏览器演示 | 已完成 | 公网长航线演示局开局、掷骰并移动合法棋子；本地另验环形路线 |
 | 公网 HTTPS 部署和可配置部署工具 | 已完成 | `deploy/install.sh`、`scripts/deploy.py`；真实服务器配置存放仓库外 |
-| 灵矽 Realtime 上游适配 | 已实现框架，未实测 | `internal/linx/bridge.go`；构建通过，缺少真实凭据联调 |
+| 灵矽 Realtime 上游适配 | 真实平台已验证 | Bearer 鉴权、`session.created` / `session.updated` |
 | 浏览器持续 PCM 采集、实时播放和语音打断 | 已实现客户端逻辑，未实测 | `web/src/lib/voice.ts`、`web/public/pcm-capture.js` |
-| Realtime 游戏工具与单轮动作授权 | 已实现，未实测 | Go 注册棋局查询、掷骰、移动工具 |
+| Realtime 游戏工具与单轮动作授权 | 查询与掷骰已实测，移动待验收 | 合成中文指令触发查询、真实随机骰子，回复与 Go 状态一致 |
 | 真实家庭试玩与比赛演示 | 待完成 | 需要灵矽联调和试玩记录 |
 
 ## 当前下一步
 
-1. 后续功能改动按 Issue 拆分并关联 PR，持续更新进展；本轮实现已按要求直接同步 main，没有创建 PR。
-2. 在本机或服务器私密配置中填入 `LINGXI_REALTIME_MODEL` 与 `LINGXI_REALTIME_API_KEY`，验证握手、双向音频、VAD 打断和工具调用。
-3. 完成家庭场景试玩并记录问题，更新验收与演示材料。
+1. 实现可自定义唤醒词的语音唤醒，默认“小灵同学”，唤醒后允许短时间连续对话。
+2. 验证浏览器真实麦克风、扬声器回声、语音选子、打断及异常恢复。
+3. 完成家庭场景试玩并记录问题；每个可验收改动直接提交 main 并回链 Issue。
 
 灵矽密钥不能进入仓库、浏览器构建产物或聊天记录。服务器地址、SSH 凭据和真实部署域名均保存在仓库外的本机配置中。
 
-当前源码位于 [main](https://github.com/zkevindev/flytogether/tree/main)。本轮按要求直接同步 main，没有创建 PR；后续改动按 Issue 和审阅边界分批创建，并在对应 Issue 回链。
+当前源码位于 [main](https://github.com/zkevindev/flytogether/tree/main)。本轮按要求直接提交 main，没有创建 PR。本机 `.env` 与服务器 `/etc/flytogether.env` 已配置语音所需变量；真实值不提交到 Git。
 
 ## 设计决策
 
@@ -60,7 +60,9 @@ PR 按功能和验收边界分批提交；每个 PR 创建后在对应 Issue 的
 - [x] Go 规则和点击操作可运行，语音未配置时点击仍可玩。
 - [x] 前端与 Go 均可构建。
 - [x] 经典十字、84 格长航线、环形棋盘可选；实际浏览器操作通过。
-- [ ] 灵矽 Realtime API 鉴权及模型会话握手成功。
-- [ ] 连续语音、中文回复、VAD 打断与音频播放通过真实联调。
-- [ ] 语音查询和一次性棋局动作工具通过真实联调。
+- [x] 灵矽 Realtime API 鉴权及模型会话握手成功。
+- [x] 合成中文 PCM 输入、VAD、转写、查询、真实掷骰与音频回复通过平台联调。
+- [ ] 浏览器真实麦克风、扬声器播放和 VAD 打断通过试玩。
+- [ ] 语音选子、无效操作与异常恢复通过联调。
+- [ ] 可编辑唤醒词与唤醒后连续对话通过联调。
 - [ ] 完成家庭试玩及比赛演示。

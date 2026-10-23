@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-网页飞行棋、Go 规则服务、家庭房间、AI 对手和公开 HTTPS 部署已可用。语音接入已切换为浏览器麦克风经 Go 网关连接灵矽 Realtime，并提供查询棋局、掷骰和移动棋子的游戏工具；真实灵矽凭据尚未配置，语音链路仍待联调。
+网页飞行棋、Go 规则服务、家庭房间、AI 对手和公开 HTTPS 部署已可用。网页通过 Go 网关连接灵矽 Realtime，提供查询棋局、掷骰和移动棋子的游戏工具。已用合成中文语音通过真实平台验证会话初始化、VAD、转写、查询、掷骰及 PCM 音频回复；浏览器真实麦克风、扬声器回声、语音选子和打断体验仍需试玩验收。
 
 棋盘可选经典十字、84 格长航线十字或环形航线；开局设置、棋盘显示和服务端路线参数保持一致。新版已部署，并完成浏览器中的开局、掷骰和合法棋子移动演示。
 
@@ -42,11 +42,11 @@ npm run dev
 
 ```dotenv
 LINGXI_REALTIME_URL=wss://xrobo-io.qiniuapi.com/v1/realtime
-LINGXI_REALTIME_MODEL=控制台中可用的实时模型名
+LINGXI_REALTIME_MODEL=lingxi-realtime
 LINGXI_REALTIME_API_KEY=你的服务端API密钥
 ```
 
-API Key 只由 Go 服务读取，不会发送给浏览器。不要把真实密钥写入仓库或聊天记录。
+API Key 只由 Go 服务读取，通过 `Authorization: Bearer` 请求头访问实时接口，不会发送给浏览器。修改配置后需要重启 Go 服务。不要把真实密钥写入仓库或聊天记录。
 
 ## 部署
 
