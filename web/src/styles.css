@@ -408,3 +408,16 @@ main { padding-top: 12px; }
   .play-layout .voice-bubble { min-height: 56px; margin: 12px 0; }
   .play-layout .voice-footnote { margin-bottom: 0; }
 }
+
+.narration-status { font-size: 11px; line-height: 1.6; color: #54755d; margin: 4px 0; }
+.narration-action { width: 100%; min-height: 40px; border: 1px solid #ccd9bd; border-radius: 9px; background: #f5f9ee; color: #54755d; font-size: 11px; }
+.celebration { position: absolute; inset: 0; z-index: 4; overflow: hidden; pointer-events: none; border-radius: 16px; }
+.celebration-message { position: absolute; top: 32%; left: 9%; width: 82%; z-index: 1; display: grid; justify-items: center; gap: 12px; padding: 24px 18px; border: 2px solid #dfc875; border-radius: 24px; background: #fffbeaee; color: #8b6b27; box-shadow: 0 16px 50px #67571e25; animation: celebration-pop .5s cubic-bezier(.2,1.4,.6,1) both; text-align: center; }
+.celebration-message>svg { width: 52px; height: 52px; color: #d8ac38; }.celebration-message strong { font-size: clamp(20px,2.8vw,34px); }.celebration-message span { font-size: 13px; line-height: 1.7; }
+.celebration-win .celebration-message { background: #fff5d8f5; }
+.confetti-rain { position: absolute; inset: 0; }.confetti-rain i { position: absolute; top: -20px; left: var(--x); width: 9px; height: 16px; border-radius: 2px; animation: confetti-fall 3.4s var(--delay) cubic-bezier(.2,.45,.6,1) both; }
+.confetti-rain i:nth-child(3n) { border-radius: 50%; width: 11px; height: 11px; }
+@keyframes confetti-fall { 0% { opacity: 0; transform: translate(0,-15px) rotate(0); } 8% { opacity: 1; } 90% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--drift),min(110dvh,1100px)) rotate(var(--spin)); } }
+@keyframes celebration-pop { from { opacity: 0; transform: scale(.65) translateY(16px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .celebration-message { animation: none; }.confetti-rain i { animation: none; top: 10%; opacity: .5; transform: rotate(var(--spin)); } }
+@media (max-width: 480px) { .celebration-message { top: 28%; padding: 18px 12px; gap: 7px; }.celebration-message>svg { width: 36px; height: 36px; }.celebration-message span { font-size: 11px; } }

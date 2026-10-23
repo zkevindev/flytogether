@@ -19,7 +19,7 @@ export function cuesFor(events: GameEvent[]): Cue[] {
     else if (event.kind === 'bonus') cues.push('six');
     else if (event.kind === 'moved') cues.push(moveCue(event.text));
     else if (event.kind === 'prop') {
-      if (event.text.includes('护盾') && !event.text.includes('炸弹')) cues.push('shield');
+      if (event.text.includes('护盾') && !event.text.includes('送回')) cues.push('shield');
       else if (event.text.includes('炸弹') || event.text.includes('送回')) cues.push('bump');
       else cues.push('card');
     }
@@ -103,9 +103,11 @@ export class Sfx {
         this.noiseBurst(time, 0.22, 900, 0.03);
         return time + 0.36;
       case 'bump':
-        this.glideTone(time, 196, 82, 0.2, 0.07, 'sine');
-        this.noiseBurst(time, 0.08, 280, 0.06);
-        return time + 0.24;
+        this.glideTone(time, 620, 52, 0.62, 0.045, 'sawtooth');
+        this.noiseBurst(time + 0.05, 0.45, 650, 0.025);
+        this.tone(time + 0.6, 55, 0.18, 'sine', 0.075);
+        this.noiseBurst(time + 0.6, 0.18, 180, 0.055);
+        return time + 0.9;
       case 'shield':
         this.tone(time, 784, 0.28, 'sine', 0.03);
         this.tone(time, 1175, 0.34, 'sine', 0.02);

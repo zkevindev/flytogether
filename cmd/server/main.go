@@ -26,6 +26,7 @@ import (
 type server struct {
 	store        *room.Store
 	bridge       *linx.Bridge
+	speaker      *linx.Speaker
 	publicHost   string
 	secureCookie bool
 }
@@ -37,6 +38,7 @@ func main() {
 	s := &server{store: room.NewStore(), bridge: &linx.Bridge{Config: linx.Config{
 		URL:    env("LINGXI_REALTIME_URL", "wss://xrobo-io.qiniuapi.com/v1/realtime"),
 		APIKey: os.Getenv("LINGXI_REALTIME_API_KEY"), Model: os.Getenv("LINGXI_REALTIME_MODEL")}}, publicHost: public.Host, secureCookie: public.Scheme == "https"}
+	s.speaker = &linx.Speaker{Config: s.bridge.Config}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"status": "ok"}) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +53,7 @@ func main() {
 	mux.HandleFunc("POST /api/rooms/{id}/matches", s.restart)
 	mux.HandleFunc("POST /api/rooms/{id}/commands", s.command)
 	mux.HandleFunc("POST /api/rooms/{id}/voice-settings", s.voiceSettings)
+	mux.HandleFunc("POST /api/rooms/{id}/announcement", s.announcement)
 	mux.HandleFunc("GET /ws/game", s.gameSocket)
 	mux.HandleFunc("GET /ws/voice", s.voiceSocket)
 	webDir := env("WEB_DIR", "web/dist")

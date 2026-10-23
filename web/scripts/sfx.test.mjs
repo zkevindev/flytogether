@@ -15,3 +15,10 @@ test('dice, flight and hits get different cues, and a win replaces the pile', ()
   assert.deepEqual(cuesFor([{ kind: 'prop', text: '爸爸使用了护盾：小熊号获得护盾。' }]), ['shield']);
   assert.deepEqual(cuesFor([{ kind: 'prop', text: '爸爸使用了起飞卡，下一次掷骰生效。' }]), ['card']);
 });
+
+
+test('shield absorption never sounds like a crash, while bomb returns do', () => {
+ assert.deepEqual(cuesFor([{kind:'prop',text:'爸爸使用炸弹，小熊号的护盾被炸弹抵消，飞机留在原地'}]),['shield']);
+ assert.deepEqual(cuesFor([{kind:'prop',text:'爸爸使用炸弹，小熊号被送回机场'}]),['bump']);
+ assert.deepEqual(cuesFor([{kind:'moved',text:'兔子号抵达终点'}]),['home']);
+});

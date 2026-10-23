@@ -28,7 +28,7 @@ type VoiceSettings struct {
 }
 
 func DefaultVoiceSettings() VoiceSettings {
-	return VoiceSettings{WakeEnabled: true, WakeWord: "小灵同学"}
+	return VoiceSettings{WakeEnabled: false, WakeWord: "小灵同学"}
 }
 
 type Command struct {

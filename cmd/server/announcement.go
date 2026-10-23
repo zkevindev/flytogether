@@ -1,0 +1,62 @@
+package main
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"net/http"
+
+	"github.com/zkevindev/flytogether/internal/game"
+	"github.com/zkevindev/flytogether/internal/linx"
+)
+
+func (s *server) announcement(w http.ResponseWriter, req *http.Request) {
+	r := s.owned(w, req, req.PathValue("id"))
+	if r == nil {
+		return
+	}
+	var input struct {
+		GameID string `json:"game_id"`
+		Key    string `json:"key"`
+	}
+	if err := decode(w, req, &input); err != nil {
+		failure(w, err)
+		return
+	}
+	key, text := "", ""
+	current := func() bool {
+		view := r.Snapshot()
+		if view.Status != "playing" {
+			return false
+		}
+		var state game.State
+		if json.Unmarshal(view.State, &state) != nil || state.ID != input.GameID {
+			return false
+		}
+		key, text = linx.TurnAnnouncement(state)
+		return key != "" && key == input.Key
+	}
+	if !current() {
+		writeJSON(w, 409, map[string]string{"message": "播报所属回合已经变化"})
+		return
+	}
+	if s.speaker == nil || !s.speaker.Config.Enabled() {
+		writeJSON(w, 503, map[string]string{"message": "灵矽播报尚未配置"})
+		return
+	}
+	audio, err := s.speaker.Say(req.Context(), text)
+	if err != nil {
+		status := 503
+		if errors.Is(err, linx.ErrSpeechBusy) {
+			status = 429
+		}
+		writeJSON(w, status, map[string]string{"message": err.Error()})
+		return
+	}
+	// Discard a slow synthesis result after a roll, pause, or new match.
+	if !current() {
+		writeJSON(w, 409, map[string]string{"message": "播报所属回合已经变化"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"key": key, "text": text, "audio": base64.StdEncoding.EncodeToString(audio), "sample_rate": 24000})
+}

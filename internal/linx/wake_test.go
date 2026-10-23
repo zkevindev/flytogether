@@ -9,7 +9,7 @@ import (
 
 func TestWakeGateConversationWindow(t *testing.T) {
 	now := time.Unix(1000, 0)
-	g := wakeGate{settings: room.DefaultVoiceSettings()}
+	g := wakeGate{settings: room.VoiceSettings{WakeEnabled: true, WakeWord: "小灵同学"}}
 	if g.accept("请帮我掷骰子", now) || g.awake(now) {
 		t.Fatal("background instruction woke the assistant")
 	}
@@ -54,5 +54,21 @@ func TestWakeGateCustomWordAndFreeConversation(t *testing.T) {
 	}
 	if g.accept("……", now) {
 		t.Fatal("empty transcription should not trigger a response")
+	}
+}
+
+func TestDefaultConversationNeedsNoWakeOrTimeout(t *testing.T) {
+	now := time.Unix(1000, 0)
+	g := wakeGate{settings: room.DefaultVoiceSettings()}
+	if g.settings.WakeEnabled || !g.accept("使用起飞卡", now) {
+		t.Fatal("the first direct command should be accepted without a wake word")
+	}
+	g.finish(now)
+	g.sleep()
+	if !g.awake(now.Add(time.Hour)) || !g.accept("掷骰子", now.Add(time.Hour)) {
+		t.Fatal("direct conversation should stay available beyond the old wake window")
+	}
+	if g.accept("……", now.Add(time.Hour)) {
+		t.Fatal("silence should not request a response")
 	}
 }

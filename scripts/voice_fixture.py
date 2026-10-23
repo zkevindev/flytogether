@@ -18,7 +18,7 @@ output.mkdir(parents=True, exist_ok=True)
 rate = 16000
 pcm = bytearray(rate * 2 * 8)
 segments = []
-phrases = [('让小熊号起飞', 8), ('小灵同学，使用起飞卡', 10), ('请帮我掷骰子', 10), ('让小熊号起飞', 10), ('现在轮到谁', 10), ('不要掷骰子', 8)]
+phrases = [('现在轮到谁', 8), ('使用起飞卡', 10), ('请帮我掷骰子', 10), ('让小熊号起飞', 10), ('现在轮到谁', 10), ('不要掷骰子', 8)]
 with tempfile.TemporaryDirectory(prefix='fly-voice-fixture-') as temp:
     source, target = Path(temp) / 'phrase.aiff', Path(temp) / 'phrase.pcm'
     for text, silence in phrases:

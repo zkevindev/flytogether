@@ -8,7 +8,7 @@ const browser=await chromium.launch({channel:'chrome',headless:true,args:process
 try{
  const page=await browser.newPage({baseURL:process.env.QA_BASE_URL,viewport:{width:1440,height:1120}});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.addInitScript(()=>localStorage.setItem('fly-auto-voice','off'));
+ await page.addInitScript(()=>{localStorage.setItem('fly-auto-voice','off');localStorage.setItem('fly-host-voice','off');});
  await page.goto(process.env.QA_BASE_URL,{waitUntil:'networkidle'});
  assert.equal(await page.locator('.flight-host').count(),0,'home has no board');
  assert.equal(await page.locator('.voice-panel').count(),0,'home has no active voice panel');

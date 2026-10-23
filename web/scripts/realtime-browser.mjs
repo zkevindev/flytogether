@@ -30,20 +30,22 @@ try {
  });
  await page.goto(new URL('/play', process.env.QA_BASE_URL).href,{waitUntil:'networkidle'});
  let room=(await(await page.request.get('/api/session')).json()).room;
- const options={room_name:'自动唤醒联调',names:['小朋友','爸爸'],board:'cross',mode:'quick',ai:false,props:true,waiting:false};
+ const options={room_name:'直接对话联调',names:['小朋友','爸爸'],board:'cross',mode:'quick',ai:false,props:true,waiting:false};
  let res=await page.request.post('/api/rooms/'+room.id+'/matches',{data:options});assert.equal(res.status(),200);room=await res.json();
- await page.getByRole('button',{name:'关闭语音与麦克风',exact:true}).waitFor({state:'visible',timeout:30000});
+ await page.getByRole('button',{name:'关闭对讲麦克风',exact:true}).waitFor({state:'visible',timeout:30000});
  log({phase:'connected_without_voice_button',version:room.state.version});
  const state=async()=>{room=(await(await page.request.get('/api/session')).json()).room;return room.state;};
- // The first utterance contains no wake word and must not arm any action.
- await new Promise(resolve=>setTimeout(resolve,14000));assert.equal((await state()).version,1);log({phase:'unwoken_ignored',version:1});
+ // The first direct query must receive a reply without changing the game.
+ await new Promise(resolve=>setTimeout(resolve,14000));assert.equal((await state()).version,1);await page.waitForFunction(() => window.__qa.events.some(e=>e.type==='stt'&&e.text?.includes('轮到')), null, {timeout:5000});
+ assert.equal(room.voice_settings.wake_enabled,false);log({phase:'direct_query_without_wake',version:1});
  const until=async predicate=>{const deadline=Date.now()+25000;while(Date.now()<deadline){const s=await state();if(predicate(s))return s;await new Promise(r=>setTimeout(r,200));}throw new Error('Timed out waiting for expected authoritative game state');};
  let s=await until(s=>s.active_prop==='launch');assert.equal(s.version,2);assert.equal(s.players[0].props.launch,0);log({phase:'launch_card',version:s.version});
  s=await until(s=>s.phase==='move');assert.equal(s.version,3);assert.ok(s.dice>=1&&s.dice<=6);log({phase:'real_roll',dice:s.dice,version:s.version});
  s=await until(s=>s.players[0].pieces[0].progress===0);assert.equal(s.version,4);log({phase:'voice_takeoff',progress:0,version:4});
- await page.waitForFunction(()=>window.__qa.events.filter(e=>e.type==='stt').length>=5,null,{timeout:40000});
+ await page.waitForFunction(()=>window.__qa.events.filter(e=>e.type==='stt').length>=6,null,{timeout:40000});
  await page.waitForFunction(()=>{const e=window.__qa.events;const last=e.findLastIndex(x=>x.type==='stt');return e.slice(last+1).some(x=>x.type==='response.done'&&x.status==='completed');},null,{timeout:15000});
  assert.equal((await state()).version,4,'query and negative speech must not change state');
+ assert.equal(await page.getByText(/语音播放积压|本次播报过长/).count(),0,'normal provider replies should not trigger playback overflow');
  const metrics=await page.evaluate(()=>{
   const events=window.__qa.events;return events.filter(e=>e.type==='stt').map(e=>{
    const start=events.indexOf(e);const end=events.slice(start+1).find(x=>x.type==='stt');
@@ -54,13 +56,13 @@ try {
   });
  });log({phase:'latency',samples:metrics});
  await page.locator('.voice-panel').screenshot({path:join(outputDir, 'auto-voice.png')});
- const before=await state();await page.getByRole('button',{name:'关闭语音与麦克风',exact:true}).click();
+ const before=await state();await page.getByRole('button',{name:'关闭对讲麦克风',exact:true}).click();
  await page.waitForFunction(()=>window.__qa.tracks.every(t=>t.readyState==='ended'));
- await page.getByRole('checkbox',{name:'自动连接语音，随时呼唤'}).check();
- await page.getByRole('button',{name:'关闭语音与麦克风',exact:true}).waitFor({state:'visible'});
+ await page.getByRole('checkbox',{name:'自动连接语音，直接说话'}).check();
+ await page.getByRole('button',{name:'关闭对讲麦克风',exact:true}).waitFor({state:'visible'});
  const after=await state();assert.equal(after.id,before.id);assert.equal(after.version,before.version);
  log({phase:'real_reconnect_preserves_game',version:after.version});
- await page.getByRole('button',{name:'关闭语音与麦克风',exact:true}).click();
+ await page.getByRole('button',{name:'关闭对讲麦克风',exact:true}).click();
  await page.waitForFunction(()=>window.__qa.tracks.every(t=>t.readyState==='ended'));
  assert.deepEqual(errors,[]);
  await writeFile(join(outputDir, 'realtime-browser-results.json'),JSON.stringify({scope:'native Chrome fake WAV microphone -> actual worklet -> Go -> real Lingxi; no autoplay override',output,metrics,errors},null,2));
