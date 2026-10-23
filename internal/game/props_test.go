@@ -108,3 +108,24 @@ func TestLuckyDiceRequiresTwoValidValues(t *testing.T) {
 		}
 	}
 }
+
+func TestBoostStillRequiresExactFinishOnEveryBoard(t *testing.T) {
+	for _, board := range Boards() {
+		for _, remaining := range []int{2, 3} {
+			s := New(Options{Names: []string{"甲", "乙"}, Props: true, Board: board.ID})
+			s.Players[0].Pieces[0].Progress = board.Finish - remaining
+			if err := s.UseProp("boost"); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Roll(1); err != nil {
+				t.Fatal(err)
+			}
+			if remaining == 2 && s.Players[0].Pieces[0].Progress != board.Finish-2 {
+				t.Fatal("boost overshot finish")
+			}
+			if remaining == 3 && (s.Winner != s.Players[0].ID || s.ActiveProp != "") {
+				t.Fatal("exact boosted finish did not win and expire prop")
+			}
+		}
+	}
+}
