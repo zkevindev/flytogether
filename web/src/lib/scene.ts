@@ -3,7 +3,7 @@ import * as THREE from 'three';
 // Fit the board, airports and raised pieces at every viewport aspect ratio.
 export function fitBoardCamera(camera: THREE.PerspectiveCamera, aspect: number) {
   camera.aspect = aspect;
-  const direction = new THREE.Vector3(0, 1, 0.58).normalize();
+  const direction = new THREE.Vector3(0, 1, 0.35).normalize();
   const up = new THREE.Vector3(0, direction.z, -direction.y);
   const vertical = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
   let distance = 0;

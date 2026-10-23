@@ -352,3 +352,59 @@ main { padding-top: 12px; }
 .room-name-input { width: 100%; padding: 13px; border: 1px solid #c4d3c5; border-radius: 9px; background: white; color: #334d3e; }
 .difficulty-options { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }.difficulty-options button { min-height: 84px; border: 1px solid #cbd7cb; border-radius: 10px; padding: 10px 8px; background: white; text-align: left; }.difficulty-options button.selected { border-color: #438264; background: #edf6e9; box-shadow: inset 0 0 0 1px #438264; }.difficulty-options strong { display: block; font-size: 14px; margin-bottom: 7px; }.difficulty-options span { font-size: 11px; line-height: 1.5; color: #637969; }
 @media (max-width: 640px) { .room-toolbar { align-items: start; flex-direction: column; padding: 14px 0; }.room-controls { width: 100%; gap: 7px; }.room-controls .outline-button { padding: 9px 11px; font-size: 12px; }.game-status-overlay { top: 29%; left: 8%; width: 84%; padding: 15px; }.game-status-overlay p { font-size: 11px; }.game-status-overlay .primary-button { min-height: 44px; padding: 10px; }.difficulty-options button { padding: 9px 6px; } }
+
+.brand-button { border: 0; background: none; padding: 0; text-align: left; }
+.home-main { display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 5vw; min-height: calc(100dvh - 100px); max-width: 1220px; }
+.home-welcome { padding: 50px 0; position: relative; z-index: 1; }
+.home-welcome h1 { font-size: clamp(42px,6vw,76px); line-height: 1.22; letter-spacing: -3px; }
+.home-welcome h1 span { color: #c7a76e; }
+.home-description { margin: 28px 0; color: #7b8979; font-size: 17px; line-height: 1.9; }
+.home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.home-actions .primary-button { width: auto; min-height: 54px; padding: 15px 26px; gap: 12px; }
+.home-features { display: flex; gap: 18px; margin-top: 35px; font-size: 12px; color: #8b9689; }
+.home-flight-art { position: relative; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle,#eef4e7 30%,#edf1e760 64%,transparent 65%); }
+.home-flight-art>svg { width: 42%; height: 42%; color: #5b8d73; filter: drop-shadow(12px 22px 0 #d4dfcb); transform: rotate(-8deg); z-index: 1; }
+.home-orbit { position: absolute; width: 88%; height: 88%; border: 1px dashed #c9d7c1; border-radius: 50%; }
+.orbit-two { width: 66%; height: 66%; border-style: solid; border-color: #d7e0ce; }
+.home-cloud { position: absolute; width: 20%; height: 8%; background: #fffdf7; border-radius: 40px; z-index: 2; box-shadow: 0 12px 22px #83977810; }
+.cloud-one { left: 3%; top: 28%; }.cloud-two { right: 3%; bottom: 23%; width: 28%; }
+.home-flight-label { position: absolute; bottom: 6%; font-size: 12px; color: #81947a; letter-spacing: 3px; }
+.play-shell .site-header { height: 62px; padding: 0 24px; }
+.play-shell .brand-mark { width: 32px; height: 32px; border-radius: 10px; }
+.play-shell .brand-name { font-size: 19px; }.play-shell .brand-name>span { display: none; }
+.play-shell .header-actions { gap: 20px; }
+.play-main { width: calc(100% - 32px); max-width: 1720px; margin: 12px auto; }
+.play-layout { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 16px; align-items: start; }
+.play-layout .board-panel { padding: 0 12px; border-radius: 18px; box-shadow: none; min-width: 0; }
+.play-layout .board-turnbar { margin: 0; min-height: 56px; background: transparent; padding: 8px 0; }
+.play-turn-actions { display: flex; gap: 8px; align-items: center; }
+.play-turn-actions .roll-button { margin: 0; width: auto; padding: 8px 14px; min-height: 38px; font-size: 12px; border-radius: 9px; }
+.play-layout .board-stage { max-width: min(100%,calc(100dvh - 250px)); margin: 0 auto; }
+.play-layout .flight-host { border-radius: 14px; }
+.play-layout .plane-legend { gap: 5px 16px; margin: 8px 6px; }
+.play-layout .plane-legend strong { display: none; }
+.play-layout .crew-list { margin: 0 -12px; border-radius: 0 0 18px 18px; overflow: hidden; }
+.play-layout .crew-seat { padding: 12px; }
+.play-layout .voice-panel { padding: 20px 17px; border-radius: 18px; }
+.play-layout .voice-examples { display: none; }
+.play-layout .voice-bubble { min-height: 110px; }
+.play-layout .voice-footnote { font-size: 10px; }
+.play-layout .side-column { min-width: 0; }
+@media (max-width: 800px) {
+  .home-main { grid-template-columns: 1fr; gap: 0; min-height: auto; }
+  .home-welcome { padding: 56px 0 20px; }.home-flight-art { max-width: 360px; width: 85%; margin: 0 auto; }
+  .home-welcome h1 { font-size: clamp(44px,10vw,66px); }.home-description { font-size: 15px; }
+  .play-shell .site-header { padding: 0 12px; height: 56px; }.play-shell .header-actions { gap: 14px; }
+  .play-main { width: calc(100% - 12px); margin: 6px auto; }
+  .play-layout { grid-template-columns: 1fr; gap: 8px; }
+  .play-layout .board-panel { padding: 0 5px; border-radius: 13px; }
+  .play-layout .board-stage { max-width: 100%; }
+  .play-layout .board-turnbar { min-height: 52px; padding: 6px 2px; gap: 4px; }
+  .play-layout .board-turnbar>strong { display: none; }
+  .play-layout .crew-list { margin: 0 -5px; }.play-layout .crew-seat { padding: 10px 6px; gap: 5px; }
+  .play-layout .crew-seat .avatar { width: 26px; height: 26px; border-radius: 9px; }.play-layout .seat-turn { display: none; }
+  .play-layout .plane-legend { margin: 6px 3px; font-size: 10px; }
+  .play-layout .voice-panel { padding: 14px; }
+  .play-layout .voice-bubble { min-height: 56px; margin: 12px 0; }
+  .play-layout .voice-footnote { margin-bottom: 0; }
+}

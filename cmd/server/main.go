@@ -68,7 +68,7 @@ func main() {
 			http.ServeFile(w, r, p)
 			return
 		}
-		if r.URL.Path != "/" {
+		if r.URL.Path != "/" && r.URL.Path != "/play" {
 			http.NotFound(w, r)
 			return
 		}

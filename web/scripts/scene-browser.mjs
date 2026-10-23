@@ -30,7 +30,7 @@ await page.addInitScript(()=>{
  };
 });
 const stats=()=>page.evaluate(()=>({allocated:window.__gpu.contexts.length,live:window.__gpu.contexts.filter(r=>!r.gl.isContextLost()).length,losses:window.__gpu.losses,resources:window.__gpu.contexts.filter(r=>!r.gl.isContextLost()).map(r=>Object.fromEntries(Object.entries(r.resources).map(([k,v])=>[k,v.size])))}));
-await page.goto(process.env.QA_BASE_URL,{waitUntil:'networkidle'});await page.clock.runFor(50);
+await page.goto(new URL('/play', process.env.QA_BASE_URL).href,{waitUntil:'networkidle'});await page.clock.runFor(50);
 const boards=(await (await page.request.get('/api/config')).json()).boards;
 const opts={names:['小朋友','爸爸','妈妈','爷爷'],board:'cross',mode:'classic',ai:false,demo:false,props:true,waiting:false};
 let room;
@@ -92,7 +92,7 @@ await noGPU.addInitScript(()=>{
  HTMLCanvasElement.prototype.getContext=function(type,...args){return ['webgl','webgl2'].includes(type)?null:original.call(this,type,...args);};
 });
 noGPU.on('pageerror',e=>errors.push(e.message));
-await noGPU.goto(process.env.QA_BASE_URL,{waitUntil:'networkidle'});
+await noGPU.goto(new URL('/play', process.env.QA_BASE_URL).href,{waitUntil:'networkidle'});
 await noGPU.getByText('当前浏览器暂时无法显示 3D',{exact:false}).waitFor({state:'visible'});
 const noGPUSession=await (await noGPU.request.get('/api/session')).json();
 const noGPUMatch=await noGPU.request.post('/api/rooms/'+noGPUSession.room.id+'/matches',{data:opts});assert.equal(noGPUMatch.status(),200);

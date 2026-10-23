@@ -24,7 +24,7 @@ try {
     socket.send(JSON.stringify({ type: 'hello' }));
     socket.send(JSON.stringify({ type: 'wake_state', wake_enabled: true, awake: false }));
   });
-  await page.goto(process.env.QA_BASE_URL, { waitUntil: 'networkidle' });
+  await page.goto(new URL('/play', process.env.QA_BASE_URL).href, { waitUntil: 'networkidle' });
   assert.equal(connections, 0, 'a waiting room must not capture microphone');
   let room = (await (await page.request.get('/api/session')).json()).room;
   const options = { names: ['小朋友', '爸爸'], board: 'cross', mode: 'quick', ai: false, props: true, waiting: false };
@@ -82,7 +82,7 @@ try {
   await denied.addInitScript(() => {
     navigator.mediaDevices.getUserMedia = async () => { await window.permissionCalled(); throw new DOMException('Permission denied', 'NotAllowedError'); };
   });
-  await denied.goto(process.env.QA_BASE_URL, { waitUntil: 'networkidle' });
+  await denied.goto(new URL('/play', process.env.QA_BASE_URL).href, { waitUntil: 'networkidle' });
   let deniedRoom = (await (await denied.request.get('/api/session')).json()).room;
   const created = await denied.request.post('/api/rooms/' + deniedRoom.id + '/matches', { data: options }); assert.equal(created.status(), 200);
   await denied.getByRole('button', { name: '点击启用麦克风并重试', exact: true }).waitFor({ state: 'visible' });

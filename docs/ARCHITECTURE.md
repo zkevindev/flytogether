@@ -513,7 +513,7 @@ flytogether/
 
 ### 家庭房间状态与难度（#8）
 
-Room 提供 `name` 和 `status`：`waiting → playing ↔ paused → ended`；waiting 也可直接结束。正常胜负使用棋局 `phase=finished`，保留冠军信息，用户仍可结束或重新准备。网页创建和重新准备均传 `waiting=true`，服务端准备后才允许写棋；旧 API 调用省略时保留原兼容行为。
+Room 提供 `name` 和 `status`：`waiting → playing ↔ paused → ended`；waiting 也可直接结束。正常胜负使用棋局 `phase=finished`，保留冠军信息，用户仍可结束或重新准备。网页首页负责创建与配置，提交后进入 `/play` 对局页。新房间先由服务端进入 waiting，网页随创建流程显式发送 start；重新开局直接以 playing 准备。准备、暂停与结束状态仍由服务端控制；`/play` 刷新返回同一应用入口。
 
 控制命令沿用 Cookie、game_id、command_id 去重和房间锁。暂停、结束同步撤销语音授权、清除 busy 并停止 AI；继续不恢复旧授权，也不自动开启麦克风。客户端断开待建立连接时，晚到的麦克风流立即停止，旧连接事件不会重建语音。握手提前断开会立即报错，停止播报后丢弃旧 response_id 的音频和字幕。上述连接行为通过模拟 WebAudio/WebSocket 自动回归；真实麦克风和声学回声仍待独立验收。
 

@@ -28,7 +28,7 @@ try {
   const create=AudioContext.prototype.createBufferSource;
   AudioContext.prototype.createBufferSource=function(...args){const source=create.apply(this,args);if(this.__voice){const start=source.start.bind(source);source.start=(...args)=>{window.__qa.sources.push({at:performance.now(),duration:source.buffer?.duration});return start(...args);};}return source;};
  });
- await page.goto(process.env.QA_BASE_URL,{waitUntil:'networkidle'});
+ await page.goto(new URL('/play', process.env.QA_BASE_URL).href,{waitUntil:'networkidle'});
  let room=(await(await page.request.get('/api/session')).json()).room;
  const options={room_name:'自动唤醒联调',names:['小朋友','爸爸'],board:'cross',mode:'quick',ai:false,props:true,waiting:false};
  let res=await page.request.post('/api/rooms/'+room.id+'/matches',{data:options});assert.equal(res.status(),200);room=await res.json();
