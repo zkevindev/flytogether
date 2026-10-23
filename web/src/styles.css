@@ -75,8 +75,24 @@ h1>span { color: #b4c4a0; }
 .prop-copy strong { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 13px; }
 .prop-copy small { font-size: 10px; font-weight: 500; white-space: nowrap; }
 .prop-copy>span { color: #596e7c; font-size: 10px; line-height: 1.5; }
-.flight-host { width: 100%; aspect-ratio: 1; border-radius: 28px; overflow: hidden; background: #e7f3f6; }
+.flight-host { position: relative; width: 100%; aspect-ratio: 1; border-radius: 28px; overflow: hidden; background: #e7f3f6; }
 .flight-host canvas { display: block; width: 100%; height: 100%; }
+.flight-host.scene-hidden { display: none; }
+.plane-labels { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.plane-marker { position: absolute; transform: translate(-50%,-100%); display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
+.plane-marker b { display: grid; place-items: center; width: 18px; height: 18px; border: 2px solid white; border-radius: 50%; background: white; box-shadow: 0 1px 4px #18352b55; font-size: 11px; line-height: 1; }
+.plane-marker[data-legal=true] b { outline: 2px solid #b29438; }
+.plane-marker small { display: none; font-size: 10px; background: #fffffff0; padding: 1px 4px; border-radius: 4px; }
+.plane-legend { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin: 10px 0 12px; font-size: 11px; }
+.plane-legend>div { min-width: 0; border-left: 3px solid currentColor; padding-left: 7px; }
+.plane-legend strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; }
+.plane-legend>div>span { display: flex; flex-wrap: wrap; gap: 4px 7px; color: #526b60; }
+.plane-legend span span { display: inline-flex; align-items: center; gap: 3px; }
+.plane-legend b { font-size: 10px; background: #e8eee7; border-radius: 50%; width: 15px; height: 15px; display: inline-grid; place-items: center; }
+.scene-recovery>p { margin: 8px 0; font-size: 12px; line-height: 1.7; }
+.scene-recovery button { border: 1px solid #b2c6bb; border-radius: 8px; background: white; padding: 7px 10px; margin: 4px; }
+.scene-recovery .board-svg { width: 100%; display: block; }
+@media (max-width: 480px) { .plane-marker b { width: 16px; height: 16px; font-size: 10px; } .plane-legend { gap: 8px 4px; font-size: 10px; } }
 .flight-board { position: relative; }
 .board-access { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .board-access button:focus { position: fixed; left: 16px; bottom: 16px; z-index: 6; width: auto; height: auto; clip: auto; margin: 0; padding: 10px 14px; overflow: visible; border: 0; border-radius: 10px; background: #fff; color: #23483d; box-shadow: 0 8px 24px #1d3b3240; }

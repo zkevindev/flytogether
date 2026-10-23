@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { Game, Piece } from '../lib/types';
 import { colors, palette } from '../lib/types';
 import { boardPieces, createBoardLayout, piecePosition, type BoardLayout, type Point } from '../lib/board-layout';
 import type { BoardSpec } from '../lib/types';
-import { createDie, dieQuaternion, disposeDie } from '../lib/die';
+import { createDie, dieQuaternion } from '../lib/die';
+import { disposeObjects, fitBoardCamera } from '../lib/scene';
+import { FlatBoard } from './FlatBoard';
 
 const S = 0.011;
 const toWorld = (point: Point, height = 0) => new THREE.Vector3((point.x - 360) * S, height, (point.y - 360) * S);
@@ -19,6 +21,9 @@ type Handlers = {
 
 export function FlightScene(props: Handlers) {
   const host = useRef<HTMLDivElement>(null);
+  const labels = useRef(new Map<string, HTMLSpanElement>());
+  const [status, setStatus] = useState<'ready' | 'lost' | 'unavailable'>('ready');
+  const [generation, setGeneration] = useState(0);
   const propsRef = useRef(props);
   propsRef.current = props;
 
@@ -26,7 +31,14 @@ export function FlightScene(props: Handlers) {
     const el = host.current;
     if (!el) return;
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch {
+      setStatus('unavailable');
+      return;
+    }
+    setStatus('ready');
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
@@ -37,8 +49,7 @@ export function FlightScene(props: Handlers) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#e7f3f6');
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 80);
-    camera.position.set(0, 7.05, 10.15);
-    camera.lookAt(0, 0, 0.15);
+
     scene.add(new THREE.HemisphereLight('#fff8ee', '#7ea497', 1.15));
     const sun = new THREE.DirectionalLight('#fffaf2', 1.45);
     sun.position.set(3.2, 8.4, 2.4);
@@ -56,21 +67,17 @@ export function FlightScene(props: Handlers) {
     const table = new THREE.Group();
     const tokens = new THREE.Group();
     scene.add(table, tokens);
-    const geos: THREE.BufferGeometry[] = [];
-    const mats: THREE.Material[] = [];
     const box = (w: number, h: number, d: number) => {
       const geometry = new THREE.BoxGeometry(w, h, d);
-      geos.push(geometry);
       return geometry;
     };
     const paint = (color: string, extra?: THREE.MeshStandardMaterialParameters) => {
       const material = new THREE.MeshStandardMaterial({ color, roughness: 0.62, metalness: 0.02, ...extra });
-      mats.push(material);
       return material;
     };
     let layoutKey = '';
     const planes = new Map<string, { group: THREE.Group; halo: THREE.Mesh; shield: THREE.Mesh; lift: number; placed: boolean }>();
-    let die = createDie(0.48);
+    const die = createDie(0.48);
     die.position.set(0, 0.36, 0);
     die.userData.kind = 'die';
     scene.add(die);
@@ -84,10 +91,11 @@ export function FlightScene(props: Handlers) {
 
     const rebuild = (game: Game) => {
       const layout = createBoardLayout(game.board);
-      while (table.children.length) {
-        const child = table.children.pop();
-        if (child) table.remove(child);
-      }
+      disposeObjects(table);
+      table.clear();
+      disposeObjects(tokens);
+      tokens.clear();
+      planes.clear();
       const base = new THREE.Mesh(box(8.15, 0.16, 8.15), paint('#f4faf8'));
       base.position.y = -0.1;
       base.receiveShadow = true;
@@ -121,12 +129,10 @@ export function FlightScene(props: Handlers) {
       });
       layout.pads.forEach((pad, player) => {
         const mesh = new THREE.Mesh(new THREE.CylinderGeometry(layout.unit * 0.34 * S, layout.unit * 0.34 * S, 0.04, 20), paint('#ffffff'));
-        geos.push(mesh.geometry);
         mesh.position.copy(toWorld(pad, 0.04));
         table.add(mesh);
       });
       const center = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.66, 0.05, 40), paint('#ffffff', { roughness: 0.35 }));
-      geos.push(center.geometry);
       center.position.y = 0.03;
       center.receiveShadow = true;
       table.add(center);
@@ -134,9 +140,7 @@ export function FlightScene(props: Handlers) {
         const from = layout.route[(player * layout.route.length / 4 + game.board.fly_from - 1) % layout.route.length];
         const to = layout.route[(player * layout.route.length / 4 + game.board.fly_to - 1) % layout.route.length];
         const geometry = new THREE.BufferGeometry().setFromPoints([toWorld(from, 0.08), toWorld(to, 0.08)]);
-        geos.push(geometry);
         const material = new THREE.LineDashedMaterial({ color: palette[color], dashSize: 0.08, gapSize: 0.05, transparent: true, opacity: 0.7 });
-        mats.push(material);
         const line = new THREE.Line(geometry, material);
         line.computeLineDistances();
         table.add(line);
@@ -173,6 +177,7 @@ export function FlightScene(props: Handlers) {
       }
       for (const [id, token] of planes) {
         if (seen.has(id)) continue;
+        disposeObjects(token.group);
         tokens.remove(token.group);
         planes.delete(id);
       }
@@ -182,8 +187,7 @@ export function FlightScene(props: Handlers) {
       const width = el.clientWidth || 720;
       const height = el.clientHeight || width;
       renderer.setSize(width, height, false);
-      camera.aspect = width / Math.max(height, 1);
-      camera.updateProjectionMatrix();
+      fitBoardCamera(camera, width / Math.max(height, 1));
     };
     const observer = new ResizeObserver(resize);
     observer.observe(el);
@@ -232,19 +236,26 @@ export function FlightScene(props: Handlers) {
     renderer.domElement.addEventListener('pointermove', hover);
 
     let frame = 0;
+    let lost = false;
+    let disposed = false;
+    let seenGame: Game | undefined;
+    const projected = new THREE.Vector3();
     const animate = () => {
+      if (disposed || lost || document.hidden) return;
       frame = requestAnimationFrame(animate);
       timer.update();
       const dt = Math.min(timer.getDelta(), 0.05);
       const now = performance.now();
       const current = propsRef.current;
-      const key = current.game.board.id + ':' + current.game.players.length;
+      const key = JSON.stringify([current.game.id, current.game.board.id, current.game.players.map(p => [p.name, p.color])]);
       if (key !== layoutKey) {
         layoutKey = key;
         rebuild(current.game);
       }
-      const layout = createBoardLayout(current.game.board);
-      syncTokens(current.game, layout);
+      if (seenGame !== current.game) {
+        syncTokens(current.game, createBoardLayout(current.game.board));
+        seenGame = current.game;
+      }
       const legal = new Set(!current.disabled && current.game.phase === 'move' ? current.game.legal_moves.map(move => move.piece_id) : []);
       for (const [id, token] of planes) {
         const target = token.group.userData.target as THREE.Vector3;
@@ -263,6 +274,15 @@ export function FlightScene(props: Handlers) {
         }
         const scale = ((token.group.userData.scale as number) || 1) * 1.28;
         token.group.scale.setScalar(scale);
+        const label = labels.current.get(id);
+        if (label) {
+          projected.copy(token.group.position);
+          projected.y += 0.24;
+          projected.project(camera);
+          label.style.left = `${(projected.x + 1) * 50}%`;
+          label.style.top = `${(1 - projected.y) * 50}%`;
+          label.dataset.legal = String(legal.has(id));
+        }
       }
       die.userData.canRoll = !current.disabled && current.game.phase === 'roll';
       const nextValue = current.game.dice || 1;
@@ -288,32 +308,60 @@ export function FlightScene(props: Handlers) {
       } else if (!current.rolling) die.position.y += (0.36 - die.position.y) * 0.2;
       renderer.render(scene, camera);
     };
+    const contextLost = (event: Event) => {
+      event.preventDefault();
+      lost = true;
+      cancelAnimationFrame(frame);
+      setStatus('lost');
+    };
+    const contextRestored = () => {
+      lost = false;
+      setStatus('ready');
+      resize();
+      cancelAnimationFrame(frame);
+      animate();
+    };
+    const visibilityChanged = () => {
+      cancelAnimationFrame(frame);
+      if (!document.hidden) animate();
+    };
+    renderer.domElement.addEventListener('webglcontextlost', contextLost);
+    renderer.domElement.addEventListener('webglcontextrestored', contextRestored);
+    document.addEventListener('visibilitychange', visibilityChanged);
     animate();
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
+      timer.dispose();
+      document.removeEventListener('visibilitychange', visibilityChanged);
+      renderer.domElement.removeEventListener('webglcontextlost', contextLost);
+      renderer.domElement.removeEventListener('webglcontextrestored', contextRestored);
       renderer.domElement.removeEventListener('pointerdown', pick);
       renderer.domElement.removeEventListener('pointermove', hover);
-      disposeDie(die);
-      for (const token of planes.values()) {
-        token.group.traverse(object => {
-          const mesh = object as THREE.Mesh;
-          mesh.geometry?.dispose();
-          const material = mesh.material;
-          if (Array.isArray(material)) material.forEach(item => item.dispose());
-          else material?.dispose();
-        });
-        tokens.remove(token.group);
-      }
-      for (const geometry of geos) geometry.dispose();
-      for (const material of mats) material.dispose();
+      disposeObjects(scene);
+      sun.shadow.dispose();
       renderer.dispose();
-      el.removeChild(renderer.domElement);
+      renderer.forceContextLoss();
+      renderer.domElement.remove();
     };
-  }, []);
+  }, [generation]);
 
-  return <div ref={host} className="flight-host" aria-hidden="true" />;
+  return <>
+    <div ref={host} className={'flight-host' + (status !== 'ready' ? ' scene-hidden' : '')} aria-hidden="true">
+      <div className="plane-labels">{props.game.players.flatMap(player => player.pieces.map(piece => <span
+        className="plane-marker" key={piece.id} ref={node => { if (node) labels.current.set(piece.id, node); else labels.current.delete(piece.id); }}
+        style={{ color: palette[player.color] }} title={`${player.name} · ${piece.number}号 ${piece.label}`}>
+        <b>{piece.number}</b><small>{piece.label}</small>
+      </span>))}</div>
+    </div>
+    {status !== 'ready' && <div className="scene-recovery" role="status">
+      <p>{status === 'lost' ? '3D 画面暂时中断，已切换到平面棋盘，游戏进度已保留。' : '当前浏览器暂时无法显示 3D，已切换到平面棋盘。'}
+        <button type="button" onClick={() => setGeneration(value => value + 1)}>恢复 3D 棋盘</button></p>
+      <FlatBoard {...props} />
+    </div>}
+  </>;
 }
 
 function ahead(layout: BoardLayout, board: BoardSpec, player: number, piece: Piece): Point {

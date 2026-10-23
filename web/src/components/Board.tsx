@@ -1,4 +1,5 @@
 import type { Game, Piece } from '../lib/types';
+import { palette } from '../lib/types';
 import { boardPieces, createBoardLayout } from '../lib/board-layout';
 import { FlightScene } from './FlightScene';
 
@@ -7,8 +8,14 @@ export function Board({ game, onPiece, disabled, onRoll, rolling = false }: {
 }) {
   const layout = createBoardLayout(game.board);
   const canRoll = !disabled && game.phase === 'roll';
-  return <div className="flight-board">
+  return <div className="flight-board" data-game-id={game.id} data-version={game.version}>
     <FlightScene game={game} disabled={disabled} rolling={rolling} onPiece={onPiece} onRoll={onRoll} />
+    <div className="plane-legend" aria-label="飞机编号对照">
+      {game.players.map(player => <div key={player.id} style={{ color: palette[player.color] }}>
+        <strong>{player.name}</strong>
+        <span>{player.pieces.map(piece => <span key={piece.id}><b>{piece.number}</b>{piece.label}</span>)}</span>
+      </div>)}
+    </div>
     <div className="board-access">
       <button type="button" disabled={!canRoll} onClick={onRoll}>{canRoll ? '掷骰子' : `本次骰子 ${game.dice || '未掷'} 点`}</button>
       {boardPieces(game, layout).map(({ player, playerIndex, piece }) => {

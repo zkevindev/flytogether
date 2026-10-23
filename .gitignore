@@ -21,6 +21,7 @@ coverage.html
 node_modules/
 /web/dist/
 /web/.vite/
+/web/test-results/
 
 # Local runtime data and audio captures
 /data/
