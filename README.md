@@ -6,6 +6,8 @@
 
 > 全家围坐，开口一起飞。
 
+公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
+
 ## 项目状态
 
 **当前阶段：方案设计完成，准备验证语音接入。**
@@ -39,6 +41,16 @@
 - [项目进展](docs/PROGRESS.md)：实际完成记录、当前任务、阻塞与决策。
 - [贡献方式](CONTRIBUTING.md)：提交、Issue 与进展记录约定。
 - [灵矽官方文档](https://linx.qiniu.com/docs/)。
+
+## 开发阶段
+
+| 阶段 | 跟踪 |
+| --- | --- |
+| M1：真实语音接入 POC | [Issue #1](https://github.com/zkevindev/flytogether/issues/1) |
+| M2：可玩游戏与家庭语音交互 | [Issue #2](https://github.com/zkevindev/flytogether/issues/2) |
+| M3：稳定性、试玩与比赛交付 | [Issue #3](https://github.com/zkevindev/flytogether/issues/3) |
+
+各阶段 Issue 保存任务清单与验收结果，进展文档记录实际变更及设计决策。
 
 ## 第一个开发目标
 

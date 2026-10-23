@@ -3,6 +3,15 @@
 - 更新日期：2026-10-23（Asia/Shanghai）
 - 当前阶段：设计基线已完成，尚未开始代码实现
 - 比赛安排：三天两晚，一人开发；实际开赛日期待确定
+- 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
+
+## GitHub 跟踪
+
+| 阶段 | Issue | 状态 |
+| --- | --- | --- |
+| M1：真实语音接入 POC | [#1](https://github.com/zkevindev/flytogether/issues/1) | 待开始 |
+| M2：可玩游戏与家庭语音交互 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 待开始 |
+| M3：稳定性、试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | 待开始 |
 
 ## 当前目标
 
@@ -13,6 +22,7 @@
 | 事项 | 状态 | 证据 |
 | --- | --- | --- |
 | 项目命名：一起飞 FlyTogether | 已完成 | README 与架构文档 |
+| 公开 GitHub 仓库与阶段 Issue | 已完成 | 仓库主页及 Issue #1～#3 |
 | 家庭同屏玩法、MVP 和快速模式 | 设计完成，未实现 | ARCHITECTURE 第 2、3、7 节 |
 | Go、网页、灵矽与 MCP 职责 | 设计完成，未实现 | ARCHITECTURE 第 4～11 节 |
 | 三天开发计划与验收标准 | 已完成 | ARCHITECTURE 第 14、15 节 |
@@ -89,7 +99,8 @@
 - 将讨论收敛为家庭语音飞行棋，命名为一起飞 FlyTogether。
 - 编写架构基线、MVP、规则、接口契约、平台接入风险和验收计划。
 - 建立 README、贡献约定、忽略规则与进展记录。
-- 确认 GitHub 仓库应公开；仓库地址以 README 所在远端为准。
+- 创建公开仓库 zkevindev/flytogether，推送设计基线。
+- 创建 M1、M2、M3 三个阶段 Issue，写入任务清单与验收要求。
 
 验证：
 
