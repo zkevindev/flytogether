@@ -1,6 +1,6 @@
 {
-  "captured_at": "2026-10-23T12:54:49.079Z",
-  "app_commit": "c535364",
+  "captured_at": "2026-10-23T13:15:59.466Z",
+  "app_commit": "f80d677",
   "browser": "155.0.8059.85",
   "scope": "Actual app UI: home, create, board, five props, random dice and takeoff; two human seats; voice switched off; no mocked state or microphone",
   "captures": [
@@ -18,7 +18,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "150ab880256f0543759a5a15978ba5be3c23e99fcd3e1be31f25817076a5e6ca"
+      "sha256": "1e618c8cfd437d55c004b567289bb26ee66ee511ac85eb91f6384c22245480c0"
     },
     {
       "file": "play-desktop.png",
@@ -42,7 +42,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "341a8cb2c8c38a4df3c972ad6ae53c00c631205abecb558af16ed29ecb4d8997"
+      "sha256": "d97a5cc6d230dba488d6624899f826b350648e2c7912f27532479a338f9b5487"
     },
     {
       "file": "dice-3d.png",
@@ -50,7 +50,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "849f465ec707042cc7499b84efcbb3cbc34fbf6ec0068f1dc5053b1b5cf3c9fa"
+      "sha256": "c752573fb7726ae0b7ce094cbc7ea20dbeeb051c17e37d28fa26d2edf8bac471"
     },
     {
       "file": "move-preview.png",
@@ -58,7 +58,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "39b5aed1c516672c5ef2ef2406dfa7e17e6f946df2644a95a1b6013f84d8ba3a"
+      "sha256": "24740d52b553e8a2e9ed00aa8fb689b4bbc5b886b18ba2337ac5ac3fadc33aa8"
     },
     {
       "file": "play-mobile.png",
@@ -66,7 +66,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "b201762649b2d7a2083a9ec7b8794fd08a411d5924e436e9e64a96858fdaac65"
+      "sha256": "52ef4e399f10de7a06953dbb6a149fcf8c05d56e934fbbd8ad155af825a0aadb"
     }
   ],
   "console_errors": 0,

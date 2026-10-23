@@ -72,7 +72,8 @@ try {
  log({phase:'actual_spoken_replies',replies});
  if(lucky){
   const dice=(await state()).dice_rolls;
-  const transcript=replies.map(r=>r.text||'').join('');
+  const turns=await page.evaluate(()=>window.__qa.events.filter(e=>e.type==='stt').map(e=>e.at));
+  const transcript=replies.filter(r=>r.at>=turns[0]&&r.at<turns[1]).map(r=>r.text||'').join('');
   const numerals=['零','一','二','三','四','五','六'];
   assert.ok(transcript.includes('幸运骰')&&transcript.includes('取'),'lucky narration must state both real dice and the chosen value');
   for(const value of dice)assert.ok(transcript.includes(String(value))||transcript.includes(numerals[value]),'spoken lucky result must contain actual dice values');

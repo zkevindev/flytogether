@@ -60,3 +60,18 @@ QA_BASE_URL=http://127.0.0.1:8080 QA_AUDIO_FILE=/tmp/flytogether-voice-fixture/b
 - 不同设备上的断网/切网恢复、后台挂起及长时间监听。
 - 家长与孩子完整对局、噪声/回声/不同说话距离的记录。
 - 更多时延样本与比赛演示备份、交付清单。
+
+
+## 引导与幸运骰回归（#19）
+
+`test:flows:browser` 使用受控应用语音握手和真实 Chrome 麦克风，检查首次/刷新未完成/手动重看引导期间麦克风请求、语音连接和主动播报请求均为零。跳过、完成后连接，手动关闭后重看引导不擅自重新启用。还覆盖结束失败不跳转、成功回首页、刷新保留首页、移除已结束局继续入口，以及点击幸运骰出现两颗点数与 Go 事件一致的骰子。
+
+新增真实平台 lucky 场景：最终公网样本为 3、6 取 6，实际回复与本轮点数一致。合成音频原话“帮我使用幸运骰”，通过实际 AudioWorklet、Go 和灵矽，验证库存扣一次、版本 1 → 3、两个随机结果与可见双骰弹窗一致；后续“不要掷骰子”不写入。转写曾为“幸运头”，该明确用卡别名已兼容，测试保留实际转写，不冒称真人实测。平台曾在仅设置 response 指令时偶发复述旧开场词，现同步服务端系统上下文，每轮替换，并校验当前转写对应回复的点数，不能用后续回复凑通过。
+
+```sh
+QA_BASE_URL=http://127.0.0.1:8080 npm --prefix web run test:flows:browser
+python3 scripts/voice_fixture.py --scenario lucky --output-dir /tmp/flytogether-lucky
+QA_BASE_URL=http://127.0.0.1:8080 QA_AUDIO_FILE=/tmp/flytogether-lucky/browser-input.wav QA_SCENARIO=lucky npm --prefix web run test:voice:realtime
+```
+
+本轮还复跑完整起飞链路（实际随机 1 点、版本 1→2→3→4）及独立灵矽 TTS，返回 107332 字节 PCM，麦克风请求为零。自然随机走棋准备后，真实网页验证撞机回库/音效与抵达撒花通过。
