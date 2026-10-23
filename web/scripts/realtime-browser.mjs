@@ -14,11 +14,14 @@ try {
  await page.exposeBinding('qaEvent',(_,value)=>{if(['hello','stt','error','speech_stopped','response.done'].includes(value.type))log(value);});
  await page.addInitScript(()=>{
  localStorage.setItem('fly-tutorial-v1','skipped');
-  window.__qa={events:[],tracks:[],sources:[]};
+  window.__qa={events:[],tracks:[],sources:[],diceDialogs:[]};
+  const seenDice=new WeakSet();
+  const observeDice=()=>{for(const dialog of document.querySelectorAll('dialog[aria-label="3D 掷骰结果"]')){if(!seenDice.has(dialog)&&dialog.querySelector('.dice-cube')){seenDice.add(dialog);window.__qa.diceDialogs.push({at:performance.now(),values:[...dialog.querySelectorAll('.dice-cube')].map(n=>Number(n.dataset.value))});}}};
+  new MutationObserver(observeDice).observe(document,{childList:true,subtree:true});
   const Original=WebSocket;
   window.WebSocket=class extends Original{constructor(url,...args){super(url,...args);if(String(url).includes('/ws/voice?'))this.addEventListener('message',e=>{
    if(typeof e.data!=='string')return;let m;try{m=JSON.parse(e.data);}catch{return;}
-   const record={at:performance.now(),type:m.type,response_id:m.response_id||m.response?.id,text:m.text,status:m.response?.status};
+   const record={at:performance.now(),type:m.type,response_id:m.response_id||m.response?.id,text:m.text||m.transcript,status:m.response?.status};
    if(m.type.endsWith('audio.delta'))record.audio_bytes=Math.floor((m.delta||'').length*3/4);
    window.__qa.events.push(record);if(!m.type.endsWith('.delta'))void window.qaEvent(record);
   });}};
@@ -36,10 +39,24 @@ try {
  await page.getByRole('button',{name:'关闭对讲麦克风',exact:true}).waitFor({state:'visible',timeout:30000});
  log({phase:'connected_without_voice_button',version:room.state.version});
  const state=async()=>{room=(await(await page.request.get('/api/session')).json()).room;return room.state;};
+
+ const lucky=process.env.QA_SCENARIO==='lucky';
+ const until=async predicate=>{const deadline=Date.now()+25000;while(Date.now()<deadline){const s=await state();if(predicate(s))return s;await new Promise(r=>setTimeout(r,200));}throw new Error('Timed out waiting for expected authoritative game state');};
+ if(lucky){
+  const s=await until(s=>s.players[0].props.luck===0&&s.dice_rolls.length===2);
+  assert.equal(s.version,3);assert.equal(s.dice,Math.max(...s.dice_rolls));
+  await page.waitForFunction(()=>window.__qa.diceDialogs.some(d=>d.values.length===2));
+  const shown=await page.evaluate(()=>window.__qa.diceDialogs.find(d=>d.values.length===2));
+  assert.deepEqual(shown.values,s.dice_rolls);
+  log({phase:'voice_lucky_actually_rolled_with_popup',dice:s.dice_rolls,version:s.version,dialog_at:shown.at});
+  await page.waitForFunction(()=>window.__qa.events.filter(e=>e.type==='stt').length>=2,null,{timeout:40000});
+  await page.waitForFunction(()=>{const e=window.__qa.events;const last=e.findLastIndex(x=>x.type==='stt');return e.slice(last+1).some(x=>x.type==='response.done'&&x.status==='completed');},null,{timeout:15000});
+  assert.equal((await state()).version,3,'negative speech after lucky dice must not throw again');
+ }else{
  // The first direct query must receive a reply without changing the game.
  await new Promise(resolve=>setTimeout(resolve,14000));assert.equal((await state()).version,1);await page.waitForFunction(() => window.__qa.events.some(e=>e.type==='stt'&&e.text?.includes('轮到')), null, {timeout:5000});
  assert.equal(room.voice_settings.wake_enabled,false);log({phase:'direct_query_without_wake',version:1});
- const until=async predicate=>{const deadline=Date.now()+25000;while(Date.now()<deadline){const s=await state();if(predicate(s))return s;await new Promise(r=>setTimeout(r,200));}throw new Error('Timed out waiting for expected authoritative game state');};
+
  let s=await until(s=>s.active_prop==='launch');assert.equal(s.version,2);assert.equal(s.players[0].props.launch,0);log({phase:'launch_card',version:s.version});
  s=await until(s=>s.phase==='move');assert.equal(s.version,3);assert.ok(s.dice>=1&&s.dice<=6);log({phase:'real_roll',dice:s.dice,version:s.version});
  s=await until(s=>s.players[0].pieces[0].progress===0);assert.equal(s.version,4);log({phase:'voice_takeoff',progress:0,version:4});
@@ -47,6 +64,12 @@ try {
  await page.waitForFunction(()=>{const e=window.__qa.events;const last=e.findLastIndex(x=>x.type==='stt');return e.slice(last+1).some(x=>x.type==='response.done'&&x.status==='completed');},null,{timeout:15000});
  assert.equal((await state()).version,4,'query and negative speech must not change state');
  assert.equal(await page.getByText(/语音播放积压|本次播报过长/).count(),0,'normal provider replies should not trigger playback overflow');
+
+  const shown=await page.evaluate(()=>window.__qa.diceDialogs);
+  assert.ok(shown.some(d=>d.values.length===1),'voice roll must actually display a dice popup');
+ }
+ const replies=await page.evaluate(()=>window.__qa.events.filter(e=>e.type.endsWith('audio_transcript.done')||e.type==='response.output_text.done').map(e=>({at:e.at,text:e.text})));
+ log({phase:'actual_spoken_replies',replies});
  const metrics=await page.evaluate(()=>{
   const events=window.__qa.events;return events.filter(e=>e.type==='stt').map(e=>{
    const start=events.indexOf(e);const end=events.slice(start+1).find(x=>x.type==='stt');
@@ -67,5 +90,5 @@ try {
  await page.waitForFunction(()=>window.__qa.tracks.every(t=>t.readyState==='ended'));
  assert.deepEqual(errors,[]);
  await writeFile(join(outputDir, 'realtime-browser-results.json'),JSON.stringify({scope:'native Chrome fake WAV microphone -> actual worklet -> Go -> real Lingxi; no autoplay override',output,metrics,errors},null,2));
- console.log('PASS: actual provider, browser auto-connect, real PCM capture path, random roll, takeoff, negative/query no-write, native reconnect');
+ console.log(lucky?'PASS: actual provider accepts exact lucky-dice utterance, commits two real dice, shows popup, negative no-write and reconnect':'PASS: actual provider, browser auto-connect, real PCM capture path, visible random roll, takeoff, negative/query no-write, native reconnect');
 } finally {await browser.close();}

@@ -227,3 +227,32 @@ func TestAdviceNamesActualTacticalTargetWithoutWriting(t *testing.T) {
 		t.Fatal("advice is not based on actual target or attempted a write")
 	}
 }
+
+func TestLuckyDiceVoiceAndNarrationUseOnlyNewRollEvents(t *testing.T) {
+	state := game.New(game.Options{Names: []string{"孩子", "爸爸"}, Props: true})
+	action, ok := resolveVoiceAction(*state, "帮我使用幸运骰")
+	if !ok || action.Name != "use_prop" || action.PropID != "luck" || action.Notice != "" {
+		t.Fatalf("lucky dice utterance missed: %+v", action)
+	}
+	for _, text := range []string{"帮我使用幸运头。", "帮我使用幸运投"} {
+		a, ok := resolveVoiceAction(*state, text)
+		if !ok || a.Name != "use_prop" || a.PropID != "luck" {
+			t.Fatalf("ASR lucky alias missed: %s: %+v", text, a)
+		}
+	}
+	for _, text := range []string{"不要使用幸运头", "幸运头怎么用"} {
+		a, ok := resolveVoiceAction(*state, text)
+		if !ok || a.Name != "get_game_state" {
+			t.Fatalf("ASR alias bypassed no-write guard: %s: %+v", text, a)
+		}
+	}
+	state.Dice = 6
+	state.History = append(state.History, game.Event{ID: "past", Kind: "rolled", Text: "上次掷出了6点", DiceRolls: []int{6}})
+	if text := narrationFacts(*state, "past"); !strings.Contains(text, "没有发生新的掷骰") {
+		t.Fatal("historical die could be narrated as a new roll")
+	}
+	state.History = append(state.History, game.Event{ID: "new", Kind: "rolled", Text: "幸运骰掷出2和5，取5点", DiceRolls: []int{2, 5}})
+	if text := narrationFacts(*state, "past"); strings.Contains(text, "上次掷出了6点") || !strings.Contains(text, "2和5") {
+		t.Fatal("narration mixed old and current dice")
+	}
+}

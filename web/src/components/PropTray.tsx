@@ -5,7 +5,7 @@ import type { Game } from '../lib/types';
 export const propCards = [
   { id: 'launch', name: '起飞卡', effect: '任意点数也能起飞', Icon: AirplaneTilt, color: '#cf574c' },
   { id: 'boost', name: '加速卡', effect: '在飞的飞机多走 2 格', Icon: Lightning, color: '#b07716' },
-  { id: 'luck', name: '幸运骰', effect: '掷两次，选较大点数', Icon: DiceFive, color: '#387fc0' },
+  { id: 'luck', name: '幸运骰', effect: '立即掷两次，选较大点数', Icon: DiceFive, color: '#387fc0' },
   { id: 'bomb', name: '炸弹', effect: '送回对手一架航线飞机', Icon: Bomb, color: '#99543c' },
   { id: 'shield', name: '护盾', effect: '抵挡一次炸弹或撞机', Icon: ShieldCheck, color: '#25866f' },
 ];

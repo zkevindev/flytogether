@@ -433,12 +433,13 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 						return errors.New("游戏操作结果没有送回灵矽")
 					}
 				}
-				instructions := "只根据本轮工具结果用一两句日常中文回答，语气像主持人，优先说实际效果或一条具体建议；除非玩家问库存，不要逐项报剩余道具。结果含error或notice时没有执行操作，按真实棋局回答问题、解释原因或追问选择，不能宣称已操作成功。需要掷骰时请玩家说‘掷骰子’，点数由游戏服务随机生成，不能询问、接受或编造玩家自报点数。本轮不要再调用工具。玩家称呼只取工具中的昵称，唤醒词是助手的名字，不是玩家姓名。不要朗读内部ID和技术字段，不要提授权或操作次数用完；用过道具不表示回合结束，玩家可以在下一句话掷骰。"
+				instructions := "只根据本轮工具结果用一两句日常中文回答，语气像主持人，优先说实际效果或一条具体建议；除非玩家问库存，不要逐项报剩余道具。结果含error或notice时没有执行操作，按真实棋局回答问题、解释原因或追问选择，不能宣称已操作成功。需要掷骰时请玩家说‘掷骰子’，点数由游戏服务随机生成，不能询问、接受或编造玩家自报点数。本轮不要再调用工具。玩家称呼只取工具中的昵称，唤醒词是助手的名字，不是玩家姓名。不要朗读内部ID和技术字段，不要提授权或操作次数用完；幸运骰使用时已实际掷两次，不能要求玩家为了让幸运骰生效再掷一次；其他道具使用后玩家在下一句话掷骰。"
 				if action.Notice != "" {
 					instructions += "本轮具体要求（必须遵守）：“" + action.Notice + "”。"
 				}
 				if state, _, ok := roomGame(r); ok {
 					seenEvent = lastEventID(state)
+					instructions += narrationFacts(state, before)
 					if action.Notice == "" {
 						instructions += "先说这次真实发生了什么，再说：" + hostCue(state) + "。"
 					}
@@ -607,7 +608,7 @@ func realtimeURL(raw, model string) (string, error) {
 func realtimeSessionUpdate(model string) map[string]any {
 	return map[string]any{"type": "session.update", "session": map[string]any{
 		"type": "realtime", "model": model, "output_modalities": []string{"audio"},
-		"instructions": "你是一起飞家庭飞行棋的语音主持人。用简短亲切的中文交流，只用玩家和棋子昵称，不朗读内部ID和技术字段。玩家只是呼唤或问怎么办时，根据工具结果说当前一个最有用的选择，不操作棋局。撞某人、走最前面、回家、我要几点，都由游戏服务判断；你只播报工具结果。棋局状态、道具库存和规则以工具结果为准；写操作前先查询状态，只按明确指令操作。合法起飞或移动必须调用move_piece执行，再播报真实结果；多个候选先追问。经典起飞需六点，起飞卡生效时可用任意点数起飞。加速卡对已离开机库的飞机增加两步，幸运骰由游戏服务掷两次取较大值，不能接受玩家自报点数。炸弹可把指定对手公共航线上的飞机送回机场，护盾可保护自己公共航线上的飞机一次。两者都需piece_id，不能选机库、起飞位和终点航道。用户问战术或推荐时，先查状态，根据库存、prop_targets、合法走法给一句具体建议，不擅自操作。道具必须在掷骰前使用，一次掷骰只能用一张。一次话语最多执行一个写动作，使用道具后等待玩家另说掷骰子。不得声称未执行的动作成功。",
+		"instructions": "你是一起飞家庭飞行棋的语音主持人。用简短亲切的中文交流，只用玩家和棋子昵称，不朗读内部ID和技术字段。玩家只是呼唤或问怎么办时，根据工具结果说当前一个最有用的选择，不操作棋局。撞某人、走最前面、回家、我要几点，都由游戏服务判断；你只播报工具结果。棋局状态、道具库存和规则以工具结果为准；写操作前先查询状态，只按明确指令操作。合法起飞或移动必须调用move_piece执行，再播报真实结果；多个候选先追问。经典起飞需六点，起飞卡生效时可用任意点数起飞。加速卡对已离开机库的飞机增加两步，幸运骰由游戏服务掷两次取较大值，不能接受玩家自报点数。炸弹可把指定对手公共航线上的飞机送回机场，护盾可保护自己公共航线上的飞机一次。两者都需piece_id，不能选机库、起飞位和终点航道。用户问战术或推荐时，先查状态，根据库存、prop_targets、合法走法给一句具体建议，不擅自操作。道具必须在掷骰前使用，一次掷骰只能用一张。一次话语最多执行一个写动作，使用幸运骰会立即真实掷两次取较大值，其余道具使用后等待玩家另说掷骰子。只有本次新增rolled事件才能播报刚掷出了点数，state.dice可能来自上一回合，不能当成本次投掷。不得声称未执行的动作成功。",
 		"audio": map[string]any{
 			"input": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 16000}, "transcription": map[string]any{},
 				"turn_detection": map[string]any{"type": "server_vad", "create_response": false, "interrupt_response": true}},
@@ -622,7 +623,7 @@ func realtimeTools() []map[string]any {
 		{"type": "function", "name": "get_game_state", "description": "查询当前棋局、当前玩家、棋子位置、骰子和合法走法。执行任何棋局操作前先调用。", "parameters": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}},
 		{"type": "function", "name": "roll_dice", "description": "按当前真人玩家的明确指令掷一次骰子。不能指定骰子点数。", "parameters": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}},
 		{"type": "function", "name": "move_piece", "description": "移动玩家明确指定的一架合法飞机。piece_id 必须来自刚查询的棋局状态。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"piece_id": map[string]any{"type": "string"}}, "required": []string{"piece_id"}, "additionalProperties": false}},
-		{"type": "function", "name": "use_prop", "description": "按玩家明确指令，在掷骰前使用一张库存道具。launch 起飞卡、boost 加速卡、luck 幸运骰、bomb 炸弹、shield 护盾。炸弹和护盾需在prop_targets中明确选择piece_id；其他道具不填写piece_id。使用后不自动掷骰。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"prop_id": map[string]any{"type": "string", "enum": []string{"launch", "boost", "luck", "bomb", "shield"}}, "piece_id": map[string]any{"type": "string", "description": "炸弹或护盾的目标ID，必须来自prop_targets；其他道具省略"}}, "required": []string{"prop_id"}, "additionalProperties": false}},
+		{"type": "function", "name": "use_prop", "description": "按玩家明确指令，在掷骰前使用一张库存道具。launch 起飞卡、boost 加速卡、luck 幸运骰、bomb 炸弹、shield 护盾。炸弹和护盾需在prop_targets中明确选择piece_id；其他道具不填写piece_id。幸运骰使用后立即真实掷两次取较大值，其余道具使用后不自动掷骰。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"prop_id": map[string]any{"type": "string", "enum": []string{"launch", "boost", "luck", "bomb", "shield"}}, "piece_id": map[string]any{"type": "string", "description": "炸弹或护盾的目标ID，必须来自prop_targets；其他道具省略"}}, "required": []string{"prop_id"}, "additionalProperties": false}},
 	}
 }
 

@@ -20,7 +20,7 @@ const rules = [
   ['同色跳跃', '落在自己的颜色格上会向前跳 4 格；到达星星飞行点，可以继续沿航线飞行。'],
   ['送回机场', '最终落点有其他玩家的飞机，就把它们送回机场。途经的飞机不会受影响。'],
   ['准确抵达', '进入终点需要恰好的点数，超过就选择其他飞机。快速模式先送达一架获胜。'],
-  ['道具口袋', '趣味模式每人各有一张起飞卡、加速卡、幸运骰、炸弹和护盾。掷骰前最多用一张；起飞卡允许任意点数起飞，加速卡让在飞的飞机多走两格，幸运骰掷两次取较大值。炸弹送回对方公共航线上的一架飞机，护盾保护自己航线上的一架飞机，抵挡一次炸弹或撞机；机库、起飞位和终点航道不受影响。'],
+  ['道具口袋', '趣味模式每人各有一张起飞卡、加速卡、幸运骰、炸弹和护盾。掷骰前最多用一张；起飞卡允许任意点数起飞，加速卡让在飞的飞机多走两格，幸运骰使用后立即掷两次取较大值。炸弹送回对方公共航线上的一架飞机，护盾保护自己航线上的一架飞机，抵挡一次炸弹或撞机；机库、起飞位和终点航道不受影响。'],
 ];
 
 function Avatar({ player, size = '' }: { player: Player; size?: string }) {
@@ -37,11 +37,11 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
 
 export default function App() {
   const [screen, setScreen] = useState<'home' | 'play'>(() => location.pathname === '/play' ? 'play' : 'home');
-  const navigate = (next: 'home' | 'play') => {
+  const navigate = useCallback((next: 'home' | 'play') => {
     history.pushState({}, '', next === 'play' ? '/play' : '/');
     setScreen(next);
     window.scrollTo(0, 0);
-  };
+  }, []);
   useEffect(() => {
     const update = () => setScreen(location.pathname === '/play' ? 'play' : 'home');
     addEventListener('popstate', update);
@@ -74,6 +74,7 @@ export default function App() {
   const autoVoiceAttempt = useRef('');
   const [speech, setSpeech] = useState({ text: '', who: '' });
   const [sound, setSound] = useState(() => localStorage.getItem('fly-sound') !== 'off');
+  const voiceAllowedRef = useRef(false);
   const voice = useRef<VoiceClient | undefined>(undefined);
   const roomRef = useRef<Room | undefined>(undefined);
   const loadingRef = useRef(false);
@@ -148,6 +149,8 @@ export default function App() {
   }, [celebration]);
   useEffect(() => { setCelebration(undefined); setImpact(undefined); }, [state?.id]);
   const lifecycle = room?.status || 'playing';
+  const voiceAllowed = screen === 'play' && lifecycle === 'playing' && state?.phase !== 'finished' && tutorialSeen && !tutorialOpen;
+  voiceAllowedRef.current = voiceAllowed;
   useEffect(() => {
     if (room?.status && room.status !== 'playing') {
       voice.current?.disconnect(); setImpact(undefined); setCelebration(undefined); narrator.current.stop();
@@ -164,7 +167,9 @@ export default function App() {
   useEffect(() => {
     if (screen === 'play' && lifecycle === 'playing' && state?.phase !== 'finished' && !tutorialSeen && !modal && !presentation.active && !presentation.queue.length) setTutorialOpen(true);
   }, [screen, lifecycle, state?.phase, tutorialSeen, modal, presentation.active, presentation.queue.length]);
-  useEffect(() => { if (tutorialOpen) setPreviewSelection(undefined); }, [tutorialOpen]);
+  useEffect(() => {
+    if (tutorialOpen) { setPreviewSelection(undefined); narrator.current.stop(); setSpeech({ text: '', who: '' }); }
+  }, [tutorialOpen]);
   const closeTutorial = (completed: boolean) => {
     localStorage.setItem(tutorialPreference, completed ? 'completed' : 'skipped');
     setTutorialSeen(true); setTutorialOpen(false);
@@ -189,6 +194,7 @@ export default function App() {
       await new Promise(resolve => setTimeout(resolve, Math.max(0, 420 - (Date.now() - start))));
       if (roomRef.current?.id === r.id) {
         accept(next);
+        if (action === 'end') navigate('home');
         if (action === 'start' || action === 'resume') sfx.current.play(['welcome']);
       }
     } catch (error) {
@@ -198,7 +204,7 @@ export default function App() {
         if (fresh?.room) accept(fresh.room);
       }
     } finally { locked.current = false; setBusy(false); setPendingAction(''); }
-  }, [accept]);
+  }, [accept, navigate]);
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -250,7 +256,7 @@ export default function App() {
   };
   const connectVoice = useCallback(async () => {
     const r = roomRef.current;
-    if (!r || r.status !== 'playing') return;
+    if (!r || r.status !== 'playing' || !voiceAllowedRef.current) return;
     autoVoiceAttempt.current = r.id + ':' + r.state.id;
     setAutoVoiceError('');
     voice.current?.disconnect();
@@ -272,16 +278,16 @@ export default function App() {
     if (!enabled) voice.current?.disconnect();
   };
   useEffect(() => {
-    if (screen !== 'play' || !autoVoice || !config?.voice_configured || room?.status !== 'playing' || room.state.phase === 'finished') {
+    if (!voiceAllowed || !room || !autoVoice || !config?.voice_configured) {
       autoVoiceAttempt.current = '';
-      if (screen !== 'play' || room?.state.phase === 'finished') voice.current?.disconnect();
+      voice.current?.disconnect();
       return;
     }
     const key = room.id + ':' + room.state.id;
     if (autoVoiceAttempt.current === key) return;
     autoVoiceAttempt.current = key;
     void connectVoice();
-  }, [screen, autoVoice, config?.voice_configured, room?.id, room?.state.id, room?.status, room?.state.phase, connectVoice]);
+  }, [voiceAllowed, autoVoice, config?.voice_configured, room?.id, room?.state.id, connectVoice]);
 
   if (loading) return <div className="loading-page"><AirplaneTilt className="loading-plane" weight="fill" /><h1>正在准备家庭机场</h1><p>把棋盘铺好，快乐马上起飞。</p></div>;
   if (fatal || !room || !state || !current) return <div className="loading-page"><House size={48} /><h1>机场暂时还没连接上</h1><p>{fatal}</p><button className="primary-button" onClick={() => void load()}>重新连接 <ArrowClockwise /></button></div>;
@@ -309,7 +315,7 @@ export default function App() {
           <h1>叫上家人，<br />一起飞一局<span>。</span></h1>
           <p className="home-description">一张棋盘，开口就能一起玩。<br />让每次起飞，都有人陪你欢呼。</p>
           <div className="home-actions"><button className="primary-button" onClick={() => openSetup(true)}><Plus size={21} />创建游戏<ArrowRight size={20} /></button>
-            {lifecycle !== 'waiting' && <button className="outline-button" onClick={() => { navigate('play'); if (lifecycle === 'paused') void command('resume'); }}>继续当前游戏<ArrowRight size={18} /></button>}
+            {(lifecycle === 'playing' || lifecycle === 'paused') && state.phase !== 'finished' && <button className="outline-button" onClick={() => { navigate('play'); if (lifecycle === 'paused') void command('resume'); }}>继续当前游戏<ArrowRight size={18} /></button>}
           </div>
           <div className="home-features"><span>2—4 位飞行员</span><span>三种棋盘</span><span>语音游戏搭子</span></div>
         </section>
@@ -343,7 +349,7 @@ export default function App() {
             <section className="voice-panel">
               <div className="voice-heading"><span className="voice-icon"><Waveform size={24} /></span><div><h2>灵矽，陪你一起飞</h2><p>你的家庭游戏搭子</p></div><span className="voice-spark"><Sparkle size={22} weight="duotone" /></span></div>
               <label className="auto-voice-setting"><input type="checkbox" checked={hostVoice} onChange={e => { setHostVoice(e.target.checked); localStorage.setItem('fly-host-voice', e.target.checked ? 'on' : 'off'); void narrator.current.unlock(); }} />关闭麦克风时也播报回合</label>
-              <HostNarration roomID={room.id} game={presentation.game || state} enabled={screen === 'play' && lifecycle === 'playing' && hostVoice && sound && !!config?.voice_configured && voiceState === 'disconnected' && (!autoVoice || !!autoVoiceError) && !presentation.active && !presentation.queue.length} narrator={narrator.current} onText={onAnnouncement} />
+              <HostNarration roomID={room.id} game={presentation.game || state} enabled={voiceAllowed && hostVoice && sound && !!config?.voice_configured && voiceState === 'disconnected' && (!autoVoice || !!autoVoiceError) && !presentation.active && !presentation.queue.length} narrator={narrator.current} onText={onAnnouncement} />
               <label className="auto-voice-setting"><input type="checkbox" checked={autoVoice} onChange={e => changeAutoVoice(e.target.checked)} />自动连接语音，直接说话</label>
               <div className="voice-bubble" aria-live="polite">{speech.text ? <><span className="speech-label">{speech.who === 'you' ? '你刚刚说' : '灵矽'}</span>{speech.text}</> : <><span className="bubble-quote">“</span>直接说「掷骰子」或<br />「让小熊号起飞」，我来帮你。</>}</div>
               <div className="voice-status"><span className={'status-dot ' + (voiceState === 'ready' ? 'online' : '')} />{config?.voice_configured ? voiceLabels[effectiveVoice] || '等待连接' : '语音待配置 · 点击玩法已就绪'}</div>
@@ -361,7 +367,7 @@ export default function App() {
       {toast && <div className="toast" role="status"><Info size={19} /><span>{toast}</span><button aria-label="关闭提示" onClick={() => setToast('')}><X size={16} /></button></div>}
       {modal === 'props' && <Modal title={`${current.name}的道具口袋`} onClose={() => setModal(null)}><PropTray key={state.id + ':' + state.version} game={state} status={lifecycle} disabled={!canAct} onUse={(id, target) => { setModal(null); void command('prop', id, target); }} /></Modal>}
       {modal === 'rules' && <Modal title="一起飞，怎么玩？" onClose={() => setModal(null)}><p className="modal-description">这是一起飞的家庭规则。快速模式先送达一架飞机获胜；完整模式需要送达全部飞机。</p><div className="rules-list">{rules.map(([title, text], i) => <div key={title}><span>{String(i + 1).padStart(2, '0')}</span><section><h3>{title}</h3><p>{text}</p></section></div>)}</div><p className="rule-note">机库、起飞位和自己的终点航道不参与撞机。相同位置可以叠放；不使用三连六惩罚或终点反弹。</p><button className="primary-button" onClick={() => setModal(null)}>懂啦，一起出发 <Check /></button></Modal>}
-      {modal === 'end' && <Modal title="结束这一局？" onClose={() => setModal(null)}><p className="modal-description">结束后停止当前对局并保留棋盘记录，可以重新准备下一局。</p><button className="primary-button" disabled={busy} onClick={() => { setModal(null); void command('end'); }}>结束游戏 <Stop weight="fill" /></button></Modal>}
+      {modal === 'end' && <Modal title="结束这一局？" onClose={() => setModal(null)}><p className="modal-description">结束后停止当前对局并返回首页，可以创建新游戏。</p><button className="primary-button" disabled={busy} onClick={() => { setModal(null); void command('end'); }}>结束游戏 <Stop weight="fill" /></button></Modal>}
       {modal === 'setup' && <Modal title={setupNew ? '创建家庭房间' : '准备下一次出发'} onClose={() => setModal(null)}>
         <form onSubmit={e => { e.preventDefault(); void restart(false); }}>
           <p className="modal-description">选好玩家、路线和难度，创建后直接进入大棋盘开始游戏。</p>

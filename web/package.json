@@ -19,7 +19,8 @@
     "test:narration": "node --experimental-strip-types --test scripts/narration.test.mjs scripts/sfx.test.mjs",
     "test:voice-buffer:browser": "node scripts/voice-buffer-browser.mjs",
     "capture:docs": "node scripts/capture-docs.mjs",
-    "test:onboarding:browser": "node scripts/onboarding-browser.mjs"
+    "test:onboarding:browser": "node scripts/onboarding-browser.mjs",
+    "test:flows:browser": "node scripts/flow-regressions-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

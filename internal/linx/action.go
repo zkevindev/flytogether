@@ -62,7 +62,7 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 	}
 	var props []string
 	for _, id := range []string{"launch", "boost", "luck", "bomb", "shield"} {
-		hit := strings.Contains(text, game.PropNames[id]) || (id == "luck" && strings.Contains(text, "幸运投"))
+		hit := strings.Contains(text, game.PropNames[id]) || (id == "luck" && (strings.Contains(text, "幸运投") || strings.Contains(text, "幸运头")))
 		if id == "bomb" && state.Phase == "roll" && bombVerb(text) {
 			hit = true
 		}
@@ -668,4 +668,19 @@ func tacticalAdvice(state game.State) string {
 		return "建议使用幸运骰，掷两次取较大值。还没有使用，等你明确选择。"
 	}
 	return "本回合没有合适的道具可用，先掷骰子，再选高亮飞机。还没有执行操作。"
+}
+
+// narrationFacts separates this command's committed events from historical dice.
+func narrationFacts(state game.State, after string) string {
+	events := eventsAfter(state.History, after)
+	var facts []string
+	rolled := false
+	for _, event := range events {
+		facts = append(facts, event.Text)
+		rolled = rolled || event.Kind == "rolled"
+	}
+	if !rolled {
+		return "本轮没有发生新的掷骰，不得声称刚投出了几点；棋局中的dice可能是历史点数。只能说明本轮实际操作、历史结果或当前阶段。"
+	}
+	return "本轮已提交的真实事件（点数只取这些新事件，不取历史结果）：" + strings.Join(facts, "；") + "。"
 }
