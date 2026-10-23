@@ -28,3 +28,16 @@ QA_BASE_URL=http://127.0.0.1:8080 npm run test:scene:browser
 截图：[桌面](images/board-3d-desktop.png)、[手机](images/board-3d-mobile.png)、[故障降级](images/board-3d-recovery.png)。
 
 覆盖范围：渲染顺序、几何取景、资源回收和故障恢复。未覆盖所有真实显卡、长期挂机、真实麦克风回声、多人家庭试玩；这些仍由 #3 跟踪。
+
+## 新手与落点预览追加回归（2026-10-23，#18）
+
+应用 [c535364](https://github.com/zkevindev/flytogether/commit/c535364) 在本地和公网 Chrome 验证：首次引导、前后步骤、完成/跳过保存、刷新和重看不修改棋局；点选、换选和取消预览不提交动作，连续确认只执行一次。暂停、新局或其他输入完成动作后清除旧预览。
+
+使用 Go 的演示起点和真实随机掷骰准备跳格、飞行、撞机、终点、护盾局面，预览取自服务端 legal_moves，并逐一核对实际落点与受影响飞机。手机视口的预览卡片和顶栏无横向溢出，受控禁用 WebGL 后 2D 预览与确认可用。没有注入飞机位置或指定骰子。
+
+30 次掷骰/切棋盘/恢复回归仍保留 1 个渲染上下文；相同棋盘资源数一致，新预览复用场景资源。当前截图见 [清单](images/current/manifest.json)；手机视口不等于真实手机验收，家庭试玩仍归 #3。
+
+```sh
+QA_BASE_URL=http://127.0.0.1:8080 npm --prefix web run test:onboarding:browser
+QA_BASE_URL=http://127.0.0.1:8080 npm --prefix web run test:scene:browser
+```
