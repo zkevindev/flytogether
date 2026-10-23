@@ -1,67 +1,69 @@
 # 一起飞 · FlyTogether
 
-**会说话的家庭飞行棋搭子。**
-
-家长和孩子围坐在同一块屏幕前，说出“掷骰子”“走小熊号”“为什么这架不能起飞”，灵矽负责理解、讲解和回应，游戏负责准确执行。人数不足时，一个 AI 玩家加入棋局。
-
-> 全家围坐，开口一起飞。
+**会说话的家庭飞行棋搭子。**家长和孩子围坐在同一块屏幕前，可以点击或直接开口掷骰、选飞机、询问棋局。Go 服务掌握真实棋局，灵矽负责语音对话。
 
 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
 
-## 项目状态
+## 当前状态
 
-**当前阶段：方案设计完成，准备验证语音接入。**
+网页飞行棋、Go 规则服务、家庭房间、AI 对手和公开 HTTPS 部署已可用。语音接入已切换为浏览器麦克风经 Go 网关连接灵矽 Realtime，并提供查询棋局、掷骰和移动棋子的游戏工具；真实灵矽凭据尚未配置，语音链路仍待联调。
 
-这是一个面向单人开发、三天两晚 Hackathon 的项目。当前仓库包含架构与开发计划，尚未实现游戏、接入灵矽或完成可运行版本。
+棋盘可选经典十字、84 格长航线十字或环形航线；开局设置、棋盘显示和服务端路线参数保持一致。新版已部署，并完成浏览器中的开局、掷骰和合法棋子移动演示。
 
-## MVP
+## 功能
 
-- 同屏 2～4 个席位，支持真人与最多一个 AI 玩家。
-- 一张飞行棋棋盘，固定的家庭规则。
-- 点击与语音两种操作方式。
-- 语音掷骰、选棋子、查询可走方案和解释规则。
-- 按需讲解与关键事件播报。
-- 快速模式，方便试玩与比赛演示。
+- 同屏 2～4 位玩家，支持一名 Go 规则策略 AI。
+- 快速局和完整局，棋盘演示局面，实时同步棋局。
+- 三种棋盘路线可在每局开始前选择。
+- 点击掷骰和移动，或通过浏览器实时语音操作与询问规则。
+- Go 服务端校验骰子、合法走法、回合和胜负；重复请求不会重复执行动作。
+- 可配置部署服务器；服务器地址与凭据不写入代码仓库。
 
-## 技术方案
+## 本地运行
 
-| 部分 | 计划 |
-| --- | --- |
-| 前端 | React、TypeScript、Vite，SVG 棋盘与轻量动画 |
-| 后端 | Go 单体服务，HTTP、WebSocket、内存棋局 |
-| 语音与对话 | 七牛灵矽 AI，WebSocket 语音连接 |
-| 工具调用 | Go MCP 服务，优先适配灵矽文档的 HTTP/SSE 传输 |
-| AI 对手 | Go 规则策略选择动作，灵矽提供语言表达 |
+需要 Go 1.26+、Node.js 22+。
 
-语音和点击都进入同一个 Go 动作处理服务。骰子、合法走法、回合和胜负以服务端结果为准。
+```sh
+cp .env.example .env
+go run ./cmd/server
+```
 
-## 文档
+另开终端运行网页开发服务器：
 
-- [项目架构设计](docs/ARCHITECTURE.md)：产品定位、系统边界、规则、接口、灵矽接入、部署和验收。
-- [项目进展](docs/PROGRESS.md)：实际完成记录、当前任务、阻塞与决策。
-- [贡献方式](CONTRIBUTING.md)：提交、Issue 与进展记录约定。
-- [灵矽官方文档](https://linx.qiniu.com/docs/)。
+```sh
+cd web
+npm ci
+npm run dev
+```
 
-## 开发阶段
+打开 Vite 输出的本地地址。语音使用浏览器麦克风，需要在 localhost 或 HTTPS 页面授权。
 
-| 阶段 | 跟踪 |
-| --- | --- |
-| M1：真实语音接入 POC | [Issue #1](https://github.com/zkevindev/flytogether/issues/1) |
-| M2：可玩游戏与家庭语音交互 | [Issue #2](https://github.com/zkevindev/flytogether/issues/2) |
-| M3：稳定性、试玩与比赛交付 | [Issue #3](https://github.com/zkevindev/flytogether/issues/3) |
+要启用灵矽语音，在本机 `.env` 或部署服务器 `/etc/flytogether.env` 设置：
 
-各阶段 Issue 保存任务清单与验收结果，进展文档记录实际变更及设计决策。
+```dotenv
+LINGXI_REALTIME_URL=wss://xrobo-io.qiniuapi.com/v1/realtime
+LINGXI_REALTIME_MODEL=控制台中可用的实时模型名
+LINGXI_REALTIME_API_KEY=你的服务端API密钥
+```
 
-## 第一个开发目标
+API Key 只由 Go 服务读取，不会发送给浏览器。不要把真实密钥写入仓库或聊天记录。
 
-跑通一条最小真实链路：
+## 部署
 
-**说“掷骰子” → 灵矽调用 Go 工具 → 网页显示点数 → 灵矽播报同一个点数。**
+部署脚本从仓库外的配置文件读取 SSH 地址、端口、目录、域名和凭据。复制 `.env.deploy.example` 到本机仓库之外并填写，再运行：
 
-该链路通过后，再扩展完整棋盘和家庭互动。
+```sh
+python3 scripts/deploy.py --config /本机安全目录/flytogether-deploy.env
+```
 
-## 开发与开源说明
+部署后的灵矽凭据保存在服务器 `/etc/flytogether.env`，权限为仅 root 可读。详见 [部署脚本](deploy/install.sh) 与 [部署工具](scripts/deploy.py)。
 
-运行命令将在完成脚手架并验证后补充。当前没有可启动服务。
+## 项目记录
 
-已发现的第三方游戏仓库只是候选参考，尚未引入代码或素材。后续使用时记录来源、许可证和修改内容。项目名称是当前工作名称。
+- [项目架构](docs/ARCHITECTURE.md)
+- [开发进展](docs/PROGRESS.md)
+- [贡献约定](CONTRIBUTING.md)
+- [Issue #1：实时语音接入](https://github.com/zkevindev/flytogether/issues/1)
+- [Issue #2：家庭飞行棋玩法](https://github.com/zkevindev/flytogether/issues/2)
+- [Issue #3：试玩与比赛交付](https://github.com/zkevindev/flytogether/issues/3)
+- [灵矽官方文档](https://linx.qiniu.com/docs/)

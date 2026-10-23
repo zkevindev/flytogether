@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.deploy.example
 *.pem
 *.key
 *.p12
@@ -26,6 +27,9 @@ node_modules/
 /logs/
 /tmp/
 /recordings/
+.venv*/
+__pycache__/
+*.pyc
 *.log
 
 # OS and editors

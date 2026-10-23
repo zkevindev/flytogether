@@ -2,7 +2,7 @@
 
 - 版本：0.1
 - 日期：2026-10-23（Asia/Shanghai）
-- 状态：设计基线，尚未实现或完成灵矽联调
+- 状态：第一版网页和 Go 游戏服务已实现并部署；灵矽 Realtime 仍待凭据和真实联调
 - 约束：一人开发，比赛三天两晚，无专用硬件，后端 Go
 
 ## 1. 项目名称与定位
@@ -24,7 +24,7 @@
 | 能力 | 验收范围 |
 | --- | --- |
 | 同屏游戏 | 2～4 个席位，至少两个参与者，最多一个 AI 席位；一块共享屏幕 |
-| 完整规则 | 一张地图；固定起飞、移动、跳格、飞行、撞机、终点和胜负规则 |
+| 完整规则 | 可选经典十字、长航线或环形棋盘；固定起飞、移动、跳格、飞行、撞机、终点和胜负规则 |
 | 真人操作 | 点击掷骰、点击棋子；语音完成等价操作 |
 | 自然选择 | 支持棋子昵称、序号，以及“最前面”“能撞机的”这类有限指代 |
 | 规则解释 | 根据 Go 返回的合法动作及原因回答“为什么不能走” |
@@ -46,7 +46,7 @@ P1：页面重启后的本机存档、更多主持风格、完整动画细节、
 ### 3.1 开始一局
 
 1. 家长打开网页，创建本地家庭房间。
-2. 选择 2～4 个席位、昵称、棋子颜色与图案；决定是否加入 AI。
+2. 选择棋盘路线、2～4 个席位、昵称、棋子颜色与图案；决定是否加入 AI。
 3. 选择完整模式或快速模式，查看固定规则摘要。
 4. 同意浏览器麦克风权限并测试一次说话；也可以直接点击试玩。
 5. 开局后突出显示当前玩家、掷骰按钮和可选棋子。
@@ -65,7 +65,7 @@ P1：页面重启后的本机存档、更多主持风格、完整动画细节、
 - “最前面”按本方路线进度判断；并列时列出候选，不随机代选。
 - “撞爸爸”先查询目标与合法走法；无法做到时解释原因。
 - 语音操作与点击按钮共享同一套可走方案。
-- 默认按住说话，松开提交；识别、思考和操作阶段显示明确状态。
+- 浏览器持续采集语音，由服务端 VAD 识别每轮说话起止；识别、思考和操作阶段显示明确状态。
 - P0 在一次语音请求结束前禁止提交下一次语音或并行点击写操作，避免无法关联的迟到指令。
 - “停止播报”只停止声音；已执行的棋步保留。P0 不实现悔棋或通过打断撤回动作。
 - 重点事件才播报，移动中不逐格念数；讲解以短句为主。
@@ -76,21 +76,19 @@ P1：页面重启后的本机存档、更多主持风格、完整动画细节、
 
 | 项目 | 文档事实 | 项目决策 / 待验证 |
 | --- | --- | --- |
-| 实时语音 | WebSocket 提供双向音频、STT、TTS 和控制消息 | 网页经 Go 代理连接，不自建 ASR/TTS |
-| 终端激活 | OTA 返回激活信息，绑定后返回 WebSocket token 和地址 | 先验证软件终端注册与绑定；沿用会话身份 |
-| 工具 | 支持云端 MCP 和端侧 MCP | 首选云端 MCP，通过 Go 提供游戏工具 |
-| 会话定位 | 云端工具请求包含设备、Agent、会话标识请求头 | Go 校验来源后映射房间，不让模型决定房间 ID |
-| 主动声音 | listen.detect 可带 text_response 指定播报内容 | 验证与正常对话的协作，作为简短播报候选 |
-| 软件参考 | 文档给出 macOS/Linux 的 C++ 音频客户端 | 作为协议参考；不是已获得的网页或 Go SDK |
-| Function Call | 入门文档要求选择支持工具调用的模式和模型 | 在控制台配置并验证四个核心游戏工具 |
+| 实时语音 | Realtime WebSocket 支持流式音频、转写、语音输出与打断 | 浏览器经 Go 代理连接；凭据留在服务端 |
+| 会话配置 | 建连后由服务端发送实时会话音频、VAD 和提示词配置 | 模型从部署配置读取，不接受浏览器传入 |
+| 游戏工具 | Realtime 会话支持工具定义与调用事件 | Go 执行本项目的查询、掷骰、移动工具，并以棋局状态为准 |
+| 语音轮次 | 服务端 VAD 识别说话起止，可在播报时开始新输入 | Go 在语音开始时签发单次动作授权；旧授权不重放 |
+| 页面音频 | 浏览器麦克风经 AudioWorklet 重采样为 16 kHz PCM；上行到 Go | Go 转成 Realtime 音频事件；返回 PCM 音频增量由浏览器播放 |
 
-事实来源：[WebSocket 协议](https://linx.qiniu.com/docs/xrobot/platform/websocket)、[OTA 协议](https://linx.qiniu.com/docs/xrobot/platform/OTA)、[云端 MCP](https://linx.qiniu.com/docs/xrobot/mcp/software-mcp)、[端侧 MCP](https://linx.qiniu.com/docs/xrobot/mcp/hardware-mcp)、[快速入门](https://linx.qiniu.com/docs/xrobot/guide/quick-start)、[客户端参考](https://linx.qiniu.com/docs/xrobot/guide/client-demo)。
+事实来源：[WebSocket 与 Realtime 协议](https://linx.qiniu.com/docs/xrobot/platform/websocket)。
 
-平台管理 API 的 API-KEY 与终端 WebSocket token 分开管理。MVP 在控制台人工创建角色、绑定终端和配置 MCP；不额外开发平台管理后台。参考：[平台 API](https://linx.qiniu.com/docs/xrobot/api/)。
+服务端 API Key 与浏览器会话分开管理。浏览器只连接本项目的 Go 网关；Go 通过 WebSocket 子协议完成上游授权，API Key 不下发到页面。Realtime 模型名和凭据由本机或服务器环境配置。
 
 ## 5. 总体架构与技术选择
 
-采用一个 Go 进程承载游戏、浏览器 API、语音代理和 MCP，按功能分包。数据库、消息队列和微服务均不是 MVP 依赖。
+采用一个 Go 进程承载游戏、浏览器 API、Realtime 语音代理和工具调用，按功能分包。数据库、消息队列和微服务均不是 MVP 依赖。
 
 ~~~mermaid
 flowchart LR
@@ -98,13 +96,12 @@ flowchart LR
     W <-->|"游戏 HTTP / WebSocket"| G["Go：房间与动作服务"]
     W <-->|"独立语音 WebSocket"| V["Go：灵矽连接适配"]
     V <-->|"上游语音 WebSocket"| L["灵矽：语音、对话、工具选择"]
-    L <-->|"鉴权的 MCP HTTP/SSE"| M["Go：MCP 工具适配"]
-    M --> G
+    L -->|"Realtime 工具调用事件"| V
+    V -->|"游戏工具"| G
     G --> R["纯 Go 规则引擎"]
     G --> A["Go AI 策略"]
     G --> S["内存房间与命令结果"]
-    V --> B["设备 / 会话 / 房间映射"]
-    M --> B
+    V --> B["浏览器语音会话 / 房间映射"]
 ~~~
 
 | 决策 | 选择及原因 |
@@ -112,14 +109,14 @@ flowchart LR
 | 前端 | React + TypeScript + Vite；SVG 棋盘便于标记棋子、响应布局与复用素材 |
 | Go HTTP | 标准库 net/http；业务逻辑不依赖 HTTP 类型 |
 | WebSocket | 候选 coder/websocket；游戏与音频用两条连接，防止音频积压阻塞棋局 |
-| MCP | 优先官方 Go SDK；适配灵矽文档的传统 HTTP/SSE，完成握手后固定依赖版本 |
+| 工具调用 | 在 Realtime 会话声明项目游戏工具，由 Go 网关处理 function call 事件 |
 | 状态 | Go 为唯一真实来源，前端负责呈现，不保留第二套权威规则 |
 | 存储 | P0 内存，页面刷新可恢复，进程退出棋局不保留；P1 再加快照存储 |
 | API 类型 | 简单 REST 契约与 TypeScript 类型；初版人工对照，后续可生成客户端 |
-| 认证 | 浏览器使用不透明会话 Cookie；MCP 使用独立服务凭据；不引入用户账号 |
+| 认证 | 浏览器使用不透明会话 Cookie；灵矽 API Key 仅由 Go 服务端读取；不引入用户账号 |
 | 对手 | 确定性规则策略选择合法动作；不额外接一个模型控制走棋 |
 
-依赖依据：[coder/websocket](https://github.com/coder/websocket)、[MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk)、[SDK 传输说明](https://go.sdk.modelcontextprotocol.io/protocol/)。具体版本在编译与平台握手验证后锁定，不使用未经验证的“最新版”作为交付条件。
+依赖依据：[coder/websocket](https://github.com/coder/websocket)。
 
 ## 6. Go 模块职责
 
@@ -128,9 +125,9 @@ flowchart LR
 | game | 纯规则、合法走法、动作结果、胜负 | 不访问网络、音频、模型或 HTTP |
 | room | 房间生命周期、版本、命令去重、串行提交、状态广播 | 所有写动作唯一入口 |
 | opponent | 在合法候选中评分，安排 AI 回合 | 不能修改随机骰子或绕过规则 |
-| linx | OTA、终端身份、上游连接、消息适配和会话绑定 | 不解释飞行棋规则 |
+| linx | Realtime 上游连接、会话初始化、音频事件与工具调用适配 | 不解释飞行棋规则 |
 | voice | 浏览器语音会话、交互状态、播报队列 | 不直接移动棋子 |
-| mcp | 工具描述、平台身份校验、工具与 room 服务适配 | 不在工具处理函数中重写规则 |
+| voice tools | 将实时会话的工具调用映射到 room 服务 | 不在工具处理函数中重写规则 |
 | transport | 浏览器 HTTP / WebSocket、Cookie、错误转换 | 不拥有业务状态 |
 
 同一房间写操作使用短临界区串行执行；网络和模型等待不持有房间锁。先计算并提交棋局，再广播结果。广播失败不回滚已完成的棋步。
@@ -154,7 +151,7 @@ flowchart LR
 | 终点 | 需要精确点数；超出终点的走法不合法；不采用反弹规则 |
 | 获胜 | 完整模式率先全部到达；快速模式率先一架到达；首位获胜后结束一局 |
 
-地图由 board.family-v1.json 定义公共格、各方有序路线、起飞位、终点航道及跳格/飞行映射。视觉坐标与逻辑 cell_id 分离；规则不依靠屏幕像素或散落的魔法数字。
+每局选择一个棋盘规格。服务端为各规格保存公共格长度、终点跑道、跳格和飞行位置；棋盘布局只影响视觉呈现与路线长度，不改变同一局内固定的 family-v1 动作结算规则。
 
 动作结算顺序：普通位移 → 最多一次同色跳格 → 最多一次飞行 → 最终落点撞机 → 到达终点 → 胜负 → 六点奖励 / 下一玩家。
 
@@ -167,12 +164,12 @@ flowchart LR
 | 对象 | 主要字段 |
 | --- | --- |
 | Room | room_id、host_session_id、match、voice_binding、room_seq |
-| Match | game_id、ruleset_id、mode、status、version、turn_id、phase、current_player_id、dice |
+| Match | game_id、ruleset_id、board_id、mode、status、version、turn_id、phase、current_player_id、dice |
 | Player | player_id、nickname、color、human/ai、pieces |
 | Piece | piece_id、label、status、route_progress；cell_id 由地图计算 |
 | Command | command_id、source、game_id、turn_id、expected_version、action、arguments |
 | CommandResult | command_id、accepted、version、snapshot、events、error |
-| VoiceBinding | device_id、agent_id、linx_session_id、room_id、game_id、binding_epoch |
+| VoiceBinding | browser_session_id、linx_session_id、room_id、game_id、binding_epoch |
 
 Room 和 Match 分开：同一家庭房间可以重新开局，每局使用新的 game_id。客户端引用旧局、旧回合或旧版本的写操作全部拒绝。
 
@@ -195,70 +192,46 @@ Resolving 是服务端一次原子动作内部的瞬态；前端可以还在播�
 
 1. 点击请求携带 command_id，同一个 ID 重试返回原结果；同 ID 不同内容返回冲突。
 2. Go 校验 game_id、turn_id、expected_version；接收后才生成骰子或移动。
-3. MCP 查询返回 Go 签发的短期 action_token，绑定本局、回合、版本、动作种类和当前语音输入授权。写工具只能使用该 token。
-4. token 成功执行后保存结果，重复调用返回原结果；MCP RPC id 仅用于协议匹配，不能单独作为业务去重依据。
-5. P0 每次按键说话只允许一次主动写操作；掷骰后唯一走法的自动移动属于该次原子动作。需要继续选择时，等反馈结束，再说下一句。
+3. VAD 检测到用户开始说话时，Go 签发仅保存在服务端的短期 action token，绑定当前局、版本和语音轮次。写工具由 Go 在收到 function call 时附加授权。
+4. 工具动作使用服务端生成的 command ID 去重；Realtime call ID 用于匹配 function output，不能单独作为业务去重依据。
+5. 每轮 Realtime VAD 语音输入只允许一次主动写操作；掷骰后唯一走法的自动移动属于该次原子动作。用户可在灵矽播报时插话，新一轮输入会替换旧授权。
 6. 同一段语音返回后的后续查询可读取新棋局，但不能据此获得第二次写授权。下一次语音输入才能签发新授权。
 7. AI 回合由服务端触发，不消耗真人语音授权；AI 调度携带预期版本，过期任务直接丢弃。
 8. 新局、语音超时、上游重连或解绑时撤销旧授权与绑定；迟到工具调用返回错误，不能改新局。
 
 不承诺无限时长的 exactly-once。去重数据在本局存活期内有效；P0 进程重启后房间与去重记录一起失效。
 
-## 9. 灵矽接入方案
+## 9. 灵矽 Realtime 接入方案
 
-### 9.1 软件终端与连接
+### 9.1 服务端连接与鉴权
 
-先创建一个专用智能体，配置支持 Function Call 的模型及家庭主持人提示词。按 OTA 文档登记稳定终端标识，在控制台绑定，再由 Go 取得 WebSocket 地址和终端 token。
+浏览器在用户点击“开启实时语音”后申请麦克风权限，将 PCM 音频发给同源 Go WebSocket。Go 使用服务端 API Key 和配置的模型名连接灵矽 Realtime；密钥不会进入网页、URL 查询参数或游戏快照。
 
-P0 一个已绑定软件终端同一时刻只服务一个活跃语音房间。其他房间仍可点击游玩，不能复用同一上游连接并混合音频。多设备绑定池属于后续范围。
+配置项为 `LINGXI_REALTIME_URL`、`LINGXI_REALTIME_MODEL` 和 `LINGXI_REALTIME_API_KEY`。开发时放在被忽略的本地 `.env`，部署时放在服务器 `/etc/flytogether.env`。Go 启动后 `/api/config` 只返回是否已配置，不返回任何凭据。
 
-Go 保存绑定信息，网页仅连接自己的 Go 服务。上游 hello 成功后立即记录真实 session_id；工具请求必须匹配活跃绑定。
+每条 Realtime 连接初始化独立会话，收到 `session.created` 后，Go 下发模型、提示词、音频格式、服务端 VAD 和游戏工具；确认 `session.updated` 后才通知浏览器开始上传音频。任一会话只对应一个房间。房间状态由 Go 管理，灵矽连接由 Go 网关独占使用。
 
-### 9.2 录音与播放
+### 9.2 音频与全双工对话
 
-优先验证浏览器采集、重采样为 16 kHz 单声道 PCM 输入。按平台 hello 协商决定实际帧格式；不能将 MediaRecorder 的 WebM 容器直接视为裸 PCM 或裸 Opus 包。
+浏览器 AudioWorklet 采集麦克风，转换为 16 kHz、单声道、signed PCM16 小帧。Go 把帧编码为 Realtime `input_audio_buffer.append` 事件。服务端 VAD 负责检测说话起止并生成回答，启用语音打断；无需手动录音按钮控制每句话的提交。
 
-输入与输出编码分别处理。平台文档的 PCM 输入示例不代表已经验证 PCM 输出；若返回 Opus，需要验证解码与音频调度方案。采样率与帧长度以本次握手为准，不能写死成麦克风原始参数。
+灵矽返回 24 kHz PCM 音频增量事件。Go 原样转发语音事件，浏览器解码 PCM 并通过 Web Audio 排程播放。VAD 检测到新输入时，浏览器立即清除旧播放队列；已提交的棋步不会因此回滚。
 
-前端播放使用有界队列。TTS stop 表示上游生成结束，不等于浏览器已播完；播放队列排空后才恢复按键说话。停止播报时清空本地队列，发送适当控制消息，保留已提交棋局。
+### 9.3 游戏工具和动作授权
 
-MVP 默认半双工按键模式，播报与录音互斥。自由打断和多人远场拾音需额外验证，不能直接继承硬件场景中的体验承诺。
+实时会话声明 `get_game_state`、`roll_dice`、`move_piece` 三个项目工具。灵矽在 Realtime 响应中返回 function call；Go 在 `response.done` 后执行对应工具，将 function call output 写回会话并请求模型继续回复。
 
-协议细节依据：[WebSocket 文档](https://linx.qiniu.com/docs/xrobot/platform/websocket)。编码、端到端时延和按键结束时机列为接入 POC 验收项。
+Go 不接受模型提供的房间 ID、骰子点数、游戏版本或动作 token。语音 VAD 开始一轮输入时，Go 为当前局和状态版本生成一次性授权；服务端根据工具名自行补入授权，并通过现有 room 服务校验回合、合法走法和去重。每轮语音最多完成一个改变棋局的动作。读操作返回的棋局状态与可走方案来自 Go。
 
-### 9.3 云端 MCP 与会话路由
+真人游戏操作与浏览器点击共用同一规则入口。模型回答规则问题前先查询当前棋局；错误和歧义作为工具结果返回，模型不得把失败操作说成成功。
 
-Go 实现文档要求的 GET /mcp 和 POST /mcp/message，完成 initialize、工具发现与调用；优先使用 SDK 的传统 SSE handler，并以实际生成的消息端点做路由适配。普通游戏 SSE、云端 MCP SSE、第三方业务 SSE 是不同协议，不能共用处理器。
+### 9.4 断线与降级
 
-控制台配置独立 MCP 服务凭据，Go 在每次 MCP HTTP 请求验证。X-Linx-Device-Id、X-Linx-Agent-Id、X-Linx-Session-Id 用于定位，不单独充当认证。
+Realtime 连接断开时，Go 关闭当前上游会话并清除该轮写授权；网页提示语音断开，可点击继续游戏。真人操作和 AI 轮次只在 Go 中执行，不依赖语音在线。
 
-校验顺序：服务凭据 → 允许的 Agent/设备 → 活跃会话绑定 → 房间与局 ID → 当前动作授权。工具不接受模型自行传入其他 room_id。
+需要真实联调的项目包括：灵矽账号上的模型名与 API Key、Realtime 子协议授权、输入与输出 PCM 事件、服务端 VAD、工具调用事件顺序、语音打断和实际延迟。代码构建成功不等于这些平台链路已验收。
 
-必须验证身份请求头在实际 tools/call 路径上的传递方式；SDK 适配层应将本次请求元数据传入工具上下文。不能将共享 MCP 连接首次收到的会话标识永久视为后续所有调用的身份。
-
-相关配置依据：[云端 MCP](https://linx.qiniu.com/docs/xrobot/mcp/software-mcp)、[MCP 服务配置](https://linx.qiniu.com/docs/xrobot/guide/mcp-store)。
-
-### 9.4 主动播报与 AI 回合
-
-真人移动完成后，room 服务判断下一席位；若为 AI，则自动生成骰子并按 Go 策略行动，发布棋局事件。AI 对手不依赖模型再次“想起来调用工具”。
-
-正常语音工具结果由灵矽组织回应。点击与 AI 自动行动产生的短播报，优先验证 listen.detect 的 text_response；它是播报请求，不被当作已证明可更新模型完整棋局记忆的接口。
-
-为避免双重播报：语音触发的动作由该次对话回应；点击和 AI 动作合并为独立简短播报。播报排队，等待当前 TTS 结束；用户开始操作时可丢弃过期的非关键解说。任意局面问题仍要求查询真实状态。
-
-若主动播报不稳定，P0 使用真实灵矽完成真人指令与问答，AI 行动先以动画、字幕和音效反馈；不能将替代音频宣称为灵矽真实主动播报。
-
-### 9.5 接入降级
-
-| 阻碍 | 处理 |
-| --- | --- |
-| 云端 MCP 网络或会话元数据不满足要求 | 验证端侧 MCP，经已有上游 WebSocket 返回工具并直接绑定该连接；保留同一业务工具接口 |
-| 主动播报冲突 | 先保留语音操作与问答，自动回合使用字幕和音效 |
-| 浏览器音频暂未跑通 | 用官方文档的桌面客户端定位账号/协议问题；独立桌面客户端不算网页接入完成 |
-| 语音断线或超时 | 关闭旧上游会话、撤销写授权，提示重连，点击继续游戏 |
-| 第一日上午仍无法完成真实工具调用 | 暂停额外美术，优先缩小语音范围；只使用带明显标记的 mock 开发，不冒充联调 |
-
-第三方业务 SSE 接入可以作为后续完全自控对话的路线，本版不同时实现。参考：[第三方业务接入](https://linx.qiniu.com/docs/xrobot/guide/third-app)。
+协议依据：[灵矽 WebSocket 文档](https://linx.qiniu.com/docs/xrobot/platform/websocket)。
 
 ## 10. 核心时序
 
@@ -268,24 +241,21 @@ sequenceDiagram
     participant W as 网页
     participant V as Go语音代理
     participant L as 灵矽
-    participant M as Go MCP
+    participant T as Go游戏工具
     participant G as Go房间与规则
-    P->>W: 按住说“走小熊号”
-    W->>V: 音频与录音控制
-    V->>L: 上游语音帧
-    L-->>V: STT 与会话事件
-    V-->>W: 显示转写，进入处理中
-    L->>M: 查询状态和合法走法
-    M->>G: 校验绑定并读取状态
-    G-->>M: 棋局、可走方案、action_token
-    M-->>L: 工具结果
-    L->>M: move_piece(piece_id, action_token)
-    M->>G: 提交版本与去重校验后的动作
+    P->>W: 开启实时语音并自然说话
+    W->>V: 持续发送 PCM 音频帧
+    V->>L: Realtime 音频追加事件
+    L-->>V: VAD、转写和响应事件
+    V-->>W: 转写与音频增量
+    L->>V: response.done 中的游戏 function call
+    V->>T: 按工具名和参数执行
+    T->>G: 使用单轮授权校验并提交动作
     G-->>W: 新快照与动画事件
-    G-->>M: 实际执行结果
-    M-->>L: 成功或明确的业务错误
-    L-->>V: TTS 与音频
-    V-->>W: 播放，排空后恢复输入
+    G-->>T: 实际执行结果
+    T-->>V: function_call_output
+    V->>L: response.create
+    L-->>V: 回复语音
 ~~~
 
 如果小熊号不合法，工具返回原因，棋局不变；如果昵称匹配多个候选，先询问，不执行移动。
@@ -302,10 +272,8 @@ sequenceDiagram
 | GET /api/rooms/{room_id} | 返回最新完整快照 |
 | POST /api/rooms/{room_id}/matches | 根据固定模式开始新局 |
 | POST /api/rooms/{room_id}/commands | 点击动作的唯一写入口 |
-| POST /api/rooms/{room_id}/voice-sessions | 获取单终端占用权并准备语音绑定 |
-| DELETE /api/rooms/{room_id}/voice-sessions/current | 释放连接与授权 |
 | GET /ws/game?room_id=... | 完整快照、游戏事件和语音 UI 状态 |
-| GET /ws/voice?room_id=... | 音频二进制帧及经 Go 验证的控制消息 |
+| GET /ws/voice?room_id=... | 浏览器 PCM 音频帧、Realtime 事件与播放增量 |
 | GET /healthz | Go 进程存活 |
 | GET /readyz | 游戏服务就绪；语音能力单独标为 ready/degraded |
 
@@ -328,18 +296,18 @@ sequenceDiagram
 
 错误码至少包括 ROOM_NOT_FOUND、NOT_AUTHORIZED、VOICE_BUSY、STALE_STATE、INVALID_PHASE、ILLEGAL_MOVE、VOICE_UNAVAILABLE、COMMAND_CONFLICT。
 
-### 11.2 MCP 工具
+### 11.2 Realtime 游戏工具
 
 | 工具 | 输入 | 输出与限制 |
 | --- | --- | --- |
 | get_game_state | 无 | 当前玩家、点数、棋子标签、版本、阶段、规则摘要 |
-| get_legal_moves | 可选 target_player_label | 由 Go 计算的合法候选、后果、不可走原因及当前 action_token |
-| roll_dice | action_token | Go 随机点数、自动移动或等待选择、真实状态 |
-| move_piece | piece_id、action_token | 校验后位移、跳格、飞行、撞机和终点结果 |
+| get_legal_moves | 无 | 由 Go 计算的合法候选、后果和不可走原因 |
+| roll_dice | 无 | Go 随机点数、自动移动或等待选择、真实状态；授权由服务端补入 |
+| move_piece | piece_id | 校验后位移、跳格、飞行、撞机和终点结果；授权由服务端补入 |
 
-action_token 是不透明值，模型只能原样使用，不得构造。写工具不接受自定义骰子点数或最终位置。AI 玩家回合不能经真人语音工具代替 AI 发起动作。
+语音动作授权不会暴露给模型。写工具不接受自定义骰子点数或最终位置。AI 玩家回合不能经真人语音工具代替 AI 发起动作。
 
-返回采用 MCP content.text 携带结构化游戏结果，业务失败使用 isError；具体 structuredContent 字段需与平台协商验证后再启用。Go 直接向网页广播棋局，不依赖平台将任意游戏字段自动转发到网页。
+Go 将结构化结果作为 `function_call_output` 写回 Realtime 会话。Go 直接向网页广播棋局，不依赖灵矽把游戏状态自动转发到网页。
 
 ### 11.3 游戏推送
 
@@ -387,21 +355,20 @@ AI 与真人使用相同骰子规则与合法候选。先用简单评分：获�
 
 ### 13.1 P0 部署
 
-本机运行 Go 服务和网页，浏览器通过 localhost 使用麦克风；云端 MCP 需要一个平台可达的 HTTPS 入口，可通过受控反向代理仅转发 /mcp 及其消息路径到同一 Go 实例。
+本机可运行 Go 服务和网页；公网部署使用 HTTPS/WSS 同源提供页面与游戏 API。麦克风由浏览器授权。
 
-音频从本机 Go 主动连接灵矽，不经过 MCP SSE。反向代理关闭 SSE 缓冲，并允许长连接。部署全站时使用 HTTPS/WSS，同源提供网页和 API。
+音频由 Go 建立到灵矽的 Realtime WebSocket 上游连接。反向代理需允许 WebSocket 长连接。
 
-P0 只运行一个 Go 实例，内存状态不支持多副本负载均衡。云端不可达时使用已验证的端侧 MCP 路线。
+P0 只运行一个 Go 实例，内存状态不支持多副本负载均衡。
 
 ### 13.2 配置类别
 
 | 配置 | 管理方式 |
 | --- | --- |
-| 本机监听地址、允许 Origin、公开 MCP URL | 集中配置并在启动时校验 |
-| 智能体 ID、稳定设备 ID、Client ID | 开发者配置与本机绑定记录 |
-| 平台 API-KEY | 仅在需要管理 API 时配置到 Go，不要求浏览器填写 |
-| 终端 token | Go 通过绑定后的 OTA 响应取得并保存在服务端 |
-| MCP 服务凭据 | 控制台请求头与 Go 端环境变量配置，独立于终端 token |
+| 本机监听地址、公开 URL | `.env` 或部署环境配置 |
+| Realtime WebSocket 地址 | `LINGXI_REALTIME_URL`，默认使用平台实时接口 |
+| Realtime 模型名 | `LINGXI_REALTIME_MODEL`，服务端会话配置使用 |
+| Realtime API Key | `LINGXI_REALTIME_API_KEY`，只由 Go 进程读取 |
 | 超时、队列长度、日志级别 | 有默认值，启动时校验范围 |
 
 真实凭据不进入 Git、网页构建产物、URL 或日志。会话 ID 等诊断值按需要截断或哈希。日志默认只记录动作与时延，不保存原始录音或完整对话；平台侧聊天保存和记忆设置需要单独确认。
@@ -414,11 +381,9 @@ P0 只运行一个 Go 实例，内存状态不支持多副本负载均衡。云�
 
 | 阶段 | 主要交付 | 验收门槛 |
 | --- | --- | --- |
-| 第 1 天上午 | Go 最小服务、软件终端绑定、音频输入输出、一个 MCP 工具、最小点数页面 | 真实说话触发一次 Go 随机点数，网页与播报一致 |
-| 第 1 天下午至晚间 | 固定地图和规则、点击走完整局、基本棋子动画 | 不依赖语音可玩完快速模式；边界规则测试通过 |
-| 第 2 天上午 | 四个游戏工具、昵称与指代、会话绑定和动作去重 | 语音掷骰、选棋子、失败讲解均完成真实联调 |
-| 第 2 天下午至晚间 | AI 对手、主持反馈、状态恢复、快速模式 | 家长/孩子操作与 AI 回合连贯，断线可点击继续 |
-| 第 3 天 | 冻结新增功能、真实环境试玩、修问题、准备演示和录屏 | 连续完成试玩，对剩余限制有明确说明 |
+| 第 1 天 | Go 规则和房间服务、网页棋盘与点击玩法 | 浏览器构建成功，玩法可点击操作 |
+| 第 2 天 | AI 对手、灵矽 Realtime 代理、游戏工具与语音交互 | 代码已实现；真实平台链路等待凭据和联调 |
+| 第 3 天 | 多棋盘选择、部署、真实环境试玩、修问题、准备演示 | 部署与棋盘选项已完成；语音联调和家庭试玩仍待完成 |
 
 第一日上午的接入 POC 优先于大面积美术。若工具已通但主动播报未通，按既定降级继续；若真实语音工具链路未通，不将该项目标记为可演示完成。
 
@@ -429,13 +394,13 @@ P0 只运行一个 Go 实例，内存状态不支持多副本负载均衡。云�
 - 规则表驱动测试：起飞、无路可走、六点奖励、跳格后飞行、终点超步、叠子与最终落点撞机、胜负。
 - 地图校验：各方路线连续，跳格/飞行映射有效；公共格与本方航道的碰撞范围正确。
 - 命令一致性：重复 command_id / action_token 不再次掷骰；同 ID 不同请求冲突；过期版本和旧 game_id 被拒绝。
-- 会话隔离：解绑、重连与新局后旧会话工具不再修改状态；无认证的 MCP 请求不能调用。
+- 会话隔离：解绑、重连与新局后旧会话工具不再修改状态；未经语音授权的游戏写工具不能调用。
 - 点击、语音与 AI 竞争：同一版本最多提交一个有效动作。
 - 动画结果与服务器最终快照一致，页面重连不重复播放旧声音。
 
 ### 15.2 人工试玩
 
-- 在预期的家庭摆放距离、扬声器音量下测试按键说话与播放回声。
+- 在预期的家庭摆放距离和扬声器音量下测试持续语音、打断与播放回声。
 - “走小熊号”“最前面的”“哪架能撞爸爸”都能完成选择或明确追问。
 - 骰子、位移、字幕和播报一致；误识别不导致隐蔽的连续动作。
 - 点击操作在灵矽断线时仍可完成一局。
@@ -478,22 +443,13 @@ flytogether/
   internal/
     game/                  # 纯规则与地图
     room/                  # 房间、动作、幂等、广播
-    opponent/              # AI 走棋策略
-    linx/                  # OTA 与上游协议适配
-    voice/                 # 语音状态与播报调度
-    mcp/                   # MCP 传输与工具
-    transport/             # 网页 HTTP / WebSocket
-    config/                # 配置验证
-  web/src/
-    features/board/
-    features/room/
-    features/voice/
-    lib/                   # 类型与 API 客户端
-  assets/boards/           # 地图逻辑和视觉坐标
+    linx/                  # 灵矽 Realtime 上游和游戏工具事件
+  web/src/                 # React 页面、棋盘、实时麦克风与播放
+  web/public/pcm-capture.js # 麦克风重采样 AudioWorklet
   docs/
     ARCHITECTURE.md
     PROGRESS.md
-  .env.example             # 实现时添加，仅占位值
+  .env.example             # 配置占位值，不含密钥
   README.md
 ~~~
 
@@ -501,14 +457,14 @@ flytogether/
 
 | 编号 | 待验证 | 完成证据 |
 | --- | --- | --- |
-| V1 | 软件终端注册、控制台绑定、取得 token | 有成功握手记录，凭据不出现在记录中 |
-| V2 | 浏览器录音、输入分帧、输出解码和播放 | 连续说话、播放多轮无错误 |
-| V3 | SSE MCP 兼容、服务鉴权、会话请求头到工具上下文 | 实际工具成功；错身份与旧会话被拒绝 |
-| V4 | 当前语音结束与下一次输入的准确界限 | 无重复动作，无上一句迟到指令修改下一回合 |
-| V5 | 主动播报与普通对话互斥 | 点击/AI 后能按顺序播报，或明确采用降级 |
+| V1 | API Key 与模型配置、Realtime 握手 | 实际平台握手成功；凭据不进入页面和日志 |
+| V2 | 浏览器录音、输入分帧、输出解码和播放 | 连续对话与打断播放正常 |
+| V3 | Realtime function call 与 Go 棋局工具 | 实际掷骰或移动成功，非法请求不改状态 |
+| V4 | VAD 语音轮次与动作授权 | 无重复动作，迟到调用不能改下一轮棋局 |
+| V5 | Realtime 对话与点击、AI 回合并发 | 棋局状态一致，打断保留已完成动作 |
 | V6 | 候选开源棋盘可复用程度 | 本机构建结果、地图与动作接口评估 |
 | V7 | 家庭环境与孩子表达 | 真实试玩记录及问题列表 |
 
-本版已作出的设计决策：Go 单体、服务端规则、同屏优先、按键语音、最多一个 AI、固定 family-v1、云端 MCP 优先、内存存储、点击降级。
+本版已作出的设计决策：Go 单体、服务端规则、同屏优先、浏览器 Realtime 语音、最多一个 AI、固定 family-v1、内存存储、点击降级。
 
 本文是开发基线；接口 schema、选定依赖版本和运行命令在实现与联调后更新。产品方案完成不代表平台接入、代码或验收完成。
