@@ -1,7 +1,7 @@
 # 一起飞 · 项目进展
 
 - 更新日期：2026-10-23（Asia/Shanghai）
-- 当前阶段：源码在 main；已实现自定义唤醒及明确指令先执行、再播报，真实麦克风与家庭试玩待验收
+- 当前阶段：传统棋盘布局、三种家庭道具及真实平台语音已部署；源码在 main，真实麦克风与家庭试玩待验收
 - 比赛安排：三天两晚，一人开发
 - 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
 
@@ -93,3 +93,5 @@
 - 自动验证：Go 道具测试覆盖经典模式拒绝、库存耗尽、每次一张、无效请求原子性、真实骰子与精确终点；几何回归覆盖三条路线及同格编号标记。
 
 语音道具测试使用合成中文音频进入真实平台。真实麦克风、回声、打断及家庭试玩继续在 #1 / #3 跟踪。
+
+已部署 [37b1a7c](https://github.com/zkevindev/flytogether/commit/37b1a7c)、[9b22123](https://github.com/zkevindev/flytogether/commit/9b22123) 和 [bd0fae2](https://github.com/zkevindev/flytogether/commit/bd0fae2)。线上再次通过三道具语音链路和完整唤醒回归；浏览器点击起飞后，棋子实际进度为 0。截图见[新版棋盘与道具](images/family-board.png)。播报偶有冗长或技术化措辞，仍需在真实试玩中继续压缩和改进。
