@@ -57,3 +57,19 @@ func TestVoiceCommandCannotBypassGameRules(t *testing.T) {
 		t.Fatal("dice instruction was not resolved")
 	}
 }
+
+func TestVoicePropSelectionIsSingleAndExplicit(t *testing.T) {
+	s := game.New(game.Options{Names: []string{"甲", "乙"}, Props: true})
+	for text, id := range map[string]string{"使用起飞卡": "launch", "来一张加速卡": "boost", "用幸运骰": "luck"} {
+		a, ok := resolveVoiceAction(*s, text)
+		if !ok || a.Name != "use_prop" || a.PropID != id {
+			t.Fatalf("prop command unresolved: %s %+v", text, a)
+		}
+	}
+	for _, text := range []string{"不要使用起飞卡", "起飞卡怎么用", "使用起飞卡和幸运骰"} {
+		a, _ := resolveVoiceAction(*s, text)
+		if a.PropID != "" || a.Notice == "" {
+			t.Fatalf("ambiguous or negative prop speech could write: %s", text)
+		}
+	}
+}

@@ -35,6 +35,7 @@ type Command struct {
 	Version int    `json:"expected_version"`
 	Action  string `json:"action"`
 	PieceID string `json:"piece_id,omitempty"`
+	PropID  string `json:"prop_id,omitempty"`
 	Token   string `json:"action_token,omitempty"`
 }
 
@@ -178,7 +179,9 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 	var err error
 	switch c.Action {
 	case "roll":
-		err = r.state.Roll(game.RandomDie())
+		err = r.state.RollRandom()
+	case "prop":
+		err = r.state.UseProp(c.PropID)
 	case "move":
 		err = r.state.Move(c.PieceID)
 	default:
@@ -203,7 +206,11 @@ func (r *Room) AI() {
 		return
 	}
 	if r.state.Phase == "roll" {
-		_ = r.state.Roll(game.RandomDie())
+		if prop := r.state.SuggestedProp(); prop != "" {
+			_ = r.state.UseProp(prop)
+		} else {
+			_ = r.state.RollRandom()
+		}
 	} else {
 		_ = r.state.Move(r.state.BestMove().PieceID)
 	}
@@ -254,11 +261,11 @@ func (r *Room) Tool(name string, args map[string]string) (any, error) {
 		if r.busy && !r.used && r.grantGame == r.state.ID && r.grantVersion == r.state.Version {
 			token = r.grant
 		}
-		reason := "掷到六点才能让机库里的飞机起飞。超过终点点数不能移动。请只选 legal_moves 中的棋子。"
+		reason := "经典规则需六点起飞，启用本回合起飞卡后可用任意点数起飞；加速卡对已离开机库的飞机增加两步；幸运骰掷两次取较大值。每次掷骰前最多用一张已有道具，不能通过语音指定点数。超过终点不能移动，请只选 legal_moves 中的棋子。"
 		return map[string]any{"room": r.view(), "action_token": token, "rules_hint": reason,
 			"current_player": r.state.Players[r.state.Current], "legal_moves": r.state.Legal}, nil
 	}
-	if name != "roll_dice" && name != "move_piece" {
+	if name != "roll_dice" && name != "move_piece" && name != "use_prop" {
 		return nil, fail("UNKNOWN_TOOL", "未知游戏工具")
 	}
 	token := args["action_token"]
@@ -268,6 +275,10 @@ func (r *Room) Tool(name string, args map[string]string) (any, error) {
 	if name == "move_piece" {
 		c.Action = "move"
 		c.PieceID = args["piece_id"]
+	}
+	if name == "use_prop" {
+		c.Action = "prop"
+		c.PropID = args["prop_id"]
 	}
 	r.mu.Unlock()
 	v, err := r.Do(c, true)

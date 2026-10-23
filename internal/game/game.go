@@ -55,11 +55,12 @@ type Piece struct {
 }
 
 type Player struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	Color  string  `json:"color"`
-	AI     bool    `json:"ai"`
-	Pieces []Piece `json:"pieces"`
+	ID     string         `json:"id"`
+	Name   string         `json:"name"`
+	Color  string         `json:"color"`
+	AI     bool           `json:"ai"`
+	Pieces []Piece        `json:"pieces"`
+	Props  map[string]int `json:"props"`
 }
 
 type Move struct {
@@ -84,21 +85,24 @@ type Event struct {
 }
 
 type State struct {
-	ID       string   `json:"id"`
-	Ruleset  string   `json:"ruleset"`
-	Board    BoardSpec `json:"board"`
-	Mode     string   `json:"mode"`
-	Demo     bool     `json:"demo"`
-	Version  int      `json:"version"`
-	Turn     int      `json:"turn"`
-	Current  int      `json:"current"`
-	Phase    string   `json:"phase"`
-	Dice     int      `json:"dice"`
-	Winner   string   `json:"winner,omitempty"`
-	Players  []Player `json:"players"`
-	Legal    []Move   `json:"legal_moves"`
-	History  []Event  `json:"history"`
-	LastMove *Move    `json:"last_move,omitempty"`
+	ID           string    `json:"id"`
+	Ruleset      string    `json:"ruleset"`
+	Board        BoardSpec `json:"board"`
+	Mode         string    `json:"mode"`
+	Demo         bool      `json:"demo"`
+	Version      int       `json:"version"`
+	Turn         int       `json:"turn"`
+	Current      int       `json:"current"`
+	Phase        string    `json:"phase"`
+	Dice         int       `json:"dice"`
+	Winner       string    `json:"winner,omitempty"`
+	Players      []Player  `json:"players"`
+	Legal        []Move    `json:"legal_moves"`
+	History      []Event   `json:"history"`
+	LastMove     *Move     `json:"last_move,omitempty"`
+	PropsEnabled bool      `json:"props_enabled"`
+	ActiveProp   string    `json:"active_prop,omitempty"`
+	DiceRolls    []int     `json:"dice_rolls"`
 }
 
 type Options struct {
@@ -107,6 +111,7 @@ type Options struct {
 	Names []string `json:"names"`
 	AI    bool     `json:"ai"`
 	Demo  bool     `json:"demo"`
+	Props bool     `json:"props"`
 }
 
 func ID() string {
@@ -138,9 +143,15 @@ func New(o Options) *State {
 		board, _ = FindBoard("cross")
 	}
 	s := &State{ID: ID(), Ruleset: "family-v1", Board: board, Mode: o.Mode, Demo: o.Demo, Version: 1,
-		Turn: 1, Phase: "roll", Legal: []Move{}, History: []Event{}, Players: []Player{}}
+		Turn: 1, Phase: "roll", Legal: []Move{}, History: []Event{}, Players: []Player{}, PropsEnabled: o.Props, DiceRolls: []int{}}
+	if o.Props {
+		s.Ruleset = "family-props-v1"
+	}
 	for i, name := range o.Names {
-		p := Player{ID: fmt.Sprintf("player-%d", i), Name: name, Color: Colors[i], AI: o.AI && i == len(o.Names)-1, Pieces: []Piece{}}
+		p := Player{ID: fmt.Sprintf("player-%d", i), Name: name, Color: Colors[i], AI: o.AI && i == len(o.Names)-1, Pieces: []Piece{}, Props: map[string]int{}}
+		if o.Props {
+			p.Props = map[string]int{"launch": 1, "boost": 1, "luck": 1}
+		}
 		for j := 0; j < count; j++ {
 			p.Pieces = append(p.Pieces, Piece{ID: fmt.Sprintf("p%d-%d", i, j), Label: Labels[j], Number: j + 1, Progress: -1})
 		}
@@ -180,13 +191,17 @@ func (s *State) legalMoves() []Move {
 		}
 		m := Move{PieceID: piece.ID, Label: piece.Label, From: piece.Progress, Captured: []string{}}
 		if piece.Progress == -1 {
-			if s.Dice != 6 {
+			if s.Dice != 6 && s.ActiveProp != "launch" {
 				continue
 			}
 			m.To, m.Launch = 0, true
 			m.Summary = "从机场起飞，进入起飞位"
 		} else {
-			m.To = piece.Progress + s.Dice
+			steps := s.Dice
+			if s.ActiveProp == "boost" {
+				steps += 2
+			}
+			m.To = piece.Progress + steps
 			if m.To > s.Board.Finish {
 				continue
 			}
@@ -215,7 +230,10 @@ func (s *State) legalMoves() []Move {
 					}
 				}
 			}
-			m.Summary = fmt.Sprintf("前进 %d 格", s.Dice)
+			m.Summary = fmt.Sprintf("前进 %d 格", steps)
+			if s.ActiveProp == "boost" {
+				m.Summary += "（加速卡 +2）"
+			}
 			if m.Jump {
 				m.Summary += "，同色跳跃"
 			}
@@ -235,14 +253,45 @@ func (s *State) legalMoves() []Move {
 }
 
 func (s *State) Roll(die int) error {
+	return s.RollValues(die)
+}
+
+// RollRandom is the transport-facing entry point; clients never supply dice.
+func (s *State) RollRandom() error {
+	values := []int{RandomDie()}
+	if s.ActiveProp == "luck" {
+		values = append(values, RandomDie())
+	}
+	return s.RollValues(values...)
+}
+
+func (s *State) RollValues(values ...int) error {
 	if s.Phase != "roll" {
 		return fmt.Errorf("请先选择这次要移动的飞机")
 	}
-	if die < 1 || die > 6 {
-		return fmt.Errorf("骰子点数无效")
+	count := 1
+	if s.ActiveProp == "luck" {
+		count = 2
 	}
+	if len(values) != count {
+		return fmt.Errorf("骰子数量无效")
+	}
+	die := 0
+	for _, value := range values {
+		if value < 1 || value > 6 {
+			return fmt.Errorf("骰子点数无效")
+		}
+		if value > die {
+			die = value
+		}
+	}
+	s.DiceRolls = append([]int(nil), values...)
 	s.Dice, s.LastMove = die, nil
-	s.add("rolled", fmt.Sprintf("%s 掷出了 %d 点", s.Players[s.Current].Name, die), "")
+	if count == 2 {
+		s.add("rolled", fmt.Sprintf("%s 的幸运骰掷出 %d 和 %d 点，取 %d 点", s.Players[s.Current].Name, values[0], values[1], die), "")
+	} else {
+		s.add("rolled", fmt.Sprintf("%s 掷出了 %d 点", s.Players[s.Current].Name, die), "")
+	}
 	s.Legal = s.legalMoves()
 	s.Version++
 	s.Phase = "move"
@@ -300,6 +349,7 @@ func (s *State) apply(m Move) {
 		target = 1
 	}
 	if finished >= target {
+		s.ActiveProp = ""
 		s.Winner = p.ID
 		s.Phase = "finished"
 		s.Legal = []Move{}
@@ -310,6 +360,7 @@ func (s *State) apply(m Move) {
 }
 
 func (s *State) next() {
+	s.ActiveProp = ""
 	s.Phase = "roll"
 	s.Legal = []Move{}
 	s.Turn++

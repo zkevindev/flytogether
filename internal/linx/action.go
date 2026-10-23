@@ -11,6 +11,7 @@ import (
 type voiceAction struct {
 	Name    string
 	PieceID string
+	PropID  string
 	Notice  string
 }
 
@@ -30,6 +31,18 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		if strings.Contains(text, phrase) {
 			return voiceAction{Name: "get_game_state", Notice: "这句话是否定、询问或规则讨论，没有执行游戏动作。请根据当前棋局回答，不要宣称已掷骰或移动。"}, true
 		}
+	}
+	var props []string
+	for _, id := range []string{"launch", "boost", "luck"} {
+		if strings.Contains(text, game.PropNames[id]) || (id == "luck" && strings.Contains(text, "幸运投")) {
+			props = append(props, id)
+		}
+	}
+	if len(props) > 1 {
+		return voiceAction{Name: "get_game_state", Notice: "一次只能用一张道具，请选择起飞卡、加速卡或幸运骰中的一张。"}, true
+	}
+	if len(props) == 1 {
+		return voiceAction{Name: "use_prop", PropID: props[0]}, true
 	}
 	if strings.Contains(text, "骰子") {
 		for _, verb := range []string{"掷", "投", "扔", "摇", "丢"} {
@@ -95,7 +108,7 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 	}
 	reason := "当前没有符合指令的合法走法。请根据棋局说明原因。"
 	if state.Phase == "roll" {
-		reason = "尚未执行移动。当前需要先掷骰子；起飞必须掷到六点。请引导玩家明确发出掷骰指令。"
+		reason = "尚未执行移动。当前需要先掷骰子；经典起飞需要六点，已经启用起飞卡则允许任意点数起飞。请引导玩家明确发出掷骰指令。"
 	}
 	return voiceAction{Name: "move_piece", Notice: reason}, true
 }
