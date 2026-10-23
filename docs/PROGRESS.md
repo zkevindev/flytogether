@@ -1,7 +1,7 @@
 # 一起飞 · 项目进展
 
 - 更新日期：2026-10-23（Asia/Shanghai）
-- 当前阶段：MVP 源码已推送开发分支；Web 棋局、三种棋盘和公网部署完成；灵矽 Realtime 等待真实凭据联调
+- 当前阶段：MVP 源码已同步到 main；Web 棋局、三种棋盘和公网部署完成；灵矽 Realtime 等待真实凭据联调
 - 比赛安排：三天两晚，一人开发
 - 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
 
@@ -9,9 +9,9 @@
 
 | 阶段 | Issue | 当前状态 | 关联 PR |
 | --- | --- | --- | --- |
-| M1：Realtime 语音接入 | [#1](https://github.com/zkevindev/flytogether/issues/1) | 桥接代码已推送开发分支并部署；等待凭据及平台联调 | 暂无；后续按可审阅功能切片关联 |
-| M2：家庭飞行棋玩法 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 点击玩法和三种棋盘已推送开发分支；实际浏览器演示通过 | 暂无；棋盘功能作为独立切片跟踪 |
-| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | HTTPS 部署及线上棋盘演示已完成；源码在开发分支，家庭试玩和真实语音演示待完成 | 暂无；部署与验收改动按阶段关联 |
+| M1：Realtime 语音接入 | [#1](https://github.com/zkevindev/flytogether/issues/1) | 桥接代码已同步到 main 并部署；等待凭据及平台联调 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
+| M2：家庭飞行棋玩法 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 点击玩法和三种棋盘已同步到 main；实际浏览器演示通过 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
+| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | HTTPS 部署及线上棋盘演示已完成；源码在 main，家庭试玩和真实语音演示待完成 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
 
 PR 按功能和验收边界分批提交；每个 PR 创建后在对应 Issue 的“关联 PR”清单中记录，不把无关改动捆成一次性提交。
 
@@ -32,13 +32,13 @@ PR 按功能和验收边界分批提交；每个 PR 创建后在对应 Issue 的
 
 ## 当前下一步
 
-1. 从开发分支按 Issue 拆分并关联功能 PR，持续更新进展；目前尚未创建 PR。
+1. 后续功能改动按 Issue 拆分并关联 PR，持续更新进展；本轮实现已按要求直接同步 main，没有创建 PR。
 2. 在本机或服务器私密配置中填入 `LINGXI_REALTIME_MODEL` 与 `LINGXI_REALTIME_API_KEY`，验证握手、双向音频、VAD 打断和工具调用。
 3. 完成家庭场景试玩并记录问题，更新验收与演示材料。
 
 灵矽密钥不能进入仓库、浏览器构建产物或聊天记录。服务器地址、SSH 凭据和真实部署域名均保存在仓库外的本机配置中。
 
-当前代码分支：[feat/flytogether-mvp](https://github.com/zkevindev/flytogether/tree/feat/flytogether-mvp)。尚未创建 PR；后续按 Issue 和审阅边界分批创建，并在对应 Issue 回链。
+当前源码位于 [main](https://github.com/zkevindev/flytogether/tree/main)。本轮按要求直接同步 main，没有创建 PR；后续改动按 Issue 和审阅边界分批创建，并在对应 Issue 回链。
 
 ## 设计决策
 
