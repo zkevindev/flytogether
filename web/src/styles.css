@@ -231,15 +231,17 @@ h1>span { color: #b4c4a0; }
 @media(max-width:700px) { .site-header { height: 73px; }.brand-name { font-size: 20px; gap: 6px; }.brand-name>span { font-size: 10px; }.brand-mark { width: 36px; height: 36px; border-radius: 12px; }.header-actions { gap: 12px; }.github-link { display: none; }.text-button { font-size: 11px; }.page-intro { padding: 27px 0 23px; gap: 10px; }.eyebrow { font-size: 7px; letter-spacing: 1px; margin-bottom: 10px; }h1 { font-size: 27px; }.intro-copy { font-size: 10px; margin-top: 9px; letter-spacing: 0; }.outline-button { padding: 10px; gap: 5px; font-size: 10px; }.outline-button svg { width: 15px; }.game-layout { grid-template-columns: minmax(0,1fr); gap: 19px; }.board-panel { padding: 20px 18px 0; }.crew-list { margin: 0 -18px; }.crew-seat { flex-direction: row; align-items: center; padding: 18px 10px; }.crew-detail strong { max-width: 90px; }.board-caption { flex-direction: row; font-size: 8px; padding-bottom: 19px; }.side-column { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 14px; }.turn-panel { padding: 19px; }.voice-panel { padding: 17px; }.log-panel { grid-column: 1/-1; padding: 5px 6px; }.voice-heading { gap: 7px; }.voice-heading h2 { font-size: 12px; }.voice-spark { display: none; }.voice-icon { width: 32px; height: 32px; }.turn-heading .section-kicker { font-size: 6px; letter-spacing: .6px; }.turn-number { font-size: 7px; }.current-player { gap: 9px; margin-top: 21px; }.avatar.large { width: 43px; height: 43px; border-radius: 13px; }.current-player h2 { font-size: 20px; }.current-player p { font-size: 9px; }.dice-area { padding: 22px 0; gap: 13px; }.dice-area strong { font-size: 11px; }.dice-area>div>span { font-size: 8px; }.dice { width: 54px; height: 54px; border-radius: 14px; gap: 4px; padding: 10px; }.pip { height: 7px; width: 7px; }.primary-button { font-size: 13px; padding: 13px; }.keyboard-hint { font-size: 8px; gap: 5px; }.voice-button { font-size: 10px; }.voice-footnote { font-size: 8px; }.page-footer { font-size: 9px; padding-top: 23px; }.page-footer>span:last-child { display: none; } }
 @media(max-width:450px) { .side-column { display: flex; gap: 16px; }.turn-panel,.voice-panel { padding: 23px; }.turn-heading .section-kicker { font-size: 9px; letter-spacing: 1px; }.turn-number { font-size: 10px; }.current-player p { font-size: 12px; }.current-player h2 { font-size: 25px; }.avatar.large { width: 52px; height: 52px; }.dice { width: 65px; height: 65px; padding: 14px; }.dice-area strong { font-size: 14px; }.dice-area>div>span { font-size: 11px; }.dice-area { gap: 20px; }.voice-heading h2 { font-size: 15px; }.voice-heading p { font-size: 10px; }.voice-icon { width: 41px; height: 41px; }.voice-spark { display: block; }.voice-bubble { font-size: 14px; }.voice-button { font-size: 13px; }.voice-status { font-size: 10px; }.voice-footnote { font-size: 10px; }.crew-seat { flex-direction: column; align-items: center; text-align: center; padding: 16px 5px; }.crew-detail strong { font-size: 11px; justify-content: center; }.crew-detail>span { font-size: 8px; }.board-caption { font-size: 7px; }.session-tools { align-self: center; }.outline-button { padding: 10px 8px; font-size: 0; }.outline-button svg { width: 18px; height: 18px; }.demo-banner { flex-wrap: wrap; }.demo-banner button { margin-left: 24px; }.toast { font-size: 12px; bottom: 18px; }.brand-name { font-size: 19px; }.brand-name>span { font-size: 9px; }.modal { padding: 22px; } }
 @media(prefers-reduced-motion:reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
-.site-header { height: 64px; }
-.page-intro { padding: 16px 0; align-items: center; }
+.site-header { height: 56px; }
+main { padding-top: 12px; }
+.page-intro { display: none; }
 .page-intro h1 { font-size: 27px; }
 .page-intro .eyebrow,.page-intro .intro-copy { display: none; }
-.board-panel { padding-top: 16px; }
+.board-panel { padding-top: 10px; }
 .panel-heading .section-kicker { display: none; }
 .panel-heading h2 { margin: 0; }
-.board-turnbar { margin: 10px 0; padding: 8px 10px; }
-.board-stage { max-width: min(100%, max(400px, calc(100dvh - 280px))); }
+.board-turnbar { margin: 6px 0; padding: 4px 8px; }
+.prop-shortcut { min-height: 44px; }
+.board-stage { max-width: min(100%, max(400px, calc(100dvh - 200px))); }
 .crew-seat { padding-top: 13px; padding-bottom: 13px; }
 .board-caption { padding-bottom: 12px; color: #617586; }
 .side-column>.prop-tray { margin: 0; }

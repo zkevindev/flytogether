@@ -202,9 +202,10 @@ export default function App() {
       <header className="site-header">
         <a className="brand" href="/" aria-label="一起飞首页"><span className="brand-mark"><AirplaneTilt size={26} weight="fill" /></span><span className="brand-name">一起飞<span>FlyTogether</span></span></a>
         <div className="header-note"><span className={'status-dot ' + (connected ? 'online' : '')} />{connected ? '家庭机场已连接' : '正在重新连接'}</div>
-        <div className="header-actions"><button className="text-button rules-top" onClick={() => setModal('rules')}><Question size={18} /> 玩法说明</button><a className="github-link" href="https://github.com/zkevindev/flytogether" target="_blank" rel="noreferrer">项目记录 <ArrowUpRight size={15} /></a></div>
+        <div className="header-actions"><button className="outline-button" aria-label="游戏设置" onClick={openSetup}><GearSix size={18} /> 游戏设置</button><button className="text-button rules-top" onClick={() => setModal('rules')}><Question size={18} /> 玩法说明</button><a className="github-link" href="https://github.com/zkevindev/flytogether" target="_blank" rel="noreferrer">项目记录 <ArrowUpRight size={15} /></a></div>
       </header>
       <main>
+        <h1 className="sr-only">一起飞家庭飞行棋</h1>
         <section className="page-intro">
           <div><p className="eyebrow"><span /> LITTLE FLIGHTS, BIG FAMILY MOMENTS</p><h1>把快乐，飞到一起<span>。</span></h1><p className="intro-copy">和家人围坐一桌，让每一次起飞，都有欢笑作伴。</p></div>
           <div className="session-tools"><span className="mode-tag"><Sparkle weight="fill" size={15} />{state.board.name} · {state.mode === 'quick' ? '轻快一局' : '完整飞行'}</span><button className="outline-button" onClick={openSetup}><GearSix size={18} /> 游戏设置</button></div>
@@ -212,7 +213,7 @@ export default function App() {
         {state.demo && <div className="demo-banner"><Info size={18} />当前是预设演示局面，骰子仍为真实随机。<button onClick={openSetup}>开始正常对局 <ArrowRight size={15} /></button></div>}
         <div className="game-layout">
           <section className="board-panel">
-            <div className="panel-heading"><div><p className="section-kicker">THE FAMILY AIRPORT</p><h2>我们的家庭机场 <span>{state.players.length} 位飞行员</span></h2></div><div className="board-display-tools"><button className="board-zoom-button" aria-pressed={boardZoom} onClick={() => setBoardZoom(v => !v)}>{boardZoom ? '适合屏幕' : '放大棋盘'}</button><button className="icon-button" aria-label={sound ? '关闭游戏音效' : '开启游戏音效'} onClick={() => { setSound(!sound); localStorage.setItem('fly-sound', sound ? 'off' : 'on'); }}>{sound ? <SpeakerHigh /> : <SpeakerSlash />}</button></div></div>
+            <div className="panel-heading"><div><p className="section-kicker">THE FAMILY AIRPORT</p><h2>{state.board.name}棋盘 <span>{state.players.length} 位飞行员</span></h2></div><div className="board-display-tools"><button className="board-zoom-button" aria-pressed={boardZoom} onClick={() => setBoardZoom(v => !v)}>{boardZoom ? '适合屏幕' : '放大棋盘'}</button><button className="icon-button" aria-label={sound ? '关闭游戏音效' : '开启游戏音效'} onClick={() => { setSound(!sound); localStorage.setItem('fly-sound', sound ? 'off' : 'on'); }}>{sound ? <SpeakerHigh /> : <SpeakerSlash />}</button></div></div>
             <div className="board-turnbar"><span style={{ color: palette[current.color] }}><AirplaneTilt weight="fill" />{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span><strong>{state.phase === 'move' ? `${state.dice} 点 · 选择高亮飞机` : '点击中央骰子，开始出发'}</strong>{state.props_enabled && !winner && <button className="prop-shortcut" onClick={() => document.getElementById('prop-pocket')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' })}>道具口袋 · {Object.values(current.props || {}).reduce((a, b) => a + b, 0)}</button>}</div>
             {boardZoom && <p className="board-zoom-hint">已放大，可滑动查看棋盘；也可以在操作区选择飞机。</p>}
             <div className={'board-viewport ' + (boardZoom ? 'is-zoomed' : '')}><div className="board-stage"><Board game={state} onPiece={onPiece} disabled={!canAct} onRoll={() => void command('roll')} rolling={busy && pendingAction === 'roll'} /></div></div>
