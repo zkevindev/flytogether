@@ -1,10 +1,10 @@
-export type Piece = { id: string; label: string; number: number; progress: number };
+export type Piece = { id: string; label: string; number: number; progress: number; shield?: boolean };
 export type Player = { id: string; name: string; color: string; ai: boolean; pieces: Piece[]; props: Record<string, number> };
 export type Move = {
   piece_id: string; label: string; from: number; to: number; captured: string[];
   jump: boolean; fly: boolean; launch: boolean; finish: boolean; summary: string;
 };
-export type GameEvent = { id: string; kind: string; text: string; player_id?: string; piece_id?: string };
+export type GameEvent = { id: string; kind: string; text: string; player_id?: string; piece_id?: string; dice_rolls?: number[] };
 export type BoardSpec = {
   id: string; name: string; layout: 'cross' | 'circle'; ring_length: number;
   home_length: number; finish: number; jump_length: number; fly_from: number; fly_to: number;

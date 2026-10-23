@@ -181,7 +181,7 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 	case "roll":
 		err = r.state.RollRandom()
 	case "prop":
-		err = r.state.UseProp(c.PropID)
+		err = r.state.UsePropOn(c.PropID, c.PieceID)
 	case "move":
 		err = r.state.Move(c.PieceID)
 	default:
@@ -206,8 +206,8 @@ func (r *Room) AI() {
 		return
 	}
 	if r.state.Phase == "roll" {
-		if prop := r.state.SuggestedProp(); prop != "" {
-			_ = r.state.UseProp(prop)
+		if prop, target := r.state.SuggestedPropTarget(); prop != "" {
+			_ = r.state.UsePropOn(prop, target)
 		} else {
 			_ = r.state.RollRandom()
 		}
@@ -261,8 +261,10 @@ func (r *Room) Tool(name string, args map[string]string) (any, error) {
 		if r.busy && !r.used && r.grantGame == r.state.ID && r.grantVersion == r.state.Version {
 			token = r.grant
 		}
-		reason := "经典规则需六点起飞，启用本回合起飞卡后可用任意点数起飞；加速卡对已离开机库的飞机增加两步；幸运骰掷两次取较大值。每次掷骰前最多用一张已有道具，不能通过语音指定点数。超过终点不能移动，请只选 legal_moves 中的棋子。"
+		suggested, target := r.state.SuggestedPropTarget()
+		reason := "经典规则需六点起飞，启用本回合起飞卡后可用任意点数起飞；加速卡对已离开机库的飞机增加两步；幸运骰掷两次取较大值。每次掷骰前最多用一张已有道具，不能通过语音指定点数。炸弹立即送回对方公共航线上的一架指定飞机，护盾抵挡一次炸弹或撞机，两者都需指定piece_id且不能选机库、起飞位或终点航道；一次掷骰前仍只能用一张。超过终点不能移动，请只选 legal_moves 中的棋子。"
 		return map[string]any{"room": r.view(), "action_token": token, "rules_hint": reason,
+			"prop_targets": map[string][]string{"bomb": r.state.PropTargets("bomb"), "shield": r.state.PropTargets("shield")}, "suggested_prop": map[string]string{"prop_id": suggested, "piece_id": target},
 			"current_player": r.state.Players[r.state.Current], "legal_moves": r.state.Legal}, nil
 	}
 	if name != "roll_dice" && name != "move_piece" && name != "use_prop" {
@@ -279,6 +281,7 @@ func (r *Room) Tool(name string, args map[string]string) (any, error) {
 	if name == "use_prop" {
 		c.Action = "prop"
 		c.PropID = args["prop_id"]
+		c.PieceID = args["piece_id"]
 	}
 	r.mu.Unlock()
 	v, err := r.Do(c, true)

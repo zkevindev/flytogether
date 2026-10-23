@@ -1,6 +1,7 @@
 package linx
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/zkevindev/flytogether/internal/game"
@@ -71,5 +72,34 @@ func TestVoicePropSelectionIsSingleAndExplicit(t *testing.T) {
 		if a.PropID != "" || a.Notice == "" {
 			t.Fatalf("ambiguous or negative prop speech could write: %s", text)
 		}
+	}
+}
+
+func TestTargetedVoicePropsRequireUnambiguousOwnerAndPlane(t *testing.T) {
+	s := game.New(game.Options{Names: []string{"小朋友", "爸爸", "妈妈"}, Props: true})
+	s.Players[0].Pieces[0].Progress = 30
+	s.Players[1].Pieces[0].Progress = 20
+	s.Players[2].Pieces[0].Progress = 10
+	for text, want := range map[string]string{"用炸弹攻击爸爸的小熊号": "p1-0", "给我的小熊号加护盾": "p0-0"} {
+		a, ok := resolveVoiceAction(*s, text)
+		if !ok || a.Name != "use_prop" || a.PieceID != want || a.Notice != "" {
+			t.Fatalf("targeted voice not resolved %s: %+v", text, a)
+		}
+	}
+	for _, text := range []string{"使用炸弹", "用炸弹攻击小熊号", "用炸弹攻击自己的小熊号", "给爸爸的小熊号加护盾", "使用护盾保护兔子号", "别用炸弹攻击爸爸的小熊号", "我有炸弹", "推荐炸弹还是护盾", "护盾怎么用", "不用护盾", "推荐一个道具", "用炸弹攻击爸爸的小熊号和妈妈的兔子号"} {
+		a, ok := resolveVoiceAction(*s, text)
+		// Without an owner, two opponents with the same label must never be guessed.
+		if !ok || a.Name == "use_prop" || a.Notice == "" {
+			t.Fatalf("ambiguous/readonly speech selected a target %s: %+v", text, a)
+		}
+	}
+}
+
+func TestAdviceNamesActualTacticalTargetWithoutWriting(t *testing.T) {
+	s := game.New(game.Options{Names: []string{"小朋友", "爸爸"}, Props: true, Demo: true})
+	before := s.Version
+	a, ok := resolveVoiceAction(*s, "推荐一个道具")
+	if !ok || a.Name != "get_game_state" || a.PropID != "" || !strings.Contains(a.Notice, "爸爸的小熊号") || s.Version != before {
+		t.Fatal("advice is not based on actual target or attempted a write")
 	}
 }

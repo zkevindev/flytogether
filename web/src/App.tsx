@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AirplaneTilt, ArrowClockwise, ArrowRight, ArrowUpRight, Check, CheckCircle, DotsThree, GearSix, House, Info, Microphone, Question, Robot, SpeakerHigh, SpeakerSlash, Sparkle, Trophy, UsersThree, Waveform, X } from '@phosphor-icons/react';
 import { Board } from './components/Board';
+import { DiceRollModal } from './components/DiceRollModal';
 import { PropTray } from './components/PropTray';
 import { api, APIError, palette, socketURL } from './lib/types';
 import type { Config, Options, Piece, Player, Room, VoiceSettings } from './lib/types';
@@ -13,7 +14,7 @@ const rules = [
   ['同色跳跃', '落在自己的颜色格上会向前跳 4 格；到达星星飞行点，可以继续沿航线飞行。'],
   ['送回机场', '最终落点有其他玩家的飞机，就把它们送回机场。途经的飞机不会受影响。'],
   ['准确抵达', '进入终点需要恰好的点数，超过就选择其他飞机。快速模式先送达一架获胜。'],
-  ['道具口袋', '趣味模式每人各有一张起飞卡、加速卡和幸运骰。掷骰前最多用一张；起飞卡允许任意点数起飞，加速卡让在飞的飞机多走两格，幸运骰掷两次取较大值。'],
+  ['道具口袋', '趣味模式每人各有一张起飞卡、加速卡、幸运骰、炸弹和护盾。掷骰前最多用一张；起飞卡允许任意点数起飞，加速卡让在飞的飞机多走两格，幸运骰掷两次取较大值。炸弹送回对方公共航线上的一架飞机，护盾保护自己航线上的一架飞机，抵挡一次炸弹或撞机；机库、起飞位和终点航道不受影响。'],
 ];
 
 function Dice({ value, rolling = false }: { value: number; rolling?: boolean }) {
@@ -43,6 +44,9 @@ export default function App() {
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState(false);
   const [pendingAction, setPendingAction] = useState('');
+  const [impact, setImpact] = useState<{ text: string; shield: boolean }>();
+  const [diceQueue, setDiceQueue] = useState<{ id: string; text: string; values: number[] }[]>([]);
+  const rollHistory = useRef<{ game: string; seen: Set<string> }>({ game: '', seen: new Set() });
   const [boardZoom, setBoardZoom] = useState(false);
   const [connected, setConnected] = useState(false);
   const [modal, setModal] = useState<'setup' | 'rules' | 'voice' | null>(null);
@@ -97,8 +101,27 @@ export default function App() {
 
   const state = room?.state;
   const current = state?.players[state.current];
+  useEffect(() => {
+    if (!state) return;
+    if (rollHistory.current.game !== state.id) {
+      rollHistory.current = { game: state.id, seen: new Set(state.history.map(e => e.id)) };
+      setDiceQueue([]); setImpact(undefined); return;
+    }
+    const fresh = state.history.filter(e => !rollHistory.current.seen.has(e.id));
+    rollHistory.current.seen = new Set(state.history.map(e => e.id));
+    const hit = [...fresh].reverse().find(e => e.kind === 'prop' && e.piece_id);
+    if (hit) setImpact({ text: hit.text, shield: hit.text.includes('使用了护盾') });
+    const rolls = fresh.filter(e => e.kind === 'rolled' && e.dice_rolls?.length).map(e => ({ id: e.id, text: e.text, values: e.dice_rolls! }));
+    if (rolls.length) setDiceQueue(queue => [...queue, ...rolls]);
+  }, [state]);
+
+  useEffect(() => {
+    if (!impact) return;
+    const timer = setTimeout(() => setImpact(undefined), 2600);
+    return () => clearTimeout(timer);
+  }, [impact]);
   const voiceBusy = room ? ['listening', 'thinking', 'speaking'].includes(room.voice) : false;
-  const canAct = !!state && !!current && !current.ai && !busy && !voiceBusy && state.phase !== 'finished';
+  const canAct = !!state && !!current && !current.ai && !busy && !voiceBusy && !diceQueue.length && state.phase !== 'finished';
 
   const chime = useCallback(() => {
     if (!sound) return;
@@ -112,11 +135,11 @@ export default function App() {
     } catch {}
   }, [sound]);
 
-  const command = useCallback(async (action: string, pieceID?: string) => {
+  const command = useCallback(async (action: string, pieceID?: string, targetID?: string) => {
     const r = roomRef.current;
     if (!r || locked.current) return;
     locked.current = true; setBusy(true); setPendingAction(action);
-    const body = { command_id: crypto.randomUUID(), game_id: r.state.id, expected_version: r.state.version, action, piece_id: action === 'move' ? pieceID : undefined, prop_id: action === 'prop' ? pieceID : undefined };
+    const body = { command_id: crypto.randomUUID(), game_id: r.state.id, expected_version: r.state.version, action, piece_id: action === 'move' ? pieceID : action === 'prop' ? targetID : undefined, prop_id: action === 'prop' ? pieceID : undefined };
     const start = Date.now();
     try {
       let next: Room;
@@ -216,7 +239,7 @@ export default function App() {
             <div className="panel-heading"><div><p className="section-kicker">THE FAMILY AIRPORT</p><h2>{state.board.name}棋盘 <span>{state.players.length} 位飞行员</span></h2></div><div className="board-display-tools"><button className="board-zoom-button" aria-pressed={boardZoom} onClick={() => setBoardZoom(v => !v)}>{boardZoom ? '适合屏幕' : '放大棋盘'}</button><button className="icon-button" aria-label={sound ? '关闭游戏音效' : '开启游戏音效'} onClick={() => { setSound(!sound); localStorage.setItem('fly-sound', sound ? 'off' : 'on'); }}>{sound ? <SpeakerHigh /> : <SpeakerSlash />}</button></div></div>
             <div className="board-turnbar"><span style={{ color: palette[current.color] }}><AirplaneTilt weight="fill" />{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span><strong>{state.phase === 'move' ? `${state.dice} 点 · 选择高亮飞机` : '点击中央骰子，开始出发'}</strong>{state.props_enabled && !winner && <button className="prop-shortcut" onClick={() => document.getElementById('prop-pocket')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' })}>道具口袋 · {Object.values(current.props || {}).reduce((a, b) => a + b, 0)}</button>}</div>
             {boardZoom && <p className="board-zoom-hint">已放大，可滑动查看棋盘；也可以在操作区选择飞机。</p>}
-            <div className={'board-viewport ' + (boardZoom ? 'is-zoomed' : '')}><div className="board-stage"><Board game={state} onPiece={onPiece} disabled={!canAct} onRoll={() => void command('roll')} rolling={busy && pendingAction === 'roll'} /></div></div>
+            <div className={'board-viewport ' + (boardZoom ? 'is-zoomed' : '')}><div className="board-stage">{impact && <div className={"board-impact " + (impact.shield ? "shield-impact" : "bomb-impact")} role="status"><Sparkle weight="fill" /><strong>{impact.shield ? "护盾启动" : "炸弹出击"}</strong><span>{impact.text}</span></div>}<Board game={state} onPiece={onPiece} disabled={!canAct} onRoll={() => void command('roll')} rolling={busy && pendingAction === 'roll'} /></div></div>
             <div className="board-caption"><span><i className="mini-star" />{state.board.ring_length} 个航线格 · {state.board.home_length} 格终点跑道 · 飞行 {state.board.fly_from}→{state.board.fly_to}</span><span>{state.mode === 'quick' ? '先送一架到终点，即可获胜' : '把全部飞机送到终点，即可获胜'}</span></div>
             <div className="crew-list" style={{ '--seats': state.players.length } as React.CSSProperties}>
               {state.players.map((player, i) => <div key={player.id} className={'crew-seat ' + (state.current === i && state.phase !== 'finished' ? 'current' : '')} style={{ '--player-color': palette[player.color] } as React.CSSProperties}>
@@ -234,7 +257,7 @@ export default function App() {
                 <div className="turn-tip"><Info size={15} /><span>{state.phase === 'move' ? '也可以直接点击棋盘上高亮的飞机。' : '只有一个合法走法时，飞机会自动出发。'}</span></div>
               </>}
             </section>
-            <PropTray game={state} disabled={!canAct} onUse={id => void command('prop', id)} />
+            <PropTray key={state.id + ":" + state.version} game={state} disabled={!canAct} onUse={(id, target) => void command('prop', id, target)} />
             <section className="voice-panel">
               <div className="voice-heading"><span className="voice-icon"><Waveform size={24} /></span><div><h2>灵矽，陪你一起飞</h2><p>你的家庭游戏搭子</p></div><span className="voice-spark"><Sparkle size={22} weight="duotone" /></span></div>
               <button className="wake-setting" onClick={() => { setVoiceOptions(voiceSettings); setModal('voice'); }} aria-label="编辑语音唤醒设置"><span>{voiceSettings.wake_enabled ? `唤醒词：${voiceSettings.wake_word}` : '自由对话模式'}</span><span>编辑 <GearSix size={13} /></span></button>
@@ -244,13 +267,14 @@ export default function App() {
                 <button className={'voice-button ' + (effectiveVoice === 'listening' ? 'listening' : '')} onClick={() => voice.current?.disconnect()}><Microphone size={21} />断开实时语音</button>}
               {effectiveVoice === 'speaking' && <button className="stop-speech" onClick={() => voice.current?.stopPlayback()}>停止播报</button>}
               {voiceSettings.wake_enabled && voiceState !== 'disconnected' && voiceState !== 'connecting' && effectiveVoice !== 'standby' && <button className="stop-speech" onClick={() => voice.current?.standby()}>回到待唤醒</button>}
-              <p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : voiceSettings.wake_enabled ? '唤醒后可连续对话 30 秒；等待唤醒时，音频也会发送给灵矽识别。' : '连接后可随时插话，试着说：“掷骰子” 或 “走小熊号”'}</p>
+              <div className="voice-examples"><strong>试着跟我说</strong><span>“推荐一个道具”</span><span>“用炸弹攻击爸爸的小熊号”</span><span>“给我的小熊号加护盾”</span></div><p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : voiceSettings.wake_enabled ? '唤醒后可连续对话 30 秒；等待唤醒时，音频也会发送给灵矽识别。' : '连接后可随时插话，试着说：“掷骰子” 或 “走小熊号”'}</p>
             </section>
             <section className="log-panel"><div className="log-heading"><h2>飞行小记</h2><DotsThree size={22} /></div><ol>{state.history.slice(-4).reverse().map((event, i) => <li key={event.id}><span className={'log-dot ' + (i === 0 ? 'latest' : '')} /><p>{event.text}</p></li>)}</ol></section>
           </aside>
         </div>
         <footer className="page-footer"><span><UsersThree size={18} /> 一张棋盘，一家人的好时光。</span><span>FlyTogether · 用声音，拉近一点距离 <AirplaneTilt size={15} /></span></footer>
       </main>
+      {diceQueue[0] && <DiceRollModal key={diceQueue[0].id} roll={diceQueue[0]} onClose={() => setDiceQueue(queue => queue.slice(1))} />}
       {toast && <div className="toast" role="status"><Info size={19} /><span>{toast}</span><button aria-label="关闭提示" onClick={() => setToast('')}><X size={16} /></button></div>}
       {modal === 'voice' && <Modal title="给灵矽一个专属称呼" onClose={() => setModal(null)}>
         <form onSubmit={e => { e.preventDefault(); void saveVoiceSettings(); }}>
@@ -272,7 +296,7 @@ export default function App() {
           <label className="field-label">飞行员席位</label><div className="segmented">{[2, 3, 4].map(count => <button type="button" key={count} className={options.names.length === count ? 'selected' : ''} onClick={() => setOptions(o => ({ ...o, names: Array.from({ length: count }, (_, i) => o.ai && i === count - 1 ? '灵矽' : (o.names[i] && o.names[i] !== '灵矽' ? o.names[i] : ['小朋友', '爸爸', '妈妈', '家人'][i])) }))}>{count} 位</button>)}</div>
           <div className="name-fields">{options.names.map((name, i) => <label key={i}><span className="name-color" style={{ background: palette[['coral', 'gold', 'blue', 'jade'][i]] }} /><span className="sr-only">第 {i + 1} 位飞行员昵称</span><input maxLength={10} required value={name} onChange={e => setOptions(o => ({ ...o, names: o.names.map((v, n) => n === i ? e.target.value : v) }))} />{options.ai && i === options.names.length - 1 && <Robot size={20} />}</label>)}</div>
           <label className="toggle-row"><span><strong>邀请灵矽加入</strong><small>最后一个席位交给 AI 飞行员</small></span><input type="checkbox" checked={options.ai} onChange={e => setOptions(o => ({ ...o, ai: e.target.checked, names: o.names.map((name, i) => i === o.names.length - 1 ? (e.target.checked ? '灵矽' : '家人') : name) }))} /></label>
-          <label className="toggle-row"><span><strong>趣味道具模式</strong><small>每人三张道具，可语音说“使用起飞卡”</small></span><input type="checkbox" checked={options.props} onChange={e => setOptions(o => ({ ...o, props: e.target.checked }))} /></label>
+          <label className="toggle-row"><span><strong>趣味道具模式</strong><small>每人五张道具：起飞、加速、幸运、炸弹、护盾</small></span><input type="checkbox" checked={options.props} onChange={e => setOptions(o => ({ ...o, props: e.target.checked }))} /></label>
           <label className="field-label">这一局的节奏</label><div className="mode-options"><button type="button" className={options.mode === 'quick' ? 'selected' : ''} onClick={() => setOptions(o => ({ ...o, mode: 'quick' }))}><Sparkle /><strong>轻快一局</strong><span>每人 2 架 · 先到 1 架获胜</span></button><button type="button" className={options.mode === 'classic' ? 'selected' : ''} onClick={() => setOptions(o => ({ ...o, mode: 'classic' }))}><AirplaneTilt /><strong>完整飞行</strong><span>每人 4 架 · 全部抵达获胜</span></button></div>
           <button className="primary-button" disabled={busy} type="submit">{busy ? '准备机场中…' : '准备好，一起飞'}<ArrowRight /></button>
           <button type="button" disabled={busy} className="demo-link" onClick={() => void restart(true)}>试试预设演示局面 <ArrowUpRight size={14} /></button>

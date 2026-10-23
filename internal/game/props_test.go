@@ -129,3 +129,130 @@ func TestBoostStillRequiresExactFinishOnEveryBoard(t *testing.T) {
 		}
 	}
 }
+
+func TestBombAndShieldOnEveryBoard(t *testing.T) {
+	for _, board := range Boards() {
+		t.Run(board.ID, func(t *testing.T) {
+			s := New(Options{Names: []string{"甲", "乙"}, Board: board.ID, Props: true})
+			target := &s.Players[1].Pieces[0]
+			target.Progress, target.Shield = 10, true
+			if err := s.UsePropOn("bomb", target.ID); err != nil {
+				t.Fatal(err)
+			}
+			if target.Progress != 10 || target.Shield || s.Players[0].Props["bomb"] != 0 || s.ActiveProp != "bomb" || s.Dice != 0 {
+				t.Fatal("bomb must consume shield, not move a protected plane or fabricate dice")
+			}
+			before, _ := json.Marshal(s)
+			if err := s.UseProp("luck"); err == nil {
+				t.Fatal("instant effects must occupy this roll's prop slot")
+			}
+			after, _ := json.Marshal(s)
+			if string(before) != string(after) {
+				t.Fatal("rejected stacking mutated state")
+			}
+			if err := s.Roll(1); err != nil {
+				t.Fatal(err)
+			}
+			if s.Current != 1 || s.ActiveProp != "" {
+				t.Fatal("bomb must not grant another turn")
+			}
+			if err := s.UsePropOn("shield", target.ID); err != nil {
+				t.Fatal(err)
+			}
+			if !target.Shield || s.Players[1].Props["shield"] != 0 {
+				t.Fatal("shield not armed")
+			}
+			// A fresh unshielded opponent is returned to its hangar exactly once.
+			s = New(Options{Names: []string{"甲", "乙"}, Board: board.ID, Props: true})
+			s.Players[1].Pieces[0].Progress = board.RingLength
+			if err := s.UsePropOn("bomb", s.Players[1].Pieces[0].ID); err != nil {
+				t.Fatal(err)
+			}
+			if s.Players[1].Pieces[0].Progress != -1 || s.Version != 2 {
+				t.Fatal("bomb did not return target to hangar")
+			}
+		})
+	}
+}
+
+func TestTargetedPropRejectionIsAtomic(t *testing.T) {
+	for _, prop := range []string{"bomb", "shield"} {
+		for _, progress := range []int{-1, 0, 53, 58} {
+			s := propGame()
+			owner := 1
+			if prop == "shield" {
+				owner = 0
+			}
+			target := &s.Players[owner].Pieces[0]
+			target.Progress = progress
+			before, _ := json.Marshal(s)
+			if err := s.UsePropOn(prop, target.ID); err == nil {
+				t.Fatalf("%s accepted safe progress %d", prop, progress)
+			}
+			after, _ := json.Marshal(s)
+			if string(before) != string(after) {
+				t.Fatal("invalid target consumed inventory")
+			}
+		}
+		for _, targetID := range []string{"", "unknown", "p0-0", "p1-0"} {
+			s := propGame()
+			s.Players[0].Pieces[0].Progress = 8
+			s.Players[1].Pieces[0].Progress = 8
+			if (prop == "shield" && targetID == "p0-0") || (prop == "bomb" && targetID == "p1-0") {
+				continue
+			}
+			before, _ := json.Marshal(s)
+			if err := s.UsePropOn(prop, targetID); err == nil {
+				t.Fatal("accepted missing or wrong owner's target")
+			}
+			after, _ := json.Marshal(s)
+			if string(before) != string(after) {
+				t.Fatal("rejection mutated state")
+			}
+		}
+	}
+}
+
+func TestShieldAbsorbsOneCollisionOnly(t *testing.T) {
+	s := propGame()
+	s.Players[0].Pieces[0].Progress = 8
+	// Player 0 landing at progress 10 shares cell with player 1 progress 49.
+	s.Players[1].Pieces[0].Progress, s.Players[1].Pieces[0].Shield = 49, true
+	if err := s.Roll(2); err != nil {
+		t.Fatal(err)
+	}
+	if s.Players[0].Pieces[0].Progress != 10 || s.Players[1].Pieces[0].Progress != 49 || s.Players[1].Pieces[0].Shield || len(s.LastMove.Captured) != 0 || len(s.LastMove.Blocked) != 1 {
+		t.Fatal("shield must break while both planes remain on cell")
+	}
+	s.Current, s.Phase, s.ActiveProp = 0, "roll", ""
+	s.Players[0].Pieces[0].Progress = 8
+	if err := s.Roll(2); err != nil {
+		t.Fatal(err)
+	}
+	if s.Players[1].Pieces[0].Progress != -1 || len(s.LastMove.Captured) != 1 {
+		t.Fatal("used shield incorrectly blocked second collision")
+	}
+}
+
+func TestTacticalSuggestionUsesValidTarget(t *testing.T) {
+	s := propGame()
+	s.Players[1].Pieces[0].Progress = 31
+	id, target := s.SuggestedPropTarget()
+	if id != "bomb" || target != "p1-0" {
+		t.Fatal("AI missed valid attack")
+	}
+	if err := s.UsePropOn(id, target); err != nil {
+		t.Fatal(err)
+	}
+	s = propGame()
+	s.Players[0].Props["bomb"] = 0
+	s.Players[0].Pieces[0].Progress = 30
+	s.Players[1].Pieces[0].Progress = 10
+	id, target = s.SuggestedPropTarget()
+	if id != "shield" || target != "p0-0" {
+		t.Fatal("AI missed valid protection")
+	}
+	if err := s.UsePropOn(id, target); err != nil {
+		t.Fatal(err)
+	}
+}

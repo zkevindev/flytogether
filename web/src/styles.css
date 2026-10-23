@@ -282,3 +282,40 @@ main { padding-top: 12px; }
   .board-caption { font-size: 10px; padding: 0 2px 14px; gap: 6px; }
   .turn-panel,.voice-panel { padding: 20px; }
 }
+
+/* Five distinct choices and explicit, accessible targets. */
+.prop-cards { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.prop-card:last-child { grid-column: 1 / -1; }
+.side-column .prop-card { flex-direction: row; align-items: center; }
+.prop-targets { margin-top: 12px; padding: 12px; background: white; border: 1px solid #b9d0dd; border-radius: 10px; }
+.prop-targets>div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.prop-targets strong { font-size: 13px; }
+.prop-targets p { font-size: 11px; color: #526b7d; line-height: 1.6; }
+.prop-target { min-height: 44px; width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #c2d7df; border-radius: 8px; background: #edf6f7; color: #244d58; text-align: left; font-size: 13px; }
+.voice-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; font-size: 11px; color: #476a66; }
+.voice-examples strong { width: 100%; }
+.voice-examples span { padding: 5px 7px; border-radius: 6px; background: #edf5ef; }
+.dice-modal { width: min(440px,calc(100% - 32px)); padding: 32px 24px 24px; overflow: visible; border: 1px solid #e0e8e7; border-radius: 26px; background: radial-gradient(ellipse at 50% 38%,#fff 0,#eff8f4 72%); color: #284c42; text-align: center; box-shadow: 0 24px 100px #102b3b55; }
+.dice-modal::backdrop { background: #172f42aa; backdrop-filter: blur(5px); }
+.dice-modal-kicker { display: flex; align-items: center; justify-content: center; gap: 8px; color: #6b7b52; font-size: 12px; letter-spacing: .12em; }
+.dice-modal h2 { margin: 15px 0 5px; font-size: 29px; }
+.dice-modal p { min-height: 44px; margin: 0 0 14px; color: #526e64; font-size: 14px; line-height: 1.6; }
+.dice-stage { display: flex; justify-content: center; gap: 36px; padding: 42px 0 45px; }
+.cube-perspective { perspective: 650px; width: 88px; height: 88px; position: relative; }
+.cube-perspective::after { content: ''; position: absolute; width: 96px; height: 20px; left: -4px; top: 103px; border-radius: 50%; background: #335a3d25; filter: blur(6px); }
+.dice-cube { width: 88px; height: 88px; position: relative; transform-style: preserve-3d; transform: var(--landing); }
+.dice-cube.tumbling { animation: dice-tumble 950ms cubic-bezier(.18,.6,.24,1) both; }
+.cube-face { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: repeat(3,1fr); gap: 6px; padding: 15px; border-radius: 15px; border: 2px solid #d1dcd8; background: linear-gradient(145deg,#fff,#e7eee9); backface-visibility: hidden; box-shadow: inset 0 0 8px #fff; }
+.face-1 { transform: translateZ(44px); }.face-2 { transform: rotateY(90deg) translateZ(44px); }.face-3 { transform: rotateX(90deg) translateZ(44px); }.face-4 { transform: rotateX(-90deg) translateZ(44px); }.face-5 { transform: rotateY(-90deg) translateZ(44px); }.face-6 { transform: rotateY(180deg) translateZ(44px); }
+.cube-pip { border-radius: 50%; opacity: 0; background: #2b5747; box-shadow: inset 0 2px 3px #092f4666; }.cube-pip.visible { opacity: 1; }.face-1 .cube-pip { background: #d3594d; }
+@keyframes dice-tumble { 0% { transform: translateY(-25px) rotateX(-400deg) rotateY(-330deg) rotateZ(-25deg); } 55% { transform: translateY(9px) rotateX(190deg) rotateY(200deg) rotateZ(15deg); } 82% { transform: translateY(-8px) var(--landing); } 100% { transform: var(--landing); } }
+@media (prefers-reduced-motion: reduce) { .dice-cube.tumbling { animation: none; } }
+@media (max-width: 480px) { .side-column .prop-card { padding: 10px 8px; }.dice-stage { gap: 25px; }.dice-modal h2 { font-size: 25px; } }
+
+.dice-stage { perspective: 750px; }
+.cube-perspective { transform-style: preserve-3d; transform: rotateX(-14deg) rotateY(-20deg); }
+.board-stage { position: relative; }
+.board-impact { position: absolute; z-index: 2; pointer-events: none; top: 43%; left: 12%; width: 76%; display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 16px; border-radius: 16px; background: #fff7edf5; border: 2px solid #ca7f4c; color: #8f4529; box-shadow: 0 8px 35px #49300e33; animation: impact-pop 250ms ease-out; text-align: center; }
+.board-impact strong { font-size: 22px; }.board-impact span { width: 100%; font-size: 13px; line-height: 1.6; }.shield-impact { background: #edfafff5; color: #1b6d89; border-color: #62afc8; }
+@keyframes impact-pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .board-impact { animation: none; } }

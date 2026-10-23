@@ -77,9 +77,10 @@ export function Board({ game, onPiece, disabled, onRoll, rolling = false }: {
       const status = finished ? '已抵达' : piece.progress < 0 ? '在机库' : piece.progress === 0 ? '在起飞位' : `前进到第 ${piece.progress} 格`;
       return <g key={piece.id} className={'board-piece ' + (legal ? 'is-legal' : '')} data-piece-id={piece.id} data-progress={piece.progress}
         style={{ transform: `translate(${point.x}px, ${point.y}px)`, color: palette[player.color] }}
-        role="button" tabIndex={legal ? 0 : -1} aria-label={`${player.name}的${piece.label}，${status}${legal ? '，可以移动' : ''}`} aria-disabled={!legal}
+        role="button" tabIndex={legal ? 0 : -1} aria-label={`${player.name}的${piece.label}，${status}${piece.shield ? "，护盾保护中" : ""}${legal ? '，可以移动' : ''}`} aria-disabled={!legal}
         onClick={() => onPiece(piece, playerIndex)} onKeyDown={e => { if (legal && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPiece(piece, playerIndex); } }}>
         <title>{player.name} · {piece.label} · {status}</title>
+        {piece.shield && <circle r={r + 5} fill="#6cd5f2" fillOpacity=".2" stroke="#1689b2" strokeWidth="2.5" strokeDasharray="5 3" />}
         {legal && <circle className="piece-halo" r={r + 7} fill="currentColor" opacity=".24" />}
         <circle r={r + 4} fill="transparent" />
         <circle className="piece-disc" r={r} fill={finished || stackSize > 1 ? 'currentColor' : 'white'} stroke="currentColor" strokeWidth={legal ? 3 : 2} filter={`url(#${uid}shadow)`} />

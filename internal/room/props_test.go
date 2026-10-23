@@ -29,3 +29,22 @@ func TestPropCommandIsIdempotentAndUsesVoiceGrant(t *testing.T) {
 		t.Fatal("a voice utterance performed two writes")
 	}
 }
+
+func TestVoiceBombUsesTargetAndOneGrant(t *testing.T) {
+	r := New(game.Options{Names: []string{"甲", "乙"}, Props: true, Demo: true})
+	if err := r.BeginSpeech(); err != nil {
+		t.Fatal(err)
+	}
+	token := r.CurrentActionToken()
+	if _, err := r.Tool("use_prop", map[string]string{"prop_id": "bomb", "piece_id": "p1-0", "action_token": token}); err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	if r.state.Players[1].Pieces[0].Progress != -1 || r.state.Players[0].Props["bomb"] != 0 {
+		t.Fatal("voice target was not applied")
+	}
+	r.mu.Unlock()
+	if _, err := r.Tool("use_prop", map[string]string{"prop_id": "bomb", "piece_id": "p1-1", "action_token": token}); err == nil {
+		t.Fatal("grant reused for different target")
+	}
+}

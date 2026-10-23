@@ -51,6 +51,7 @@ type Piece struct {
 	ID       string `json:"id"`
 	Label    string `json:"label"`
 	Number   int    `json:"number"`
+	Shield   bool   `json:"shield,omitempty"`
 	Progress int    `json:"progress"` // -1 hangar, 0 launch pad, 1..ring ring, ring+1..finish home lane.
 }
 
@@ -69,6 +70,7 @@ type Move struct {
 	From     int      `json:"from"`
 	To       int      `json:"to"`
 	Captured []string `json:"captured"`
+	Blocked  []string `json:"blocked,omitempty"`
 	Jump     bool     `json:"jump"`
 	Fly      bool     `json:"fly"`
 	Launch   bool     `json:"launch"`
@@ -77,11 +79,12 @@ type Move struct {
 }
 
 type Event struct {
-	ID      string `json:"id"`
-	Kind    string `json:"kind"`
-	Text    string `json:"text"`
-	Player  string `json:"player_id,omitempty"`
-	PieceID string `json:"piece_id,omitempty"`
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	Text      string `json:"text"`
+	Player    string `json:"player_id,omitempty"`
+	PieceID   string `json:"piece_id,omitempty"`
+	DiceRolls []int  `json:"dice_rolls,omitempty"`
 }
 
 type State struct {
@@ -145,12 +148,12 @@ func New(o Options) *State {
 	s := &State{ID: ID(), Ruleset: "family-v1", Board: board, Mode: o.Mode, Demo: o.Demo, Version: 1,
 		Turn: 1, Phase: "roll", Legal: []Move{}, History: []Event{}, Players: []Player{}, PropsEnabled: o.Props, DiceRolls: []int{}}
 	if o.Props {
-		s.Ruleset = "family-props-v1"
+		s.Ruleset = "family-props-v2"
 	}
 	for i, name := range o.Names {
 		p := Player{ID: fmt.Sprintf("player-%d", i), Name: name, Color: Colors[i], AI: o.AI && i == len(o.Names)-1, Pieces: []Piece{}, Props: map[string]int{}}
 		if o.Props {
-			p.Props = map[string]int{"launch": 1, "boost": 1, "luck": 1}
+			p.Props = map[string]int{"launch": 1, "boost": 1, "luck": 1, "bomb": 1, "shield": 1}
 		}
 		for j := 0; j < count; j++ {
 			p.Pieces = append(p.Pieces, Piece{ID: fmt.Sprintf("p%d-%d", i, j), Label: Labels[j], Number: j + 1, Progress: -1})
@@ -225,7 +228,11 @@ func (s *State) legalMoves() []Move {
 					}
 					for _, op := range other.Pieces {
 						if op.Progress > 0 && op.Progress <= s.Board.RingLength && CellOn(s.Board.RingLength, i, op.Progress) == CellOn(s.Board.RingLength, s.Current, m.To) {
-							m.Captured = append(m.Captured, op.ID)
+							if op.Shield {
+								m.Blocked = append(m.Blocked, op.ID)
+							} else {
+								m.Captured = append(m.Captured, op.ID)
+							}
 						}
 					}
 				}
@@ -242,6 +249,9 @@ func (s *State) legalMoves() []Move {
 			}
 			if len(m.Captured) > 0 {
 				m.Summary += fmt.Sprintf("，送 %d 架飞机回机场", len(m.Captured))
+			}
+			if len(m.Blocked) > 0 {
+				m.Summary += fmt.Sprintf("，击破 %d 个护盾", len(m.Blocked))
 			}
 			if m.Finish {
 				m.Summary += "，抵达终点"
@@ -292,6 +302,7 @@ func (s *State) RollValues(values ...int) error {
 	} else {
 		s.add("rolled", fmt.Sprintf("%s 掷出了 %d 点", s.Players[s.Current].Name, die), "")
 	}
+	s.History[len(s.History)-1].DiceRolls = append([]int(nil), values...)
 	s.Legal = s.legalMoves()
 	s.Version++
 	s.Phase = "move"
@@ -325,13 +336,21 @@ func (s *State) apply(m Move) {
 			p.Pieces[i].Progress = m.To
 		}
 	}
+	blocked := map[string]bool{}
+	for _, id := range m.Blocked {
+		blocked[id] = true
+	}
 	captured := map[string]bool{}
 	for _, id := range m.Captured {
 		captured[id] = true
 	}
 	for i := range s.Players {
 		for j := range s.Players[i].Pieces {
+			if blocked[s.Players[i].Pieces[j].ID] {
+				s.Players[i].Pieces[j].Shield = false
+			}
 			if captured[s.Players[i].Pieces[j].ID] {
+				s.Players[i].Pieces[j].Shield = false
 				s.Players[i].Pieces[j].Progress = -1
 			}
 		}
