@@ -75,7 +75,12 @@ h1>span { color: #b4c4a0; }
 .prop-copy strong { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 13px; }
 .prop-copy small { font-size: 10px; font-weight: 500; white-space: nowrap; }
 .prop-copy>span { color: #596e7c; font-size: 10px; line-height: 1.5; }
-.board-svg { display: block; width: 100%; height: auto; }
+.flight-host { width: 100%; aspect-ratio: 1; border-radius: 28px; overflow: hidden; background: #e7f3f6; }
+.flight-host canvas { display: block; width: 100%; height: 100%; }
+.flight-board { position: relative; }
+.board-access { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.board-access button:focus { position: fixed; left: 16px; bottom: 16px; z-index: 6; width: auto; height: auto; clip: auto; margin: 0; padding: 10px 14px; overflow: visible; border: 0; border-radius: 10px; background: #fff; color: #23483d; box-shadow: 0 8px 24px #1d3b3240; }
+.dice-canvas { width: min(100%, 420px); height: 220px; margin: 6px auto 0; }
 .board-display-tools { display: flex; align-items: center; gap: 8px; }
 .board-zoom-button { min-height: 44px; padding: 8px 10px; border: 1px solid #d2dee5; background: #f7fafc; border-radius: 9px; color: #46657a; font-size: 11px; }
 .board-viewport { overflow: auto; overscroll-behavior: contain; border-radius: 16px; }

@@ -19,6 +19,10 @@ export class VoiceClient {
   private generationDone = false;
   private assistantTranscript = '';
   private waitingForWake = false;
+  private expectHost = false;
+  private dropHost = false;
+  private hostLive = false;
+  private hostResponses = new Set<string>();
   private activeSources = new Set<AudioBufferSourceNode>();
 
   constructor(private roomID: string, private onState: (s: string) => void, private onText: (s: string, who: string) => void, private onError: (s: string) => void) {}
@@ -29,6 +33,7 @@ export class VoiceClient {
     this.disconnect();
     const epoch = ++this.epoch;
     this.waitingForWake = false; this.mutedUntilInput = false; this.mutedResponses.clear();
+    this.expectHost = false; this.dropHost = false; this.hostLive = false; this.hostResponses.clear();
     this.onState('connecting');
     try {
       const audio = this.audio = new AudioContext();
@@ -68,9 +73,16 @@ export class VoiceClient {
           } else if (message.type === 'wake_state') {
             const wasWaiting = this.waitingForWake;
             this.waitingForWake = !!message.wake_enabled && !message.awake;
-            if (this.waitingForWake) {
+            if (this.waitingForWake && !this.hostLive) {
               this.clearPlayback(); this.generationDone = true; this.onState('standby');
-            } else if (wasWaiting) this.onState('thinking');
+            } else if (!this.waitingForWake && wasWaiting) this.onState('thinking');
+          } else if (message.type === 'host_cue') {
+            this.expectHost = true;
+          } else if (message.type === 'host_cancel') {
+            this.expectHost = false; this.dropHost = true; this.hostLive = false;
+            this.clearPlayback(); this.generationDone = true;
+            if (this.responseID) this.mutedResponses.add(this.responseID);
+            if (this.recording) this.onState(this.waitingForWake ? 'standby' : 'ready');
           } else if (message.type === 'error') {
             clearTimeout(timeout);
             const error = new Error(message.message || '语音连接没有成功');
@@ -94,7 +106,11 @@ export class VoiceClient {
             if (message.transcript) { this.assistantTranscript = message.transcript; this.onText(this.assistantTranscript, 'linx'); }
           } else if (message.type === 'response.created') {
             this.responseID = message.response?.id || '';
-            if (this.mutedUntilInput && this.responseID) this.mutedResponses.add(this.responseID);
+            if (this.dropHost && this.responseID) { this.mutedResponses.add(this.responseID); this.dropHost = false; this.expectHost = false; }
+            if (this.expectHost && this.responseID) {
+              this.hostResponses.add(this.responseID); this.hostLive = true; this.expectHost = false;
+              if (this.mutedUntilInput) this.mutedResponses.add(this.responseID);
+            } else if (this.mutedUntilInput && this.responseID) this.mutedResponses.add(this.responseID);
             this.assistantTranscript = '';
           } else if (message.type === 'input_audio_buffer.speech_started' || message.type === 'speech_started') {
             this.muteResponse();
@@ -108,7 +124,11 @@ export class VoiceClient {
             this.generationDone = true;
             this.checkDrain();
           } else if (message.type === 'response.done') {
-            if (this.ignoreResponse(message)) return;
+            const id = message.response?.id || message.response_id || this.responseID;
+            const host = this.hostResponses.has(id);
+            this.hostResponses.delete(id);
+            if (host && (this.mutedResponses.has(id) || this.mutedUntilInput)) { this.hostLive = false; return; }
+            if (!host && this.ignoreResponse(message)) return;
             this.generationDone = true;
             this.checkDrain();
           }
@@ -180,6 +200,7 @@ export class VoiceClient {
       return;
     }
     this.schedule = 0;
+    this.hostLive = false;
     if (this.recording) this.onState(this.waitingForWake ? 'standby' : 'ready');
   }
 
@@ -193,6 +214,7 @@ export class VoiceClient {
 
   standby() {
     this.muteResponse();
+    this.expectHost = false; this.dropHost = false; this.hostLive = false; this.hostResponses.clear();
     this.waitingForWake = true;
     this.clearPlayback();
     this.generationDone = true;
@@ -202,13 +224,16 @@ export class VoiceClient {
 
   private muteResponse() {
     this.mutedUntilInput = true;
+    this.hostLive = false; this.expectHost = false;
     if (this.responseID) this.mutedResponses.add(this.responseID);
     if (this.mutedResponses.size > 64) this.mutedResponses.delete(this.mutedResponses.values().next().value!);
   }
 
   private ignoreResponse(message: RealtimeMessage) {
     const id = message.response_id || message.response?.id || this.responseID;
-    return this.waitingForWake || this.mutedUntilInput || this.mutedResponses.has(id);
+    if (this.mutedResponses.has(id) || this.mutedUntilInput) return true;
+    if (this.hostResponses.has(id)) return false;
+    return this.waitingForWake;
   }
 
   private send(value: unknown) { if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(value)); }

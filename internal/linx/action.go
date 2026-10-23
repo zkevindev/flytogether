@@ -2,6 +2,7 @@ package linx
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/zkevindev/flytogether/internal/game"
@@ -13,6 +14,13 @@ type voiceAction struct {
 	PieceID string
 	PropID  string
 	Notice  string
+	Cheer   int
+}
+
+// Cheer is a spoken dice call. It never changes the roll; it is resolved after a real roll event.
+type Cheer struct {
+	Die   int
+	After string
 }
 
 // Resolve explicit game commands before narration so success always follows a
@@ -30,17 +38,35 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 	if len(state.Players) == 0 || state.Current < 0 || state.Current >= len(state.Players) {
 		return voiceAction{}, false
 	}
+	if text == "" || text == "你好" || text == "在吗" || text == "嗨" || text == "喂" {
+		return voiceAction{Name: "get_game_state", Notice: hostCue(state)}, true
+	}
 	if strings.Contains(text, "推荐") || strings.Contains(text, "建议") || strings.Contains(text, "帮我选") {
 		return voiceAction{Name: "get_game_state", Notice: tacticalAdvice(state)}, true
 	}
-	for _, phrase := range []string{"不要", "不想", "别用", "别炸", "别加", "不用", "不使用", "不炸", "不加", "推荐", "建议", "别让", "别走", "别移动", "别起飞", "取消", "为什么", "怎么", "能不能", "可不可以", "能否", "吗", "哪", "规则"} {
+	for _, phrase := range []string{"不要", "不想", "别用", "别炸", "别加", "不用", "不使用", "不炸", "不加", "别让", "别走", "别移动", "别起飞", "取消"} {
 		if strings.Contains(text, phrase) {
-			return voiceAction{Name: "get_game_state", Notice: "这句话是否定、询问或规则讨论，没有执行游戏动作。请根据当前棋局回答，不要宣称已掷骰或移动。"}, true
+			return voiceAction{Name: "get_game_state", Notice: "先不这么做。" + hostCue(state)}, true
 		}
+	}
+	for _, phrase := range []string{"为什么", "怎么", "能不能", "可不可以", "能否", "吗", "哪", "规则", "怎么办", "该我", "现在怎么样"} {
+		if strings.Contains(text, phrase) {
+			return voiceAction{Name: "get_game_state", Notice: hostCue(state)}, true
+		}
+	}
+	if n, ok := calledDie(text); ok && !rollVerb(text) {
+		if state.Phase != "roll" {
+			return voiceAction{Name: "get_game_state", Notice: "这把已经掷过了，是" + strconv.Itoa(state.Dice) + "点。" + hostCue(state)}, true
+		}
+		return voiceAction{Name: "get_game_state", Notice: "好，你喊" + strconv.Itoa(n) + "点。说「掷骰子」，我不会改点数。", Cheer: n}, true
 	}
 	var props []string
 	for _, id := range []string{"launch", "boost", "luck", "bomb", "shield"} {
-		if strings.Contains(text, game.PropNames[id]) || (id == "luck" && strings.Contains(text, "幸运投")) {
+		hit := strings.Contains(text, game.PropNames[id]) || (id == "luck" && strings.Contains(text, "幸运投"))
+		if id == "bomb" && state.Phase == "roll" && bombVerb(text) {
+			hit = true
+		}
+		if hit {
 			props = append(props, id)
 		}
 	}
@@ -52,6 +78,9 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		explicit := text == normalizeWake(game.PropNames[id])
 		for _, verb := range []string{"使用", "用", "来一张", "来个", "加", "装", "套", "攻击", "释放"} {
 			explicit = explicit || strings.Contains(text, verb)
+		}
+		if id == "bomb" && bombVerb(text) {
+			explicit = true
 		}
 		if !explicit {
 			return voiceAction{Name: "get_game_state", Notice: "只是提及道具，没有明确使用指令。本轮不操作，请回答问题或给出建议。"}, true
@@ -119,19 +148,13 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		}
 		return voiceAction{Name: "use_prop", PropID: id}, true
 	}
-	if strings.Contains(text, "骰子") {
-		for _, verb := range []string{"掷", "投", "扔", "摇", "丢"} {
-			if strings.Contains(text, verb) {
-				return voiceAction{Name: "roll_dice"}, true
-			}
-		}
+	cheer, _ := calledDie(text)
+	if rollVerb(text) {
+		return voiceAction{Name: "roll_dice", Cheer: cheer}, true
 	}
 	move := false
-	for _, verb := range []string{"起飞", "移动", "前进", "走", "撞"} {
+	for _, verb := range []string{"起飞", "移动", "前进", "走", "撞", "打回", "送回"} {
 		move = move || strings.Contains(text, verb)
-	}
-	if len(state.Players) == 0 || state.Current < 0 || state.Current >= len(state.Players) {
-		return voiceAction{}, false
 	}
 	player := state.Players[state.Current]
 	var named []game.Piece
@@ -141,17 +164,29 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		}
 	}
 	// A bare piece name answers the preceding selection question during a move.
-	if !move && !(state.Phase == "move" && len(named) == 1 && text == normalizeWake(named[0].Label)) {
-		return voiceAction{}, false
-	}
-	if len(named) == 1 {
+	bare := state.Phase == "move" && len(named) == 1 && text == normalizeWake(named[0].Label)
+	if len(named) == 1 && (move || bare) {
 		if strings.Contains(text, "起飞") && named[0].Progress >= 0 {
-			return voiceAction{Name: "move_piece", Notice: "这架飞机已经离开机库，没有再次起飞或移动。请询问玩家是否要移动它。"}, true
+			return voiceAction{Name: "move_piece", Notice: "这架飞机已经离开机库。" + hostCue(state)}, true
 		}
 		return voiceAction{Name: "move_piece", PieceID: named[0].ID}, true
 	}
-	if len(named) > 1 {
-		return voiceAction{Name: "move_piece", Notice: "一次只能操作一架飞机，请让玩家指定一架。"}, true
+	if len(named) > 1 && (move || state.Phase == "move") {
+		return voiceAction{Name: "move_piece", Notice: "一次只能操作一架飞机，请指定一架。"}, true
+	}
+	if delegated(text) {
+		if state.Phase == "move" {
+			if best := state.BestMove(); best.PieceID != "" {
+				return voiceAction{Name: "move_piece", PieceID: best.PieceID}, true
+			}
+		}
+		return voiceAction{Name: "get_game_state", Notice: hostCue(state)}, true
+	}
+	if candidates, relevant := intentMoves(state, text); relevant {
+		return resolveCandidates(state, candidates, intentMiss(state, text))
+	}
+	if !move {
+		return voiceAction{}, false
 	}
 	candidates := state.Legal
 	if strings.Contains(text, "起飞") {
@@ -162,15 +197,160 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 			}
 		}
 	}
-	if strings.Contains(text, "撞") {
-		filtered := []game.Move{}
-		for _, option := range candidates {
-			if len(option.Captured) > 0 {
-				filtered = append(filtered, option)
+	return resolveCandidates(state, candidates, "")
+}
+
+func rollVerb(text string) bool {
+	if !strings.Contains(text, "骰子") && !strings.Contains(text, "骰") {
+		return false
+	}
+	for _, verb := range []string{"掷", "投", "扔", "摇", "丢"} {
+		if strings.Contains(text, verb) {
+			return true
+		}
+	}
+	return false
+}
+
+func bombVerb(text string) bool {
+	return strings.Contains(strings.ReplaceAll(text, "炸弹", ""), "炸")
+}
+
+func delegated(text string) bool {
+	for _, phrase := range []string{"你来走", "帮我走", "走最好", "你决定", "你来选"} {
+		if strings.Contains(text, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+func calledDie(text string) (int, bool) {
+	text = normalizeWake(text)
+	nums := []struct {
+		word string
+		n    int
+	}{{"1", 1}, {"2", 2}, {"3", 3}, {"4", 4}, {"5", 5}, {"6", 6}, {"一", 1}, {"二", 2}, {"两", 2}, {"三", 3}, {"四", 4}, {"五", 5}, {"六", 6}}
+	for _, prefix := range []string{"我要", "想要", "赌", "来个", "喊"} {
+		at := strings.Index(text, prefix)
+		if at < 0 {
+			continue
+		}
+		rest := text[at+len(prefix):]
+		for _, num := range nums {
+			if strings.HasPrefix(rest, num.word) {
+				return num.n, true
 			}
 		}
-		candidates = filtered
 	}
+	return 0, false
+}
+
+func intentMoves(state game.State, text string) ([]game.Move, bool) {
+	switch {
+	case strings.Contains(text, "最前") || strings.Contains(text, "领头") || strings.Contains(text, "最快"):
+		return leading(state.Legal, true), true
+	case strings.Contains(text, "最后") || strings.Contains(text, "垫底"):
+		return leading(state.Legal, false), true
+	case strings.Contains(text, "回家") || strings.Contains(text, "终点") || strings.Contains(text, "冲线"):
+		out := []game.Move{}
+		for _, option := range state.Legal {
+			if option.Finish {
+				out = append(out, option)
+			}
+		}
+		return out, true
+	case strings.Contains(text, "撞") || strings.Contains(text, "打回") || strings.Contains(text, "送回") || (state.Phase == "move" && bombVerb(text)):
+		out := []game.Move{}
+		mentioned := len(mentionedOpponents(state, text)) > 0 || mentionedLabel(text)
+		for _, option := range state.Legal {
+			if len(option.Captured) == 0 {
+				continue
+			}
+			if mentioned && !captureMatches(state, option, text) {
+				continue
+			}
+			out = append(out, option)
+		}
+		return out, true
+	default:
+		return nil, false
+	}
+}
+
+func leading(moves []game.Move, front bool) []game.Move {
+	if len(moves) == 0 {
+		return nil
+	}
+	best := moves[0].From
+	for _, option := range moves[1:] {
+		if (front && option.From > best) || (!front && option.From < best) {
+			best = option.From
+		}
+	}
+	out := []game.Move{}
+	for _, option := range moves {
+		if option.From == best {
+			out = append(out, option)
+		}
+	}
+	return out
+}
+
+func mentionedOpponents(state game.State, text string) []int {
+	out := []int{}
+	for i, player := range state.Players {
+		if i == state.Current {
+			continue
+		}
+		if strings.Contains(text, normalizeWake(player.Name)) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+func mentionedLabel(text string) bool {
+	for _, label := range game.Labels {
+		if strings.Contains(text, normalizeWake(label)) {
+			return true
+		}
+	}
+	return false
+}
+
+func captureMatches(state game.State, option game.Move, text string) bool {
+	opponents := mentionedOpponents(state, text)
+	wantLabel := mentionedLabel(text)
+	for _, id := range option.Captured {
+		player, piece, ok := findPiece(state, id)
+		if !ok {
+			continue
+		}
+		ownerOK := len(opponents) == 0
+		for _, index := range opponents {
+			ownerOK = ownerOK || state.Players[index].ID == player.ID
+		}
+		labelOK := !wantLabel || strings.Contains(text, normalizeWake(piece.Label))
+		if ownerOK && labelOK {
+			return true
+		}
+	}
+	return false
+}
+
+func findPiece(state game.State, id string) (game.Player, game.Piece, bool) {
+	for _, player := range state.Players {
+		for _, piece := range player.Pieces {
+			if piece.ID == id {
+				return player, piece, true
+			}
+		}
+	}
+	return game.Player{}, game.Piece{}, false
+}
+
+func resolveCandidates(state game.State, candidates []game.Move, empty string) (voiceAction, bool) {
 	if len(candidates) == 1 {
 		return voiceAction{Name: "move_piece", PieceID: candidates[0].PieceID}, true
 	}
@@ -179,13 +359,231 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		for _, option := range candidates {
 			labels = append(labels, option.Label)
 		}
-		return voiceAction{Name: "move_piece", Notice: "尚未执行操作。请玩家从这些合法飞机中选择一架：" + strings.Join(labels, "、")}, true
+		return voiceAction{Name: "move_piece", Notice: "还没走棋。可以说其中一架：" + strings.Join(labels, "、") + "。"}, true
 	}
-	reason := "当前没有符合指令的合法走法。请根据棋局说明原因。"
-	if state.Phase == "roll" {
-		reason = "尚未执行移动。当前需要先掷骰子；经典起飞需要六点，已经启用起飞卡则允许任意点数起飞。请引导玩家明确发出掷骰指令。"
+	if empty == "" {
+		empty = hostCue(state)
+		if state.Phase == "roll" {
+			empty = "现在还不能走棋。" + empty
+		}
 	}
-	return voiceAction{Name: "move_piece", Notice: reason}, true
+	return voiceAction{Name: "move_piece", Notice: empty}, true
+}
+
+func intentMiss(state game.State, text string) string {
+	if strings.Contains(text, "撞") || strings.Contains(text, "打回") || strings.Contains(text, "送回") || bombVerb(text) {
+		if notice := blockedNotice(state); notice != "" {
+			return notice
+		}
+		who := "对方"
+		for _, index := range mentionedOpponents(state, text) {
+			who = state.Players[index].Name
+		}
+		if state.Phase == "roll" {
+			return "现在还撞不到" + who + "。" + hostCue(state)
+		}
+		return "这把撞不到" + who + "。" + hostCue(state)
+	}
+	if strings.Contains(text, "回家") || strings.Contains(text, "终点") || strings.Contains(text, "冲线") {
+		return "这次没有飞机能正好到家。" + hostCue(state)
+	}
+	return hostCue(state)
+}
+
+func blockedNotice(state game.State) string {
+	for _, option := range state.Legal {
+		if len(option.Blocked) == 0 {
+			continue
+		}
+		player, piece, ok := findPiece(state, option.Blocked[0])
+		if !ok {
+			continue
+		}
+		return player.Name + "的" + piece.Label + "有护盾，撞上去只会把盾打掉。可以说「走" + option.Label + "」。"
+	}
+	return ""
+}
+
+func hostCue(state game.State) string {
+	if len(state.Players) == 0 || state.Current < 0 || state.Current >= len(state.Players) {
+		return "棋局还在准备。"
+	}
+	if state.Phase == "finished" {
+		name := "有人"
+		for _, player := range state.Players {
+			if player.ID == state.Winner {
+				name = player.Name
+			}
+		}
+		return name + "赢了这一局。想再飞，就重新开一局。"
+	}
+	player := state.Players[state.Current]
+	if player.AI {
+		return "轮到" + player.Name + "了，等它飞完再叫我。"
+	}
+	if state.Phase == "move" {
+		return moveCue(state, player.Name)
+	}
+	return rollCue(state, player.Name)
+}
+
+func moveCue(state game.State, name string) string {
+	if len(state.Legal) == 0 {
+		return name + "，这枚骰子没有飞机能走。"
+	}
+	if len(state.Legal) == 1 {
+		option := state.Legal[0]
+		return name + "掷出" + strconv.Itoa(state.Dice) + "点，只能走" + option.Label + "，" + option.Summary + "。说「走" + option.Label + "」就出发。"
+	}
+	for _, option := range state.Legal {
+		if len(option.Captured) == 0 {
+			continue
+		}
+		return name + "，" + option.Label + "可以撞" + capturedNames(state, option) + "。说「撞」加上对方名字，或者说「走最前面」。"
+	}
+	for _, option := range state.Legal {
+		if option.Finish {
+			return name + "，" + option.Label + "可以到家。说「回家」，或者说另一架的名字。"
+		}
+	}
+	labels := []string{}
+	for _, option := range state.Legal {
+		labels = append(labels, option.Label)
+	}
+	return name + "掷出" + strconv.Itoa(state.Dice) + "点，可以走" + strings.Join(labels, "或") + "。说「最前面」，或直接说飞机名字。"
+}
+
+func capturedNames(state game.State, option game.Move) string {
+	names := []string{}
+	for _, id := range option.Captured {
+		player, piece, ok := findPiece(state, id)
+		if !ok {
+			continue
+		}
+		names = append(names, player.Name+"的"+piece.Label)
+	}
+	if len(names) == 0 {
+		return "对方"
+	}
+	return strings.Join(names, "和")
+}
+
+func rollCue(state game.State, name string) string {
+	id, target := state.SuggestedPropTarget()
+	if player, piece, ok := findPiece(state, target); ok && (id == "bomb" || id == "shield") {
+		if id == "bomb" {
+			return name + "，" + player.Name + "的" + piece.Label + "飞在前面。说「炸" + player.Name + "的" + piece.Label + "」，或者说「掷骰子」。"
+		}
+		return name + "，" + piece.Label + "已经飞得挺远。说「给" + piece.Label + "加护盾」，或者说「掷骰子」。"
+	}
+	switch id {
+	case "launch":
+		return name + "，飞机还在机场。说「用起飞卡」，任意点数都能起飞；也可以直接说「掷骰子」。"
+	case "boost":
+		return name + "，说「用加速卡」可以多走两格，或者说「掷骰子」。"
+	case "luck":
+		return name + "，说「用幸运骰」会掷两次取大的，或者说「掷骰子」。"
+	default:
+		return name + "，说「掷骰子」。想好玩一点，可以先喊「我要六点」。"
+	}
+}
+
+func (c *Cheer) take(state game.State) string {
+	if c == nil || c.Die == 0 {
+		return ""
+	}
+	rolled := false
+	for _, event := range eventsAfter(state.History, c.After) {
+		if event.Kind == "rolled" {
+			rolled = true
+		}
+	}
+	if !rolled {
+		return ""
+	}
+	want, got := c.Die, state.Dice
+	c.Die = 0
+	if got == want {
+		return "你喊中了，就是" + strconv.Itoa(got) + "点。"
+	}
+	return "你喊的是" + strconv.Itoa(want) + "点，实际是" + strconv.Itoa(got) + "点。"
+}
+
+func eventsAfter(history []game.Event, id string) []game.Event {
+	if len(history) == 0 || id == "" {
+		return nil
+	}
+	for i, event := range history {
+		if event.ID == id {
+			if i+1 >= len(history) {
+				return nil
+			}
+			return history[i+1:]
+		}
+	}
+	return history[len(history)-1:]
+}
+
+func lastEventID(state game.State) string {
+	if len(state.History) == 0 {
+		return ""
+	}
+	return state.History[len(state.History)-1].ID
+}
+
+// nextHostLine is what the agent says after a click or an AI turn. seen is the last event already spoken.
+func nextHostLine(state game.State, seen string) (string, string) {
+	last := lastEventID(state)
+	if seen == "" || last == "" || last == seen {
+		return "", last
+	}
+	fresh := eventsAfter(state.History, seen)
+	if len(fresh) == 0 {
+		return "", last
+	}
+	dramas := []string{}
+	rolled := false
+	for _, event := range fresh {
+		if event.Kind == "rolled" {
+			rolled = true
+		}
+		if event.Kind == "won" || event.Kind == "bonus" || event.Kind == "prop" || (event.Kind == "moved" && dramatic(event.Text)) {
+			dramas = append(dramas, strings.TrimRight(event.Text, "。"))
+		}
+	}
+	if len(dramas) > 2 {
+		dramas = dramas[len(dramas)-2:]
+	}
+	human := state.Current >= 0 && state.Current < len(state.Players) && !state.Players[state.Current].AI
+	cue := ""
+	if human && (state.Phase == "roll" || state.Phase == "move" || state.Phase == "finished") {
+		cue = hostCue(state)
+	}
+	if len(dramas) == 0 && !rolled && state.Phase != "roll" {
+		return "", last
+	}
+	if len(dramas) == 0 && !human {
+		return "", last
+	}
+	if len(dramas) > 0 && cue != "" {
+		return strings.Join(dramas, "。") + "。" + cue, last
+	}
+	if cue != "" {
+		return cue, last
+	}
+	if len(dramas) > 0 {
+		return strings.Join(dramas, "。") + "。", last
+	}
+	return "", last
+}
+
+func dramatic(text string) bool {
+	for _, word := range []string{"回机场", "飞行", "跳跃", "终点", "护盾", "赢"} {
+		if strings.Contains(text, word) {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *wakeGate) commandText(text string) string {

@@ -95,6 +95,91 @@ func TestTargetedVoicePropsRequireUnambiguousOwnerAndPlane(t *testing.T) {
 	}
 }
 
+func TestVoiceIntentsChooseWithoutNamingCoordinates(t *testing.T) {
+	frontState := game.New(game.Options{Names: []string{"小朋友", "爸爸"}})
+	frontState.Players[0].Pieces[0].Progress = 10
+	frontState.Players[0].Pieces[1].Progress = 30
+	if err := frontState.Roll(1); err != nil {
+		t.Fatal(err)
+	}
+	front, ok := resolveVoiceAction(*frontState, "走最前面")
+	if !ok || front.PieceID != "p0-1" || front.Notice != "" {
+		t.Fatalf("front plane not chosen: %+v", front)
+	}
+	tiedState := game.New(game.Options{Names: []string{"小朋友", "爸爸"}})
+	tiedState.Players[0].Pieces[0].Progress = 10
+	tiedState.Players[0].Pieces[1].Progress = 10
+	if err := tiedState.Roll(1); err != nil {
+		t.Fatal(err)
+	}
+	tied, ok := resolveVoiceAction(*tiedState, "走最前面")
+	if !ok || tied.PieceID != "" || tied.Notice == "" {
+		t.Fatalf("tied front planes were guessed: %+v", tied)
+	}
+
+	fight := game.New(game.Options{Names: []string{"小朋友", "爸爸"}})
+	fight.Players[0].Pieces[0].Progress = 20
+	fight.Players[0].Pieces[1].Progress = 4
+	fight.Players[1].Pieces[0].Progress = 10
+	if err := fight.Roll(3); err != nil {
+		t.Fatal(err)
+	}
+	bump, ok := resolveVoiceAction(*fight, "撞爸爸")
+	if !ok || bump.Name != "move_piece" || bump.PieceID != "p0-0" || bump.Notice != "" {
+		t.Fatalf("capture intent missed: %+v legal=%+v", bump, fight.Legal)
+	}
+	home := game.New(game.Options{Names: []string{"小朋友", "爸爸"}})
+	home.Players[0].Pieces[0].Progress = 55
+	home.Players[0].Pieces[1].Progress = 10
+	if err := home.Roll(3); err != nil {
+		t.Fatal(err)
+	}
+	chosen, ok := resolveVoiceAction(*home, "你来走")
+	if !ok || chosen.PieceID != "p0-0" {
+		t.Fatalf("delegated move was not the best plane: %+v", chosen)
+	}
+}
+
+func TestVoiceBombPhraseAndDiceCheerDoNotInventResults(t *testing.T) {
+	s := game.New(game.Options{Names: []string{"小朋友", "爸爸"}, Props: true})
+	s.Players[0].Pieces[0].Progress = 30
+	s.Players[1].Pieces[0].Progress = 20
+	bomb, ok := resolveVoiceAction(*s, "炸爸爸的小熊号")
+	if !ok || bomb.Name != "use_prop" || bomb.PropID != "bomb" || bomb.PieceID != "p1-0" {
+		t.Fatalf("spoken bomb missed: %+v", bomb)
+	}
+	cheer, ok := resolveVoiceAction(*s, "我要六点")
+	if !ok || cheer.Name == "roll_dice" || cheer.Cheer != 6 || cheer.Notice == "" {
+		t.Fatalf("dice call changed or dropped the roll: %+v", cheer)
+	}
+	both, ok := resolveVoiceAction(*s, "我要六点掷骰子")
+	if !ok || both.Name != "roll_dice" || both.Cheer != 6 {
+		t.Fatalf("called roll was not kept: %+v", both)
+	}
+	before := s.Version
+	if _, ok := resolveVoiceAction(*s, "我喜欢小熊号"); ok || s.Version != before {
+		t.Fatal("casual speech became a command")
+	}
+}
+
+func TestHostLineSpeaksOnHumanTurnAndDramaticHits(t *testing.T) {
+	s := game.New(game.Options{Names: []string{"小朋友", "爸爸"}})
+	if script, _ := nextHostLine(*s, ""); script != "" {
+		t.Fatalf("opening baseline should stay quiet: %s", script)
+	}
+	seen := lastEventID(*s)
+	s.History = append(s.History, game.Event{ID: "hit", Kind: "moved", Text: "小朋友的小熊号：前进 3 格，送 1 架飞机回机场"})
+	s.Current = 1
+	script, mark := nextHostLine(*s, seen)
+	if !strings.Contains(script, "回机场") || !strings.Contains(script, "爸爸") || mark != "hit" {
+		t.Fatalf("dramatic handoff missing: %s", script)
+	}
+	cue := hostCue(*s)
+	if !strings.Contains(cue, "爸爸") || !strings.Contains(cue, "掷骰子") {
+		t.Fatal(cue)
+	}
+}
+
 func TestAdviceNamesActualTacticalTargetWithoutWriting(t *testing.T) {
 	s := game.New(game.Options{Names: []string{"小朋友", "爸爸"}, Props: true, Demo: true})
 	before := s.Version

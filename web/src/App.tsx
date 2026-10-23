@@ -5,6 +5,7 @@ import { DiceRollModal } from './components/DiceRollModal';
 import { PropTray } from './components/PropTray';
 import { api, APIError, palette, socketURL } from './lib/types';
 import type { Config, Options, Piece, Player, Room, VoiceSettings } from './lib/types';
+import { cuesFor, Sfx } from './lib/sfx';
 import { VoiceClient } from './lib/voice';
 
 const defaults: Options = { room_name: '周末家庭机场', difficulty: 'normal', waiting: true, names: ['小朋友', '爸爸', '灵矽'], board: 'cross', mode: 'quick', ai: true, demo: false, props: true };
@@ -61,7 +62,7 @@ export default function App() {
   const roomRef = useRef<Room | undefined>(undefined);
   const loadingRef = useRef(false);
   const locked = useRef(false);
-  const soundRef = useRef<AudioContext | undefined>(undefined);
+  const sfx = useRef(new Sfx());
   roomRef.current = room;
 
   const accept = useCallback((next: Room) => setRoom(old => old && old.id === next.id && old.seq > next.seq ? old : next), []);
@@ -84,7 +85,7 @@ export default function App() {
     } catch (error) { setFatal(error instanceof Error ? error.message : '暂时无法连接游戏'); }
     finally { setLoading(false); loadingRef.current = false; }
   }, [accept]);
-  useEffect(() => { void load(); return () => { voice.current?.disconnect(); void soundRef.current?.close(); }; }, [load]);
+  useEffect(() => { void load(); return () => { voice.current?.disconnect(); }; }, [load]);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(''), 4500); return () => clearTimeout(id); }, [toast]);
   useEffect(() => {
     if (!room?.id) return;
@@ -110,6 +111,7 @@ export default function App() {
     }
     const fresh = state.history.filter(e => !rollHistory.current.seen.has(e.id));
     rollHistory.current.seen = new Set(state.history.map(e => e.id));
+    if (fresh.length) sfx.current.play(cuesFor(fresh));
     const hit = [...fresh].reverse().find(e => e.kind === 'prop' && e.piece_id);
     if (hit) setImpact({ text: hit.text, shield: hit.text.includes('使用了护盾') });
     const rolls = fresh.filter(e => e.kind === 'rolled' && e.dice_rolls?.length).map(e => ({ id: e.id, text: e.text, values: e.dice_rolls! }));
@@ -127,20 +129,10 @@ export default function App() {
       voice.current?.disconnect(); setDiceQueue([]); setImpact(undefined);
     }
   }, [room?.id, room?.status]);
+  useEffect(() => { sfx.current.enabled = sound; if (!sound) sfx.current.stop(); }, [sound]);
+  useEffect(() => () => sfx.current.dispose(), []);
   const voiceBusy = room ? ['listening', 'thinking', 'speaking'].includes(room.voice) : false;
   const canAct = lifecycle === 'playing' && !!state && !!current && !current.ai && !busy && !voiceBusy && !diceQueue.length && state.phase !== 'finished';
-
-  const chime = useCallback(() => {
-    if (!sound) return;
-    try {
-      const audio = soundRef.current ||= new AudioContext(); void audio.resume();
-      const oscillator = audio.createOscillator(), gain = audio.createGain();
-      oscillator.connect(gain); gain.connect(audio.destination); oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(660, audio.currentTime); oscillator.frequency.exponentialRampToValueAtTime(880, audio.currentTime + .12);
-      gain.gain.setValueAtTime(.045, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .22);
-      oscillator.start(); oscillator.stop(audio.currentTime + .22);
-    } catch {}
-  }, [sound]);
 
   const command = useCallback(async (action: string, pieceID?: string, targetID?: string) => {
     const r = roomRef.current;
@@ -154,7 +146,10 @@ export default function App() {
       try { next = await api<Room>('/api/rooms/' + r.id + '/commands', body); }
       catch (error) { if (error instanceof TypeError) next = await api<Room>('/api/rooms/' + r.id + '/commands', body); else throw error; }
       await new Promise(resolve => setTimeout(resolve, Math.max(0, 420 - (Date.now() - start))));
-      if (roomRef.current?.id === r.id) { accept(next); chime(); }
+      if (roomRef.current?.id === r.id) {
+        accept(next);
+        if (action === 'start' || action === 'resume') sfx.current.play(['welcome']);
+      }
     } catch (error) {
       setToast(error instanceof Error ? error.message : '这次操作没有完成');
       if (error instanceof APIError && (error.status === 409 || error.code === 'AI_TURN')) {
@@ -162,7 +157,7 @@ export default function App() {
         if (fresh?.room) accept(fresh.room);
       }
     } finally { locked.current = false; setBusy(false); setPendingAction(''); }
-  }, [accept, chime]);
+  }, [accept]);
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -193,7 +188,7 @@ export default function App() {
   const restart = async (demo = false) => {
     if (!room || locked.current) return;
     locked.current = true; setBusy(true);
-    try { voice.current?.disconnect(); accept(await api<Room>(setupNew ? '/api/rooms/new' : '/api/rooms/' + room.id + '/matches', { ...options, waiting: true, demo })); setModal(null); setSpeech({ text: '', who: '' }); chime(); }
+    try { voice.current?.disconnect(); accept(await api<Room>(setupNew ? '/api/rooms/new' : '/api/rooms/' + room.id + '/matches', { ...options, waiting: true, demo })); setModal(null); setSpeech({ text: '', who: '' }); sfx.current.play(['welcome']); }
     catch (error) { setToast(error instanceof Error ? error.message : '开局失败'); }
     finally { locked.current = false; setBusy(false); }
   };
@@ -287,7 +282,7 @@ export default function App() {
                 <button className={'voice-button ' + (effectiveVoice === 'listening' ? 'listening' : '')} onClick={() => voice.current?.disconnect()}><Microphone size={21} />断开实时语音</button>}
               {effectiveVoice === 'speaking' && <button className="stop-speech" onClick={() => voice.current?.stopPlayback()}>停止播报</button>}
               {voiceSettings.wake_enabled && voiceState !== 'disconnected' && voiceState !== 'connecting' && effectiveVoice !== 'standby' && <button className="stop-speech" onClick={() => voice.current?.standby()}>回到待唤醒</button>}
-              <div className="voice-examples"><strong>试着跟我说</strong><span>“推荐一个道具”</span><span>“用炸弹攻击爸爸的小熊号”</span><span>“给我的小熊号加护盾”</span></div><p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : voiceSettings.wake_enabled ? '唤醒后可连续对话 30 秒；等待唤醒时，音频也会发送给灵矽识别。' : '连接后可随时插话，试着说：“掷骰子” 或 “走小熊号”'}</p>
+              <div className="voice-examples"><strong>试着跟我说</strong><span>“怎么办”</span><span>“撞爸爸”</span><span>“走最前面”</span><span>“我要六点”</span></div><p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : voiceSettings.wake_enabled ? '唤醒后可连续对话 30 秒。轮到你时我会先说一句；想喊点数，可以说「我要六点」再掷骰。' : '连接后可以说「怎么办」「撞爸爸」或「掷骰子」。'}</p>
             </section>
             <section className="log-panel"><div className="log-heading"><h2>飞行小记</h2><DotsThree size={22} /></div><ol>{state.history.slice(-4).reverse().map((event, i) => <li key={event.id}><span className={'log-dot ' + (i === 0 ? 'latest' : '')} /><p>{event.text}</p></li>)}</ol></section>
           </aside>

@@ -68,6 +68,18 @@ test('standby suppresses final captions and interruption detaches old playback c
  client.standby();ws.emit({type:'response.output_audio_transcript.done',response_id:'old',transcript:'不应显示'});assert.equal(texts.length,0);
  assert.equal(playback[0].onended,null);assert.equal(playback[0].disconnected,true);assert.equal(states.at(-1),'standby');client.disconnect();
 });
+test('host line still plays while waiting for the wake word', async () => {
+  const {client, ws} = await connected();
+  ws.emit({type: 'wake_state', wake_enabled: true, awake: false});
+  ws.emit({type: 'response.created', response: {id: 'late'}});
+  ws.emit(audio('late'));
+  assert.equal(playback.length, 0);
+  ws.emit({type: 'host_cue'});
+  ws.emit({type: 'response.created', response: {id: 'host'}});
+  ws.emit(audio('host'));
+  assert.equal(playback.length, 1);
+  client.disconnect();
+});
 test('socket failure after hello releases resources and offers manual reconnect',async()=>{
  const {client,ws,states,errors}=await connected();ws.onerror();assert.equal(track.stopped,true);assert.equal(states.at(-1),'disconnected');assert.match(errors[0],/重新开启/);client.disconnect();
 });
