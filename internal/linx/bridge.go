@@ -219,6 +219,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 	var hostSince time.Time
 	var seenEvent string
 	var cheered Cheer
+	var narrationContext string
 	hostIDs := map[string]bool{}
 	grants := map[string]string{}
 	calls := map[string][]functionCall{}
@@ -452,6 +453,19 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 						instructions += "当前正在等待掷骰。不能邀请玩家直接移动飞机。"
 					}
 					instructions += narrationFacts(state, before)
+				}
+				// Keep the current facts in conversation context as well as response
+				// instructions; the provider can otherwise repeat an earlier host cue.
+				if narrationContext != "" {
+					if e := sendUp(map[string]any{"type": "conversation.item.delete", "item_id": narrationContext}); e != nil {
+						return errors.New("游戏播报上下文没有更新")
+					}
+				}
+				narrationContext = game.ID()
+				if e := sendUp(map[string]any{"type": "conversation.item.create", "item": map[string]any{
+					"id": narrationContext, "type": "message", "role": "system", "content": []any{map[string]any{"type": "input_text", "text": instructions}},
+				}}); e != nil {
+					return errors.New("游戏播报上下文没有送回灵矽")
 				}
 				response["response"] = map[string]any{"tool_choice": "none", "instructions": instructions}
 			}
