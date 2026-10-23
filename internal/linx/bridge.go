@@ -345,7 +345,20 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 						return errors.New("游戏操作结果没有送回灵矽")
 					}
 				}
-				response["response"] = map[string]any{"tool_choice": "none", "instructions": "只根据本轮工具结果简短回答。结果含error或notice时没有执行操作，按真实棋局回答问题、解释原因或追问选择，不能宣称已操作成功。需要掷骰时请玩家说‘掷骰子’，点数由游戏服务随机生成，不能询问、接受或编造玩家自报点数。本轮不要再调用工具。不要朗读内部ID和技术字段。"}
+				instructions := "只根据本轮工具结果简短回答。结果含error或notice时没有执行操作，按真实棋局回答问题、解释原因或追问选择，不能宣称已操作成功。需要掷骰时请玩家说‘掷骰子’，点数由游戏服务随机生成，不能询问、接受或编造玩家自报点数。本轮不要再调用工具。不要朗读内部ID和技术字段。"
+				if action.Notice != "" {
+					instructions += "本轮具体要求（必须遵守）：“" + action.Notice + "”。"
+				}
+				var state game.State
+				if json.Unmarshal(r.Snapshot().State, &state) == nil {
+					switch state.Phase {
+					case "move":
+						instructions += "当前已经掷骰，正在等待选择飞机。禁止要求再次掷骰，必须根据合法候选询问选择。"
+					case "roll":
+						instructions += "当前正在等待掷骰。不能邀请玩家直接移动飞机。"
+					}
+				}
+				response["response"] = map[string]any{"tool_choice": "none", "instructions": instructions}
 			}
 			if e := sendUp(response); e != nil {
 				return e
