@@ -6,6 +6,9 @@ export class VoiceClient {
   private epoch = 0;
   private cancelConnect?: () => void;
   private drainTimer?: ReturnType<typeof setTimeout>;
+  private pumpTimer?: ReturnType<typeof setTimeout>;
+  private pendingPCM: { samples: Float32Array; rate: number; offset: number }[] = [];
+  private pendingSeconds = 0;
   private responseID = '';
   private mutedResponses = new Set<string>();
   private mutedUntilInput = false;
@@ -52,6 +55,10 @@ export class VoiceClient {
       if (epoch !== this.epoch) return;
       await audio.audioWorklet.addModule('/pcm-capture.js');
       if (epoch !== this.epoch) return;
+      audio.onstatechange = () => {
+        if (epoch !== this.epoch || this.audio !== audio) return;
+        if (audio.state === 'running') this.pumpPlayback();
+      };
       this.source = audio.createMediaStreamSource(stream);
       this.capture = new AudioWorkletNode(audio, 'pcm-capture');
       this.capture.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
@@ -182,29 +189,53 @@ export class VoiceClient {
         const value = binary.charCodeAt(i * 2) | (binary.charCodeAt(i * 2 + 1) << 8);
         samples[i] = (value & 0x8000 ? value - 0x10000 : value) / 32768;
       }
-      if (this.schedule - audio.currentTime > 12) {
-        this.onError('语音播放积压，请重新连接');
-        this.disconnect();
+      // Fast generation is normal: hold PCM in a bounded queue, rather than
+      // scheduling the whole reply into the browser's audio timeline.
+      const duration = samples.length / sampleRate;
+      if (!Number.isFinite(duration) || ![16000, 24000, 48000].includes(sampleRate)) throw new Error('Invalid PCM rate');
+      if (this.pendingSeconds + Math.max(0, this.schedule - audio.currentTime) + duration > 90 || this.pendingPCM.length >= 4096) {
+        this.stopPlayback();
+        this.onError('本次播报过长，已停止。语音仍连接，可以直接说下一句');
         return;
       }
-      const buffer = audio.createBuffer(1, samples.length, sampleRate);
-      buffer.getChannelData(0).set(samples);
-      const source = audio.createBufferSource();
-      source.buffer = buffer;
-      source.connect(audio.destination);
-      this.schedule = Math.max(audio.currentTime + .025, this.schedule);
-      this.activeSources.add(source);
-      source.onended = () => { this.activeSources.delete(source); source.disconnect(); this.checkDrain(); };
-      source.start(this.schedule);
-      this.schedule += buffer.duration;
+      if (!samples.length) return;
+      this.pendingPCM.push({ samples, rate: sampleRate, offset: 0 });
+      this.pendingSeconds += duration;
+      this.pumpPlayback();
     } catch {
       this.onError('返回音频解码失败，请重新连接语音');
       this.disconnect();
     }
   }
 
+  private pumpPlayback() {
+    clearTimeout(this.pumpTimer); this.pumpTimer = undefined;
+    const audio = this.audio;
+    if (!audio || audio.state !== 'running') return;
+    // Keep less than half a second scheduled, splitting large provider chunks.
+    // onended drives normal playback; the timer also covers timer throttling.
+    while (this.pendingPCM.length && this.schedule < audio.currentTime + .35) {
+      const chunk = this.pendingPCM[0];
+      const length = Math.min(chunk.samples.length - chunk.offset, Math.max(1, Math.floor(chunk.rate * .1)));
+      const buffer = audio.createBuffer(1, length, chunk.rate);
+      buffer.getChannelData(0).set(chunk.samples.subarray(chunk.offset, chunk.offset + length));
+      chunk.offset += length;
+      this.pendingSeconds = Math.max(0, this.pendingSeconds - buffer.duration);
+      if (chunk.offset === chunk.samples.length) this.pendingPCM.shift();
+      const source = audio.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audio.destination);
+      this.schedule = Math.max(audio.currentTime + .025, this.schedule);
+      this.activeSources.add(source);
+      source.onended = () => { this.activeSources.delete(source); source.disconnect(); this.pumpPlayback(); this.checkDrain(); };
+      source.start(this.schedule);
+      this.schedule += buffer.duration;
+    }
+    if (this.pendingPCM.length) this.pumpTimer = setTimeout(() => this.pumpPlayback(), 50);
+  }
+
   private checkDrain() {
-    if (!this.generationDone || this.activeSources.size) return;
+    if (!this.generationDone || this.activeSources.size || this.pendingPCM.length) return;
     const audio = this.audio;
     if (audio && this.schedule > audio.currentTime + .04) {
       clearTimeout(this.drainTimer);
@@ -252,6 +283,8 @@ export class VoiceClient {
 
   private clearPlayback() {
     clearTimeout(this.drainTimer); this.drainTimer = undefined;
+    clearTimeout(this.pumpTimer); this.pumpTimer = undefined;
+    this.pendingPCM = []; this.pendingSeconds = 0;
     for (const source of this.activeSources) { source.onended = null; try { source.stop(); } catch {} source.disconnect(); }
     this.activeSources.clear();
     this.schedule = 0;
@@ -262,6 +295,7 @@ export class VoiceClient {
     this.stream?.getTracks().forEach(track => track.stop()); this.stream = undefined;
     if (this.capture) { this.capture.port.onmessage = null; this.capture.disconnect(); } this.capture = undefined;
     this.source?.disconnect(); this.source = undefined;
+    if (this.audio) this.audio.onstatechange = null;
     void this.audio?.close().catch(() => {}); this.audio = undefined;
   }
 

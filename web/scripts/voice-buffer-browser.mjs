@@ -1,0 +1,57 @@
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+assert.ok(process.env.QA_BASE_URL, 'Set QA_BASE_URL');
+const browser = await chromium.launch({channel:'chrome',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream',...(process.platform==='darwin'?['--use-angle=metal']:[])]});
+try {
+ const context=await browser.newContext({baseURL:process.env.QA_BASE_URL,permissions:['microphone']});
+ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>{
+  localStorage.setItem('fly-host-voice','off');
+  window.__buffer={starts:[],tracks:[],maxAhead:0};
+  const get=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia=async options=>{const stream=await get(options);window.__buffer.tracks.push(...stream.getTracks());return stream;};
+  const media=AudioContext.prototype.createMediaStreamSource;
+  AudioContext.prototype.createMediaStreamSource=function(...args){window.__buffer.context=this;return media.apply(this,args);};
+  const create=AudioContext.prototype.createBufferSource;
+  AudioContext.prototype.createBufferSource=function(...args){const source=create.apply(this,args),ctx=this,start=source.start.bind(source);source.start=(at=0,...rest)=>{if(window.__buffer.context===ctx){window.__buffer.starts.push(at);window.__buffer.maxAhead=Math.max(window.__buffer.maxAhead,at-ctx.currentTime);}return start(at,...rest);};return source;};
+ });
+ let socket;const sent=[];
+ await page.routeWebSocket('**/ws/voice?*',ws=>{socket=ws;ws.onMessage(m=>{if(typeof m==='string')sent.push(JSON.parse(m));});ws.send(JSON.stringify({type:'hello'}));ws.send(JSON.stringify({type:'wake_state',wake_enabled:false,awake:true}));});
+ await page.goto(new URL('/play',process.env.QA_BASE_URL).href,{waitUntil:'networkidle'});
+ let room=(await(await page.request.get('/api/session')).json()).room;
+ // Start a legacy room too: refreshing must migrate it to direct conversation.
+ await page.request.post('/api/rooms/'+room.id+'/voice-settings',{data:{wake_enabled:true,wake_word:'旧的称呼'}});
+ await page.reload({waitUntil:'networkidle'});
+ room=(await(await page.request.get('/api/session')).json()).room;assert.equal(room.voice_settings.wake_enabled,false);
+ const response=await page.request.post('/api/rooms/'+room.id+'/matches',{data:{names:['小朋友','爸爸'],board:'cross',mode:'quick',ai:false,props:true,waiting:false}});assert.equal(response.status(),200);
+ await page.getByRole('button',{name:'关闭对讲麦克风',exact:true}).waitFor({state:'visible'});
+ const emit=m=>socket.send(JSON.stringify(m));
+ const delta=Buffer.alloc(24000*2).toString('base64');
+ emit({type:'response.created',response:{id:'long'}});
+ for(let i=0;i<24;i++)emit({type:'response.output_audio.delta',response_id:'long',delta});
+ emit({type:'response.done',response:{id:'long',status:'completed'}});
+ await page.waitForTimeout(500);
+ assert.ok(await page.evaluate(()=>window.__buffer.starts.length<12));
+ await page.getByText('直接说话，我在听',{exact:true}).waitFor({state:'visible',timeout:30000});
+ const full=await page.evaluate(()=>({count:window.__buffer.starts.length,maxAhead:window.__buffer.maxAhead,live:window.__buffer.tracks.every(t=>t.readyState==='live')}));
+ assert.ok(full.count>=240);assert.ok(full.maxAhead<.5);assert.equal(full.live,true);
+ assert.equal(sent.filter(m=>m.type==='abort').length,0);
+ console.log(JSON.stringify({result:'PASS',case:'24 seconds of PCM delivered instantly and fully played without reconnect',...full}));
+ await page.evaluate(()=>window.__buffer.context.suspend());
+ const previous=await page.evaluate(()=>window.__buffer.starts.length);
+ emit({type:'response.created',response:{id:'suspended'}});
+ for(let i=0;i<16;i++)emit({type:'response.output_audio.delta',response_id:'suspended',delta});
+ await page.waitForTimeout(300);assert.equal(await page.evaluate(()=>window.__buffer.starts.length),previous);
+ await page.evaluate(()=>window.__buffer.context.resume());
+ await page.waitForFunction(count=>window.__buffer.starts.length>count,previous);
+ emit({type:'speech_started'});emit({type:'stt',text:'现在轮到谁'});emit({type:'response.created',response:{id:'fresh'}});
+ emit({type:'response.output_audio.delta',response_id:'suspended',delta});
+ emit({type:'response.output_audio.delta',response_id:'fresh',delta:Buffer.alloc(2400*2).toString('base64')});
+ emit({type:'response.done',response:{id:'fresh',status:'completed'}});
+ await page.getByText('直接说话，我在听',{exact:true}).waitFor({state:'visible'});
+ assert.equal(await page.getByText(/语音播放积压/).count(),0);
+ await page.getByRole('button',{name:'关闭对讲麦克风',exact:true}).click();
+ await page.waitForFunction(()=>window.__buffer.tracks.every(t=>t.readyState==='ended'));
+ assert.deepEqual(errors,[]);
+ console.log('PASS: actual AudioContext suspend/resume, queued-audio interruption, late response discard and microphone cleanup');
+}finally{await browser.close();}

@@ -19,17 +19,17 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 let sockets, contexts, playback, track;
 class NodeMock { connect() {} disconnect() {this.disconnected=true;} }
 class AudioMock {
- constructor(){this.currentTime=0;this.destination={};this.audioWorklet={addModule:async()=>{}};contexts.push(this);}
+ constructor(){this.currentTime=0;this.state='running';this.destination={};this.audioWorklet={addModule:async()=>{}};contexts.push(this);}
  async resume(){} async close(){this.closed=true;}
  createMediaStreamSource(){return new NodeMock();}
  createBuffer(_channels,length,rate){return {duration:length/rate,getChannelData:()=>new Float32Array(length)};}
- createBufferSource(){const node=new NodeMock();node.start=()=>playback.push(node);node.stop=()=>{node.stopped=true;};return node;}
+ createBufferSource(){const node=new NodeMock();node.start=at=>{node.startAt=at;playback.push(node);};node.stop=()=>{node.stopped=true;};return node;}
 }
 class WorkletMock extends NodeMock {constructor(){super();this.port={onmessage:null};}}
 class SocketMock {
  static OPEN=1;
  constructor(){this.readyState=1;sockets.push(this);}
- send(){} close(){this.readyState=3;}
+ send(value){(this.sent||=[]).push(JSON.parse(value));} close(){this.readyState=3;}
  emit(message){this.onmessage?.({data:JSON.stringify(message)});}
 }
 function setup(getUserMedia){
@@ -115,4 +115,48 @@ test('denied microphone permission does not get stuck behind an unresolved audio
   await assert.rejects(t.client.connect(),/麦克风权限未开启/);
   assert.equal(contexts[0].closed,true);assert.equal(sockets.length,0);
  }finally{AudioMock.prototype.resume=original;}
+});
+
+
+test('a fast 24-second reply stays connected and only schedules a short audio horizon',async()=>{
+ const {client,ws,states,errors}=await connected();const ctx=contexts[0];
+ ws.emit({type:'response.created',response:{id:'long'}});
+ const delta=Buffer.alloc(24000*2).toString('base64');
+ for(let i=0;i<24;i++)ws.emit({...audio('long'),delta});
+ ws.emit({type:'response.done',response:{id:'long',status:'completed'}});
+ assert.equal(ws.readyState,1);assert.deepEqual(errors,[]);assert.ok(playback.length<=5);
+ assert.equal(states.at(-1),'speaking');
+ for(let i=0;i<300;i++){
+  ctx.currentTime+=.1;
+  const ended=[...playback].filter(node=>!node.ended&&!node.stopped&&node.onended&&node.startAt+node.buffer.duration<=ctx.currentTime);
+  for(const source of ended){source.ended=true;source.onended?.();}
+ }
+ assert.ok(playback.length>=240,'all audio eventually drains, not discarded at twelve seconds');
+ assert.equal(states.at(-1),'ready');assert.equal(ws.readyState,1);client.disconnect();
+});
+test('suspended audio keeps bounded pending PCM, then resumes without a reconnect',async()=>{
+ const {client,ws,errors}=await connected();const ctx=contexts[0];ctx.state='suspended';
+ ws.emit({type:'response.created',response:{id:'paused'}});
+ ws.emit({...audio('paused'),delta:Buffer.alloc(24000*2*16).toString('base64')});
+ assert.equal(playback.length,0);assert.deepEqual(errors,[]);assert.equal(ws.readyState,1);
+ ctx.currentTime=30;ctx.state='running';ctx.onstatechange();
+ assert.ok(playback.length>0&&playback.length<=5);client.stopPlayback();
+ assert.ok(playback.every(node=>node.stopped));client.disconnect();
+});
+test('overflow cancels only the current response and the next direct utterance still plays',async()=>{
+ const {client,ws,errors}=await connected();ws.emit({type:'response.created',response:{id:'overflow'}});
+ const delta=Buffer.alloc(24000*2*10).toString('base64');
+ for(let i=0;i<10;i++)ws.emit({...audio('overflow'),delta});
+ assert.equal(ws.readyState,1);assert.equal(track.stopped,undefined);assert.equal(errors.length,1);
+ assert.match(errors[0],/语音仍连接/);assert.equal(ws.sent.at(-1).type,'abort');
+ const count=playback.length;ws.emit(audio('overflow'));assert.equal(playback.length,count);
+ ws.emit({type:'stt',text:'现在轮到谁'});ws.emit({type:'response.created',response:{id:'next'}});ws.emit(audio('next'));
+ assert.equal(playback.length,count+1);client.disconnect();
+});
+test('interruption drops unscheduled PCM as well as late chunks of the old reply',async()=>{
+ const {client,ws}=await connected();const ctx=contexts[0];
+ ws.emit({type:'response.created',response:{id:'old-long'}});ws.emit({...audio('old-long'),delta:Buffer.alloc(24000*2*20).toString('base64')});
+ const oldCount=playback.length;ws.emit({type:'speech_started'});ctx.currentTime=40;
+ ws.emit({type:'stt',text:'掷骰子'});ws.emit({type:'response.created',response:{id:'new'}});ws.emit(audio('old-long'));ws.emit(audio('new'));
+ assert.ok(playback.slice(0,oldCount).every(node=>node.stopped));assert.equal(playback.length,oldCount+1);client.disconnect();
 });
