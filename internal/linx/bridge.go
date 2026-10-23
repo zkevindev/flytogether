@@ -345,7 +345,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 						return errors.New("游戏操作结果没有送回灵矽")
 					}
 				}
-				response["response"] = map[string]any{"tool_choice": "none", "instructions": "只根据本轮工具结果简短回答。结果含error或notice时没有执行操作，按真实棋局回答问题、解释原因或追问选择，不能宣称已操作成功。本轮不要再调用工具。不要朗读内部ID和技术字段。"}
+				response["response"] = map[string]any{"tool_choice": "none", "instructions": "只根据本轮工具结果简短回答。结果含error或notice时没有执行操作，按真实棋局回答问题、解释原因或追问选择，不能宣称已操作成功。需要掷骰时请玩家说‘掷骰子’，点数由游戏服务随机生成，不能询问、接受或编造玩家自报点数。本轮不要再调用工具。不要朗读内部ID和技术字段。"}
 			}
 			if e := sendUp(response); e != nil {
 				return e
