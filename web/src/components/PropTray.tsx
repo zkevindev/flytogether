@@ -27,7 +27,7 @@ export function PropTray({ game, status = 'playing', disabled, onUse }: { game: 
       const targeted = id === 'bomb' || id === 'shield', noTarget = targeted && !targets(id).length;
       const selected = game.active_prop === id;
       const unavailable = disabled || game.phase !== 'roll' || !!game.active_prop || count === 0 || needsPlane || noHangar || noTarget;
-      const hint = selected && status !== 'playing' ? '已选道具 · 效果保留' : selected ? (targeted ? '已生效，请继续掷骰' : '本次掷骰生效') : count === 0 ? '已经用完' : needsPlane ? '需先有飞机起飞' : noHangar ? '飞机都已起飞' : noTarget ? '暂无可选择的航线飞机' : effect;
+      const hint = selected && status !== 'playing' ? '已选道具 · 效果保留' : selected ? (game.phase === 'move' ? '效果已生效，请选飞机' : targeted ? '已生效，请继续掷骰' : '本次掷骰生效') : count === 0 ? '已经用完' : needsPlane ? '需先有飞机起飞' : noHangar ? '飞机都已起飞' : noTarget ? '暂无可选择的航线飞机' : effect;
       return <button key={id} className={'prop-card ' + (selected || targeting === id ? 'selected' : '')} disabled={unavailable} onClick={() => targeted ? setTargeting(id) : onUse(id)} aria-label={`使用${name}`} title={hint} style={{ '--prop-color': color } as React.CSSProperties}>
         <span className="prop-symbol"><Icon weight="fill" size={23} /></span><span className="prop-copy"><strong>{name}<small>{selected ? '已使用' : `×${count}`}</small></strong><span>{hint}</span></span>
       </button>;
