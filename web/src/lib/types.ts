@@ -1,7 +1,7 @@
 export type Piece = { id: string; label: string; number: number; progress: number; shield?: boolean };
 export type Player = { id: string; name: string; color: string; ai: boolean; pieces: Piece[]; props: Record<string, number> };
 export type Move = {
-  piece_id: string; label: string; from: number; to: number; captured: string[];
+  piece_id: string; label: string; from: number; to: number; captured: string[]; blocked?: string[];
   jump: boolean; fly: boolean; launch: boolean; finish: boolean; summary: string;
 };
 export type GameEvent = { id: string; kind: string; text: string; player_id?: string; piece_id?: string; dice_rolls?: number[] };

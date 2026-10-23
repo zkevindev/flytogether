@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import type { Game, Piece } from '../lib/types';
+import type { Game, Move, Piece } from '../lib/types';
 import { colors, palette } from '../lib/types';
 import { boardPieces, createBoardLayout, piecePosition, type BoardLayout, type Point } from '../lib/board-layout';
 import type { BoardSpec } from '../lib/types';
@@ -15,12 +15,14 @@ type Handlers = {
   game: Game;
   disabled: boolean;
   rolling: boolean;
+  preview?: Move;
   onPiece: (piece: Piece, player: number) => void;
   onRoll: () => void;
 };
 
 export function FlightScene(props: Handlers) {
   const host = useRef<HTMLDivElement>(null);
+  const landingLabel = useRef<HTMLSpanElement>(null);
   const labels = useRef(new Map<string, HTMLSpanElement>());
   const [status, setStatus] = useState<'ready' | 'lost' | 'unavailable'>('ready');
   const [generation, setGeneration] = useState(0);
@@ -67,6 +69,19 @@ export function FlightScene(props: Handlers) {
     const table = new THREE.Group();
     const tokens = new THREE.Group();
     scene.add(table, tokens);
+    // Reuse preview geometry for every selection; never create a renderer per preview.
+    const landing = new THREE.Group();
+    const landingRing = new THREE.Mesh(new THREE.RingGeometry(.16, .23, 32), new THREE.MeshBasicMaterial({ color: '#fff2a5', side: THREE.DoubleSide, depthTest: false }));
+    landingRing.rotation.x = -Math.PI / 2;
+    const landingDisc = new THREE.Mesh(new THREE.CircleGeometry(.16, 32), new THREE.MeshBasicMaterial({ color: '#ffc84e', transparent: true, opacity: .55, side: THREE.DoubleSide, depthTest: false }));
+    landingDisc.rotation.x = -Math.PI / 2;
+    landing.add(landingRing, landingDisc); landing.visible = false;
+    const previewGeometry = new THREE.BufferGeometry();
+    previewGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    previewGeometry.setAttribute('lineDistance', new THREE.BufferAttribute(new Float32Array(2), 1));
+    const previewLine = new THREE.Line(previewGeometry, new THREE.LineDashedMaterial({ color: '#8b681a', dashSize: .11, gapSize: .07, depthTest: false }));
+    previewLine.frustumCulled = false; previewLine.visible = false;
+    scene.add(landing, previewLine);
     const box = (w: number, h: number, d: number) => {
       const geometry = new THREE.BoxGeometry(w, h, d);
       return geometry;
@@ -183,6 +198,8 @@ export function FlightScene(props: Handlers) {
       }
     };
 
+    let previewKey = '';
+    const previewStart = new THREE.Vector3(), previewEnd = new THREE.Vector3();
     const resize = () => {
       const width = el.clientWidth || 720;
       const height = el.clientHeight || width;
@@ -202,7 +219,7 @@ export function FlightScene(props: Handlers) {
       for (const hit of hits) {
         let object: THREE.Object3D | null = hit.object;
         while (object) {
-          if (object.userData.kind === 'piece' && object.userData.legal) {
+          if (object.userData.kind === 'piece' && !propsRef.current.disabled) {
             propsRef.current.onPiece(object.userData.piece as Piece, object.userData.playerIndex as number);
             return;
           }
@@ -282,6 +299,32 @@ export function FlightScene(props: Handlers) {
           label.style.left = `${(projected.x + 1) * 50}%`;
           label.style.top = `${(1 - projected.y) * 50}%`;
           label.dataset.legal = String(legal.has(id));
+          label.dataset.selected = String(current.preview?.piece_id === id);
+        }
+      }
+      const move = !current.disabled && current.game.phase === 'move' ? current.preview : undefined;
+      const previewPiece = move && current.game.players[current.game.current].pieces.find(piece => piece.id === move.piece_id);
+      landing.visible = previewLine.visible = !!previewPiece;
+      if (landingLabel.current) landingLabel.current.hidden = !previewPiece;
+      if (move && previewPiece) {
+        const key = `${current.game.id}:${current.game.version}:${move.piece_id}`;
+        if (key !== previewKey) {
+          previewKey = key;
+          const layout = createBoardLayout(current.game.board);
+          const count = current.game.players[current.game.current].pieces.length;
+          previewEnd.copy(toWorld(piecePosition(layout, current.game.board, current.game.current, { ...previewPiece, progress: move.to }, count), .24));
+          previewStart.copy(toWorld(piecePosition(layout, current.game.board, current.game.current, previewPiece, count), .24));
+          landing.position.copy(previewEnd);
+          const points = previewGeometry.getAttribute('position') as THREE.BufferAttribute;
+          points.setXYZ(0, previewStart.x, previewStart.y, previewStart.z); points.setXYZ(1, previewEnd.x, previewEnd.y, previewEnd.z); points.needsUpdate = true;
+          const distances = previewGeometry.getAttribute('lineDistance') as THREE.BufferAttribute;
+          distances.setX(1, previewStart.distanceTo(previewEnd)); distances.needsUpdate = true;
+        }
+        landingRing.scale.setScalar(reduced ? 1 : 1 + Math.sin(now / 220) * .08);
+        if (landingLabel.current) {
+          projected.copy(previewEnd); projected.y += .3; projected.project(camera);
+          landingLabel.current.style.left = `${(projected.x + 1) * 50}%`;
+          landingLabel.current.style.top = `${(1 - projected.y) * 50}%`;
         }
       }
       die.userData.canRoll = !current.disabled && current.game.phase === 'roll';
@@ -350,7 +393,7 @@ export function FlightScene(props: Handlers) {
 
   return <>
     <div ref={host} className={'flight-host' + (status !== 'ready' ? ' scene-hidden' : '')} aria-hidden="true">
-      <div className="plane-labels">{props.game.players.flatMap(player => player.pieces.map(piece => <span
+      <div className="plane-labels"><span ref={landingLabel} hidden className="landing-marker" aria-hidden="true">预计落点</span>{props.game.players.flatMap(player => player.pieces.map(piece => <span
         className="plane-marker" key={piece.id} ref={node => { if (node) labels.current.set(piece.id, node); else labels.current.delete(piece.id); }}
         style={{ color: palette[player.color] }} title={`${player.name} · ${piece.number}号 ${piece.label}`}>
         <b>{piece.number}</b><small>{piece.label}</small>

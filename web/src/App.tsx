@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { AirplaneTilt, ArrowClockwise, ArrowRight, ArrowUpRight, Check, GearSix, House, Info, Microphone, Pause, Play, Plus, Stop, Question, Robot, SpeakerHigh, SpeakerSlash, Sparkle, Waveform, X } from '@phosphor-icons/react';
+import { Tutorial, tutorialPreference } from './components/Tutorial';
+import { MovePreview } from './components/MovePreview';
 import { Celebration } from './components/Celebration';
 import { HostNarration } from './components/HostNarration';
 import { Narrator } from './lib/narration';
@@ -52,6 +54,9 @@ export default function App() {
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState(false);
   const [pendingAction, setPendingAction] = useState('');
+  const [tutorialSeen, setTutorialSeen] = useState(() => !!localStorage.getItem(tutorialPreference));
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [previewSelection, setPreviewSelection] = useState<{ gameID: string; version: number; pieceID: string }>();
   const [impact, setImpact] = useState<{ text: string; shield: boolean; crash: boolean }>();
   const [celebration, setCelebration] = useState<{ id: string; text: string; won: boolean }>();
   const [hostVoice, setHostVoice] = useState(() => localStorage.getItem('fly-host-voice') !== 'off');
@@ -151,7 +156,23 @@ export default function App() {
   useEffect(() => { sfx.current.enabled = sound; if (!sound) sfx.current.stop(); }, [sound]);
   useEffect(() => () => { sfx.current.dispose(); narrator.current.dispose(); }, []);
   const voiceBusy = room ? ['listening', 'thinking', 'speaking'].includes(room.voice) : false;
-  const canAct = lifecycle === 'playing' && !!state && !!current && !current.ai && !busy && !voiceBusy && !presentation.active && !presentation.queue.length && state.phase !== 'finished';
+  const canAct = !tutorialOpen && lifecycle === 'playing' && !!state && !!current && !current.ai && !busy && !voiceBusy && !presentation.active && !presentation.queue.length && state.phase !== 'finished';
+
+  const preview = canAct && state?.phase === 'move' && previewSelection?.gameID === state.id && previewSelection.version === state.version
+    ? state.legal_moves.find(move => move.piece_id === previewSelection.pieceID) : undefined;
+  useEffect(() => { setPreviewSelection(undefined); }, [state?.id, state?.version, lifecycle, screen]);
+  useEffect(() => {
+    if (screen === 'play' && lifecycle === 'playing' && state?.phase !== 'finished' && !tutorialSeen && !modal && !presentation.active && !presentation.queue.length) setTutorialOpen(true);
+  }, [screen, lifecycle, state?.phase, tutorialSeen, modal, presentation.active, presentation.queue.length]);
+  useEffect(() => { if (tutorialOpen) setPreviewSelection(undefined); }, [tutorialOpen]);
+  const closeTutorial = (completed: boolean) => {
+    localStorage.setItem(tutorialPreference, completed ? 'completed' : 'skipped');
+    setTutorialSeen(true); setTutorialOpen(false);
+  };
+  const selectMove = (pieceID: string) => {
+    if (!canAct || state?.phase !== 'move' || !state.legal_moves.some(move => move.piece_id === pieceID)) return;
+    setPreviewSelection({ gameID: state.id, version: state.version, pieceID });
+  };
 
   const command = useCallback(async (action: string, pieceID?: string, targetID?: string) => {
     const r = roomRef.current;
@@ -181,12 +202,13 @@ export default function App() {
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !modal && previewSelection) { setPreviewSelection(undefined); return; }
       if (e.code === 'Space' && !modal && canAct && state?.phase === 'roll' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) {
         e.preventDefault(); void command('roll');
       }
     };
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
-  }, [canAct, modal, state?.phase, command]);
+  }, [canAct, modal, previewSelection, state?.phase, command]);
 
   useEffect(() => {
     if (screen === 'home' && room?.status === 'playing' && room.state.phase !== 'finished' && !locked.current) void command('pause');
@@ -198,9 +220,9 @@ export default function App() {
     if (state.current !== player) { setToast('现在轮到' + current.name + '，请选择自己的飞机。'); return; }
     if (state.phase === 'roll') { setToast('先掷骰子，再选择飞机。'); return; }
     if (!state.legal_moves.some(m => m.piece_id === piece.id)) {
-      setToast(piece.progress === -1 ? '机库里的飞机需要掷到六点才能起飞。' : '这架飞机不能使用本次点数，试试高亮的飞机。'); return;
+      setToast(piece.progress === state.board.finish ? '这架飞机已经抵达终点，选其他飞机继续。' : piece.progress === -1 ? '机库里的飞机需要掷到六点或使用起飞卡才能起飞。' : '这架飞机不能使用本次点数，试试高亮的飞机。'); return;
     }
-    void command('move', piece.id);
+    selectMove(piece.id);
   };
 
   const openSetup = (newRoom = false) => {
@@ -274,10 +296,11 @@ export default function App() {
           {screen === 'play' && <>
             {lifecycle === 'playing' && !winner && <button className="text-button" disabled={busy} onClick={() => void command('pause')}><Pause />暂停</button>}
             {lifecycle === 'paused' && <button className="text-button" disabled={busy} onClick={() => void command('resume')}><Play />继续游戏</button>}
-            {lifecycle !== 'ended' && <button className="text-button" disabled={busy} onClick={() => setModal('end')}><Stop />结束游戏</button>}
+            {lifecycle !== 'ended' && <button className="text-button" disabled={busy} onClick={() => setModal('end')} aria-label="结束游戏"><Stop /><span className="desktop-label">结束游戏</span><span className="mobile-label">结束</span></button>}
             <button className="icon-button" aria-label={sound ? '关闭游戏音效' : '开启游戏音效'} onClick={() => { setSound(!sound); localStorage.setItem('fly-sound', sound ? 'off' : 'on'); }}>{sound ? <SpeakerHigh /> : <SpeakerSlash />}</button>
           </>}
-          <button className="text-button" onClick={() => setModal('rules')}><Question size={18} />玩法</button>
+          <button className="text-button" aria-label="新手指南" onClick={() => setTutorialOpen(true)}><Sparkle size={18} /><span className="desktop-label">新手指南</span><span className="mobile-label">新手</span></button>
+          <button className="text-button rules-button" aria-label="玩法" onClick={() => setModal('rules')}><Question size={18} /><span>玩法</span></button>
         </div>
       </header>
       {screen === 'home' ? <main className="home-main">
@@ -297,12 +320,13 @@ export default function App() {
             <div className="board-turnbar"><span style={{ color: palette[current.color] }}><AirplaneTilt weight="fill" />{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span>
               <strong>{state.demo ? '演示局面' : state.board.name}{state.phase === 'move' ? ` · ${state.dice} 点` : ''}</strong>
               <div className="play-turn-actions">{lifecycle === 'playing' && !winner && state.phase === 'roll' && <button className="primary-button roll-button" disabled={!canAct} onClick={() => void command('roll')}>{current.ai ? '灵矽的回合' : busy ? '骰子转呀转…' : '掷骰子'}</button>}
-                {lifecycle === 'playing' && !winner && state.phase === 'move' && state.legal_moves.map(move => <button key={move.piece_id} className="prop-shortcut" disabled={!canAct} title={move.summary} onClick={() => void command('move', move.piece_id)}>{move.label}</button>)}
+                {lifecycle === 'playing' && !winner && state.phase === 'move' && state.legal_moves.map(move => <button key={move.piece_id} className="prop-shortcut" disabled={!canAct} title={move.summary} aria-pressed={preview?.piece_id === move.piece_id} onClick={() => selectMove(move.piece_id)}>{move.label}</button>)}
                 {state.props_enabled && !winner && <button className="prop-shortcut" onClick={() => setModal('props')}>道具口袋 · {Object.values(current.props || {}).reduce((a, b) => a + b, 0)}</button>}
                 {(lifecycle === 'ended' || winner) && <button className="prop-shortcut" onClick={() => openSetup(false)}>再来一局</button>}
               </div>
             </div>
-            <div className={'board-viewport ' + (boardZoom ? 'is-zoomed' : '')}><div className="board-stage">{celebration && <Celebration key={celebration.id} text={celebration.text} won={celebration.won} />}{impact && <div className={"board-impact " + (impact.shield ? "shield-impact" : "bomb-impact")} role="status"><Sparkle weight="fill" /><strong>{impact.shield ? "护盾启动" : impact.crash ? "被撞回机场" : "炸弹出击"}</strong><span>{impact.text}</span></div>}{lifecycle !== 'playing' && <div className="game-status-overlay"><strong>{lifecycle === 'waiting' ? '飞行员准备好了吗？' : lifecycle === 'paused' ? '先休息一下' : '这一趟飞行已结束'}</strong><p>{lifecycle === 'waiting' ? '确认玩家和难度后，点击开始游戏。' : lifecycle === 'paused' ? '棋盘、道具和骰子已保留，随时继续。' : '保留本局记录，重新准备下一次出发。'}</p><button className="primary-button" disabled={busy} onClick={() => lifecycle === 'ended' ? openSetup(false) : void command(lifecycle === 'waiting' ? 'start' : 'resume')}><Play weight="fill" />{lifecycle === 'waiting' ? '开始游戏' : lifecycle === 'paused' ? '继续游戏' : '重新准备'}</button></div>}<Board game={presentation.game || state} onPiece={onPiece} disabled={!canAct} onRoll={() => void command('roll')} rolling={busy && pendingAction === 'roll'} /></div></div>
+            {lifecycle === 'playing' && !winner && !presentation.active && !presentation.queue.length && <p className="turn-help" role="status">{current.ai ? '灵矽正在思考这一回合。' : state.phase === 'move' ? '点一架亮着的飞机，先看落点；确认后再飞行。' : current.pieces.every(piece => piece.progress < 0) && state.active_prop !== 'launch' ? `轮到${current.name}先掷骰子。机库飞机要掷到六点才能起飞${state.props_enabled && current.props.launch > 0 ? '，也可以先用起飞卡' : ''}。` : `轮到${current.name}先掷骰子，再选择飞机。`}</p>}
+            <div className={'board-viewport ' + (boardZoom ? 'is-zoomed' : '')}><div className="board-stage">{celebration && <Celebration key={celebration.id} text={celebration.text} won={celebration.won} />}{impact && <div className={"board-impact " + (impact.shield ? "shield-impact" : "bomb-impact")} role="status"><Sparkle weight="fill" /><strong>{impact.shield ? "护盾启动" : impact.crash ? "被撞回机场" : "炸弹出击"}</strong><span>{impact.text}</span></div>}{lifecycle !== 'playing' && <div className="game-status-overlay"><strong>{lifecycle === 'waiting' ? '飞行员准备好了吗？' : lifecycle === 'paused' ? '先休息一下' : '这一趟飞行已结束'}</strong><p>{lifecycle === 'waiting' ? '确认玩家和难度后，点击开始游戏。' : lifecycle === 'paused' ? '棋盘、道具和骰子已保留，随时继续。' : '保留本局记录，重新准备下一次出发。'}</p><button className="primary-button" disabled={busy} onClick={() => lifecycle === 'ended' ? openSetup(false) : void command(lifecycle === 'waiting' ? 'start' : 'resume')}><Play weight="fill" />{lifecycle === 'waiting' ? '开始游戏' : lifecycle === 'paused' ? '继续游戏' : '重新准备'}</button></div>}<Board game={presentation.game || state} onPiece={onPiece} disabled={!canAct} onRoll={() => void command('roll')} rolling={busy && pendingAction === 'roll'} preview={preview} /></div></div>
             <div className="crew-list" style={{ '--seats': state.players.length } as React.CSSProperties}>
               {state.players.map((player, i) => <div key={player.id} className={'crew-seat ' + (state.current === i && state.phase !== 'finished' ? 'current' : '')} style={{ '--player-color': palette[player.color] } as React.CSSProperties}>
                 <Avatar player={player} /><div className="crew-detail"><strong>{player.name}{player.ai && <span className="ai-tag">AI</span>}</strong><span>{player.pieces.filter(p => p.progress === state.board.finish).length}/{state.mode === 'quick' ? '1' : player.pieces.length} 架抵达</span></div>{state.current === i && state.phase !== 'finished' && <span className="seat-turn">本回合</span>}
@@ -310,6 +334,12 @@ export default function App() {
             </div>
           </section>
           <aside className="side-column" aria-label="语音助手">
+            {preview && <MovePreview game={state} move={preview} disabled={!canAct} onCancel={() => setPreviewSelection(undefined)} onConfirm={() => {
+              const live = roomRef.current;
+              if (!live || live.state.id !== previewSelection?.gameID || live.state.version !== previewSelection.version || live.status !== 'playing') { setPreviewSelection(undefined); return; }
+              void command('move', preview.piece_id);
+            }} />}
+
             <section className="voice-panel">
               <div className="voice-heading"><span className="voice-icon"><Waveform size={24} /></span><div><h2>灵矽，陪你一起飞</h2><p>你的家庭游戏搭子</p></div><span className="voice-spark"><Sparkle size={22} weight="duotone" /></span></div>
               <label className="auto-voice-setting"><input type="checkbox" checked={hostVoice} onChange={e => { setHostVoice(e.target.checked); localStorage.setItem('fly-host-voice', e.target.checked ? 'on' : 'off'); void narrator.current.unlock(); }} />关闭麦克风时也播报回合</label>
@@ -326,6 +356,7 @@ export default function App() {
           </aside>
         </div>
       </main>}
+      {tutorialOpen && !modal && !presentation.active && <Tutorial voiceConfigured={!!config?.voice_configured} propsEnabled={state.props_enabled} quick={state.mode === 'quick'} onClose={closeTutorial} />}
       {presentation.active?.kind === 'dice' && <DiceRollModal key={presentation.active.id} roll={presentation.active.roll} onClose={() => { if (presentation.active) present({ type: 'advance', id: presentation.active.id }); }} />}
       {toast && <div className="toast" role="status"><Info size={19} /><span>{toast}</span><button aria-label="关闭提示" onClick={() => setToast('')}><X size={16} /></button></div>}
       {modal === 'props' && <Modal title={`${current.name}的道具口袋`} onClose={() => setModal(null)}><PropTray key={state.id + ':' + state.version} game={state} status={lifecycle} disabled={!canAct} onUse={(id, target) => { setModal(null); void command('prop', id, target); }} /></Modal>}

@@ -6,6 +6,7 @@ try {
  const context=await browser.newContext({baseURL:process.env.QA_BASE_URL,permissions:['microphone']});
  const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{
+ localStorage.setItem('fly-tutorial-v1','skipped');
   localStorage.setItem('fly-host-voice','off');
   window.__buffer={starts:[],tracks:[],maxAhead:0};
   const get=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);

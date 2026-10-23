@@ -8,7 +8,8 @@ const browser=await chromium.launch({channel:'chrome',headless:true,args:process
 try{
  const page=await browser.newPage({baseURL:process.env.QA_BASE_URL,viewport:{width:1440,height:1120}});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.addInitScript(()=>{localStorage.setItem('fly-auto-voice','off');localStorage.setItem('fly-host-voice','off');});
+ await page.addInitScript(()=>{
+ localStorage.setItem('fly-tutorial-v1','skipped');localStorage.setItem('fly-auto-voice','off');localStorage.setItem('fly-host-voice','off');});
  await page.goto(process.env.QA_BASE_URL,{waitUntil:'networkidle'});
  assert.equal(await page.locator('.flight-host').count(),0,'home has no board');
  assert.equal(await page.locator('.voice-panel').count(),0,'home has no active voice panel');
@@ -36,6 +37,7 @@ try{
  await page.getByRole('dialog',{name:'3D 掷骰结果'}).waitFor({state:'visible'});
  await page.getByRole('button',{name:'继续飞行',exact:true}).click();
  await page.getByRole('button',{name:'小熊号',exact:true}).click();
+ await page.getByRole('button',{name:'确认飞行',exact:true}).click();
  await page.waitForFunction(version=>document.querySelector('.flight-board')?.dataset.version===String(version),initialVersion+3);
  room=(await(await page.request.get('/api/session')).json()).room;assert.equal(room.state.players[0].pieces[0].progress,0);
  await page.getByRole('button',{name:'返回首页',exact:true}).click();await page.waitForURL(new URL('/',process.env.QA_BASE_URL).href);

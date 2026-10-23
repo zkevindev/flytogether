@@ -8,6 +8,7 @@ try {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(() => {
+ localStorage.setItem('fly-tutorial-v1','skipped');
     localStorage.setItem('fly-host-voice','off');
     localStorage.setItem('fly-voice-settings', JSON.stringify({wake_enabled:true,wake_word:'旧的称呼'}));
     window.__mic = { calls: 0, tracks: [] };
@@ -85,6 +86,7 @@ try {
   let permissionCalls = 0;
   await denied.exposeBinding('permissionCalled', () => permissionCalls++);
   await denied.addInitScript(() => {
+ localStorage.setItem('fly-tutorial-v1','skipped');
     localStorage.setItem('fly-host-voice','off');
     navigator.mediaDevices.getUserMedia = async () => { await window.permissionCalled(); throw new DOMException('Permission denied', 'NotAllowedError'); };
   });

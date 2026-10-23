@@ -1,15 +1,15 @@
-import type { Game, Piece } from '../lib/types';
+import type { Game, Move, Piece } from '../lib/types';
 import { palette } from '../lib/types';
 import { boardPieces, createBoardLayout } from '../lib/board-layout';
 import { FlightScene } from './FlightScene';
 
-export function Board({ game, onPiece, disabled, onRoll, rolling = false }: {
-  game: Game; onPiece: (piece: Piece, player: number) => void; disabled: boolean; onRoll: () => void; rolling?: boolean;
+export function Board({ game, onPiece, disabled, onRoll, rolling = false, preview }: {
+  game: Game; onPiece: (piece: Piece, player: number) => void; disabled: boolean; onRoll: () => void; rolling?: boolean; preview?: Move;
 }) {
   const layout = createBoardLayout(game.board);
   const canRoll = !disabled && game.phase === 'roll';
   return <div className="flight-board" data-game-id={game.id} data-version={game.version}>
-    <FlightScene game={game} disabled={disabled} rolling={rolling} onPiece={onPiece} onRoll={onRoll} />
+    <FlightScene game={game} disabled={disabled} rolling={rolling} preview={preview} onPiece={onPiece} onRoll={onRoll} />
     <div className="plane-legend" aria-label="飞机编号对照">
       {game.players.map(player => <div key={player.id} style={{ color: palette[player.color] }}>
         <strong>{player.name}</strong>

@@ -1,17 +1,20 @@
 import { useId } from 'react';
-import type { Game, Piece } from '../lib/types';
+import type { Game, Move, Piece } from '../lib/types';
 import { colors, palette } from '../lib/types';
-import { boardPieces, createBoardLayout, hangarPosition } from '../lib/board-layout';
+import { boardPieces, createBoardLayout, hangarPosition, piecePosition } from '../lib/board-layout';
 
 const planePath = 'M-3-18 3-18 5-4 16 4 16 9 5 5 4 13 9 17 9 20 0 17-9 20-9 17-4 13-5 5-16 9-16 4-5-4Z';
 const dicePips: Record<number, number[]> = { 0: [4], 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
 const shortName = (name: string) => [...name].length > 8 ? [...name].slice(0, 7).join('') + '…' : name;
 
-export function FlatBoard({ game, onPiece, disabled, onRoll, rolling = false }: {
-  game: Game; onPiece: (piece: Piece, player: number) => void; disabled: boolean; onRoll: () => void; rolling?: boolean;
+export function FlatBoard({ game, onPiece, disabled, onRoll, rolling = false, preview }: {
+  game: Game; onPiece: (piece: Piece, player: number) => void; disabled: boolean; onRoll: () => void; rolling?: boolean; preview?: Move;
 }) {
   const uid = useId().replaceAll(':', '');
   const layout = createBoardLayout(game.board), { unit, route, home, airports, pads } = layout;
+  const previewPiece = preview && game.players[game.current].pieces.find(piece => piece.id === preview.piece_id);
+  const landing = preview && previewPiece && !disabled ? piecePosition(layout, game.board, game.current, { ...previewPiece, progress: preview.to }, game.players[game.current].pieces.length) : undefined;
+  const origin = previewPiece ? piecePosition(layout, game.board, game.current, previewPiece, game.players[game.current].pieces.length) : undefined;
   const canRoll = !disabled && game.phase === 'roll';
   const radius = game.board.layout === 'circle' ? 15 : unit * .47;
   const routePath = route.map(p => `${p.x},${p.y}`).join(' ') + ` ${route[0].x},${route[0].y}`;
@@ -71,6 +74,12 @@ export function FlatBoard({ game, onPiece, disabled, onRoll, rolling = false }: 
       <rect className="board-die-face" x="-26" y="-26" width="52" height="52" rx="13" fill="white" stroke={canRoll ? '#2e5e4c' : '#cbd8df'} strokeWidth="2" filter={`url(#${uid}shadow)`} />
       {dicePips[game.dice || 0].map(p => <circle key={p} cx={(p % 3 - 1) * 12} cy={(Math.floor(p / 3) - 1) * 12} r="4" fill="#324e62" />)}
     </g>
+    {landing && origin && <g className="flat-preview" aria-label="预计落点" pointerEvents="none">
+      <line x1={origin.x} y1={origin.y} x2={landing.x} y2={landing.y} stroke="#8b681a" strokeWidth="3" strokeDasharray="7 5" />
+      <circle cx={landing.x} cy={landing.y} r={unit * .55} fill="#ffe89a" fillOpacity=".7" stroke="#a77e20" strokeWidth="3" />
+      <rect x={landing.x - 35} y={landing.y - 37} width="70" height="22" rx="7" fill="#72591e" />
+      <text x={landing.x} y={landing.y - 22} fontSize="13" fill="white" textAnchor="middle">预计落点</text>
+    </g>}
     {boardPieces(game, layout).map(({ player, playerIndex, piece, point, radius: r, stackSize }) => {
       const legal = !disabled && game.current === playerIndex && game.legal_moves.some(m => m.piece_id === piece.id);
       const finished = piece.progress === game.board.finish;
@@ -78,7 +87,7 @@ export function FlatBoard({ game, onPiece, disabled, onRoll, rolling = false }: 
       return <g key={piece.id} className={'board-piece ' + (legal ? 'is-legal' : '')} data-piece-id={piece.id} data-progress={piece.progress}
         style={{ transform: `translate(${point.x}px, ${point.y}px)`, color: palette[player.color] }}
         role="button" tabIndex={legal ? 0 : -1} aria-label={`${player.name}的${piece.label}，${status}${piece.shield ? "，护盾保护中" : ""}${legal ? '，可以移动' : ''}`} aria-disabled={!legal}
-        onClick={() => { if (legal) onPiece(piece, playerIndex); }} onKeyDown={e => { if (legal && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPiece(piece, playerIndex); } }}>
+        onClick={() => { if (!disabled) onPiece(piece, playerIndex); }} onKeyDown={e => { if (legal && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPiece(piece, playerIndex); } }}>
         <title>{player.name} · {piece.label} · {status}</title>
         {piece.shield && <circle r={r + 5} fill="#6cd5f2" fillOpacity=".2" stroke="#1689b2" strokeWidth="2.5" strokeDasharray="5 3" />}
         {legal && <circle className="piece-halo" r={r + 7} fill="currentColor" opacity=".24" />}

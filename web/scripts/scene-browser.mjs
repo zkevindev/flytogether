@@ -11,6 +11,7 @@ try {
 const errors=[]; page.on('pageerror',e=>errors.push(e.message));
 await page.clock.install(); await page.clock.pauseAt(new Date(Date.now()+500));
 await page.addInitScript(()=>{
+ localStorage.setItem('fly-tutorial-v1','skipped');
     localStorage.setItem('fly-host-voice','off');
  localStorage.setItem('fly-auto-voice','off');
  const seen=new WeakSet();window.__gpu={contexts:[],losses:0};
@@ -88,6 +89,7 @@ assert.deepEqual(errors,[]);
 const noGPU=await browser.newPage({baseURL:process.env.QA_BASE_URL});
 await noGPU.clock.install(); await noGPU.clock.pauseAt(new Date(Date.now()+500));
 await noGPU.addInitScript(()=>{
+ localStorage.setItem('fly-tutorial-v1','skipped');
  localStorage.setItem('fly-host-voice','off');
  localStorage.setItem('fly-auto-voice','off');
  const original=HTMLCanvasElement.prototype.getContext;

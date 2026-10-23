@@ -13,6 +13,7 @@ try {
  page.on('pageerror',e=>errors.push(e.message));
  await page.exposeBinding('qaEvent',(_,value)=>{if(['hello','stt','error','speech_stopped','response.done'].includes(value.type))log(value);});
  await page.addInitScript(()=>{
+ localStorage.setItem('fly-tutorial-v1','skipped');
   window.__qa={events:[],tracks:[],sources:[]};
   const Original=WebSocket;
   window.WebSocket=class extends Original{constructor(url,...args){super(url,...args);if(String(url).includes('/ws/voice?'))this.addEventListener('message',e=>{

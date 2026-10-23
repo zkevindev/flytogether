@@ -15,6 +15,7 @@ const setup=async()=>{
  const command=async(action,extra={})=>{await state();const response=await context.request.post('/api/rooms/'+room.id+'/commands',{data:{command_id:crypto.randomUUID(),game_id:room.state.id,expected_version:room.state.version,action,...extra}});assert.equal(response.status(),200);room=await response.json();return room.state;};
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{
+ localStorage.setItem('fly-tutorial-v1','skipped');
   localStorage.setItem('fly-auto-voice','off');localStorage.setItem('fly-host-voice','off');
   window.__qa={microphone:0,playbacks:0,frequencies:[]};
   navigator.mediaDevices.getUserMedia=async()=>{window.__qa.microphone++;throw new Error('This test never needs microphone capture');};
@@ -23,7 +24,8 @@ const setup=async()=>{
   const set=AudioParam.prototype.setValueAtTime;
   AudioParam.prototype.setValueAtTime=function(value,...args){window.__qa.frequencies.push(value);return set.call(this,value,...args);};
  });
- return {context,page,state,command,room:()=>room};
+ const restart=async()=>{const response=await context.request.post('/api/rooms/'+room.id+'/matches',{data:options});assert.equal(response.status(),200);room=await response.json();};
+ return {context,page,state,command,restart,room:()=>room};
 };
 const pcmWav=pcm=>{const header=Buffer.alloc(44);header.write('RIFF');header.writeUInt32LE(36+pcm.length,4);header.write('WAVEfmt ',8);header.writeUInt32LE(16,16);header.writeUInt16LE(1,20);header.writeUInt16LE(1,22);header.writeUInt32LE(24000,24);header.writeUInt32LE(48000,28);header.writeUInt16LE(2,32);header.writeUInt16LE(16,34);header.write('data',36);header.writeUInt32LE(pcm.length,40);return Buffer.concat([header,pcm]);};
 try{
@@ -52,7 +54,7 @@ try{
   const item=await setup();let picked;let steps=0;
   for(;steps<1400;steps++){
    const state=await item.state();
-   if(state.phase==='finished')throw new Error('preparation reached an unexpected completed game');
+   if(state.phase==='finished'){await item.restart();continue;}
    if(state.phase==='roll'){await item.command('roll');continue;}
    picked=state.legal_moves.find(m=>kind==='capture'?m.captured.length>0:m.finish);
    if(picked)break;
@@ -62,6 +64,7 @@ try{
   await item.page.goto(new URL('/play',process.env.QA_BASE_URL).href,{waitUntil:'networkidle'});
   const before=await item.state();
   await item.page.getByRole('button',{name:picked.label,exact:true}).click();
+  await item.page.getByRole('button',{name:'确认飞行',exact:true}).click();
   if(kind==='capture'){
    await item.page.getByText('被撞回机场',{exact:true}).waitFor({state:'visible'});
    const after=await item.state();for(const id of picked.captured)assert.equal(after.players.flatMap(p=>p.pieces).find(p=>p.id===id).progress,-1);
