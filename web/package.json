@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "test:board": "node --experimental-strip-types --test scripts/board-layout.test.mjs",
     "preview": "vite preview --host 127.0.0.1",
-    "test:voice": "node --test scripts/voice-lifecycle.test.mjs"
+    "test:voice": "node --test scripts/voice-lifecycle.test.mjs",
+    "test:presentation": "node --experimental-strip-types --test scripts/presentation.test.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

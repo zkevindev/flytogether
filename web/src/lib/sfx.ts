@@ -93,8 +93,9 @@ export class Sfx {
         this.tone(time + 0.08, 659, 0.11, 'triangle', 0.04);
         return time + 0.22;
       case 'launch':
-        this.glideTone(time, 370, 740, 0.24, 0.05);
-        return time + 0.28;
+        this.glideTone(time, 370, 1046, 0.38, 0.055);
+        this.noiseBurst(time + 0.02, 0.34, 1200, 0.032);
+        return time + 0.48;
       case 'glide':
         this.tone(time, 523, 0.1, 'triangle', 0.04);
         this.tone(time + 0.09, 659, 0.1, 'triangle', 0.04);
