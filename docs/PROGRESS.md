@@ -111,3 +111,5 @@
 功能提交 [25e25d7](https://github.com/zkevindev/flytogether/commit/25e25d7) 与 [447b8d5](https://github.com/zkevindev/flytogether/commit/447b8d5) 已同步 main 并部署，服务健康。公网浏览器完成创建挑战演示房间、显式开始、炸弹送回爸爸的小熊号、真实四点 3D 弹窗、暂停后保留四点、继续并移动兔子号至 39、手机幸运骰 1/6 取 6、结束保留记录。375 像素页面无横向溢出，三个房间控制按钮高度均为 44 像素。
 
 公网真实灵矽接口通过合成语音验证：战术建议只读且给出真实目标，多个同名小熊号先追问，明确炸弹指令实际回库，明确护盾指令实际扣库存并启用。真实麦克风、声学回声、实体打断与家庭试玩继续在 #1/#3 跟踪。3D 实测截图见 [骰子弹窗](images/dice-3d.png)。
+
+最终应用版本 [2e9ed7f](https://github.com/zkevindev/flytogether/commit/2e9ed7f) 已部署，公网静态资源与本地已验证构建一致；更新了阶段提示及语音播报措辞。新版[家庭房间、控制栏与五道具截图](images/family-board.png)取自最终公网版本。
