@@ -80,6 +80,11 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 	}
 
 	errCh := make(chan error, 2)
+	controls := make(chan string, 4)
+	gate := wakeGate{settings: r.VoiceSettings()}
+	sendWake := func() error {
+		return sendBrowser(map[string]any{"type": "wake_state", "awake": gate.awake(time.Now()), "wake_enabled": gate.settings.WakeEnabled, "wake_word": gate.settings.WakeWord, "window_seconds": int(wakeWindow.Seconds())})
+	}
 	go func() {
 		defer cancel()
 		for {
@@ -109,6 +114,12 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 			if control.Type == "abort" {
 				if e = sendUp(map[string]any{"type": "response.cancel"}); e != nil {
 					errCh <- e
+					return
+				}
+			} else if control.Type == "sleep" {
+				select {
+				case controls <- "sleep":
+				case <-ctx.Done():
 					return
 				}
 			}
@@ -167,95 +178,224 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 			if e = sendBrowser(map[string]any{"type": "hello", "audio_params": map[string]any{"format": "pcm", "sample_rate": 24000}}); e != nil {
 				return e
 			}
-			r.VoiceState("ready")
+			if gate.settings.WakeEnabled {
+				r.VoiceState("standby")
+			} else {
+				r.VoiceState("ready")
+			}
+			if e = sendWake(); e != nil {
+				return e
+			}
 			break
 		}
 	}
 
-	var responseHasTools bool
-	var pendingCalls []functionCall
+	incoming := make(chan realtimeEvent, 16)
+	go func() {
+		for {
+			kind, data, err := up.Read(ctx)
+			if err != nil {
+				select {
+				case errCh <- err:
+				case <-ctx.Done():
+				}
+				return
+			}
+			if kind != websocket.MessageText {
+				continue
+			}
+			var event realtimeEvent
+			if json.Unmarshal(data, &event) != nil {
+				continue
+			}
+			select {
+			case incoming <- event:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	var currentToken string
+	var inFlight bool
+	grants := map[string]string{}
+	calls := map[string][]functionCall{}
+	seenInputs := map[string]bool{}
+	idle := func() {
+		if gate.awake(time.Now()) {
+			r.VoiceState("ready")
+		} else {
+			r.VoiceState("standby")
+		}
+	}
+	sleep := func() error {
+		if inFlight {
+			_ = sendUp(map[string]any{"type": "response.cancel"})
+		}
+		gate.sleep()
+		currentToken, inFlight = "", false
+		idle()
+		return sendWake()
+	}
 	for {
+		var event realtimeEvent
 		select {
 		case <-ctx.Done():
 			return nil
-		case e := <-errCh:
-			if ctx.Err() != nil {
-				return nil
-			}
-			return e
-		default:
-		}
-		kind, data, e := up.Read(ctx)
-		if e != nil {
+		case <-errCh:
 			if ctx.Err() != nil {
 				return nil
 			}
 			return errors.New("灵矽实时会话已断开")
-		}
-		if kind != websocket.MessageText {
+		case <-controls:
+			if e := sleep(); e != nil {
+				return e
+			}
 			continue
-		}
-		var event realtimeEvent
-		if json.Unmarshal(data, &event) != nil {
-			continue
-		}
-		switch event.Type {
-		case "input_audio_buffer.speech_started":
-			if e = r.BeginSpeech(); e != nil {
-				// A duplicate VAD edge can occur while the same utterance is active.
-				if voiceErr, ok := e.(*room.Error); !ok || voiceErr.Code != "VOICE_BUSY" {
+		case now := <-ticker.C:
+			if settings := r.VoiceSettings(); settings != gate.settings {
+				gate.settings = settings
+				if e := sleep(); e != nil {
+					return e
+				}
+			} else if !inFlight && !gate.awake(now) && r.Snapshot().Voice != "standby" {
+				idle()
+				if e := sendWake(); e != nil {
 					return e
 				}
 			}
-			_ = sendBrowser(map[string]any{"type": "speech_started"})
+			continue
+		case event = <-incoming:
+		}
+		switch event.Type {
+		case "input_audio_buffer.speech_started":
+			// Revoke the previous utterance before accepting a new transcript.
+			currentToken, inFlight = "", false
+			r.VoiceState("standby")
+			if gate.awake(time.Now()) {
+				r.VoiceState("listening")
+				if e := sendBrowser(map[string]any{"type": "speech_started"}); e != nil {
+					return e
+				}
+			}
+			continue
 		case "input_audio_buffer.speech_stopped":
-			r.VoiceState("thinking")
-			_ = sendBrowser(map[string]any{"type": "speech_stopped"})
+			if gate.awake(time.Now()) {
+				r.VoiceState("thinking")
+				if e := sendBrowser(map[string]any{"type": "speech_stopped"}); e != nil {
+					return e
+				}
+			}
+			continue
 		case "conversation.item.input_audio_transcription.completed":
 			var body struct {
 				Transcript string `json:"transcript"`
+				ItemID     string `json:"item_id"`
 			}
-			_ = json.Unmarshal(event.Raw, &body)
-			_ = sendBrowser(map[string]any{"type": "stt", "text": body.Transcript})
+			if json.Unmarshal(event.Raw, &body) != nil || seenInputs[body.ItemID] {
+				continue
+			}
+			if body.ItemID != "" {
+				seenInputs[body.ItemID] = true
+			}
+			if !gate.accept(body.Transcript, time.Now()) {
+				// Keep unrelated background speech out of later model context.
+				if body.ItemID != "" {
+					_ = sendUp(map[string]any{"type": "conversation.item.delete", "item_id": body.ItemID})
+				}
+				idle()
+				if e := sendWake(); e != nil {
+					return e
+				}
+				continue
+			}
+			r.VoiceState("standby")
+			if e := r.BeginSpeech(); e != nil {
+				return e
+			}
+			currentToken, inFlight = r.CurrentActionToken(), true
+			r.VoiceState("thinking")
+			if e := sendWake(); e != nil {
+				return e
+			}
+			if e := sendBrowser(map[string]any{"type": "stt", "text": body.Transcript}); e != nil {
+				return e
+			}
+			if e := sendUp(map[string]any{"type": "response.create"}); e != nil {
+				return e
+			}
+			continue
 		case "response.created":
-			responseHasTools = false
+			if inFlight {
+				grants[event.ResponseID] = currentToken
+			}
 		case "response.output_item.done":
+			if !inFlight || grants[event.ResponseID] != currentToken {
+				continue
+			}
 			var body struct {
 				Item functionCall `json:"item"`
 			}
 			if json.Unmarshal(event.Raw, &body) == nil && body.Item.Type == "function_call" {
-				responseHasTools = true
-				pendingCalls = append(pendingCalls, body.Item)
-			}
-		case "response.audio.delta", "response.output_audio.delta":
-			if r.Snapshot().Voice != "speaking" {
-				r.VoiceState("speaking")
+				body.Item.Grant = grants[event.ResponseID]
+				calls[event.ResponseID] = append(calls[event.ResponseID], body.Item)
 			}
 		case "response.done":
-			if len(pendingCalls) > 0 {
-				for _, call := range pendingCalls {
+			pending := calls[event.ResponseID]
+			delete(calls, event.ResponseID)
+			grant := grants[event.ResponseID]
+			delete(grants, event.ResponseID)
+			if !inFlight || grant == "" || grant != currentToken {
+				continue
+			}
+			var body struct {
+				Response struct {
+					Status string `json:"status"`
+				} `json:"response"`
+			}
+			_ = json.Unmarshal(event.Raw, &body)
+			if body.Response.Status == "completed" && len(pending) > 0 {
+				for _, call := range pending {
 					output := b.executeTool(r, call)
 					item := map[string]any{"type": "conversation.item.create", "item": map[string]any{"type": "function_call_output", "call_id": call.CallID, "output": output}}
-					if e = sendUp(item); e != nil {
+					if e := sendUp(item); e != nil {
 						return errors.New("游戏操作结果没有送回灵矽")
 					}
 				}
-				pendingCalls = nil
-				if e = sendUp(map[string]any{"type": "response.create"}); e != nil {
+				if e := sendUp(map[string]any{"type": "response.create"}); e != nil {
 					return errors.New("灵矽无法继续生成语音回复")
 				}
-				responseHasTools = false
 				continue
 			}
-			if !responseHasTools && r.Snapshot().Voice != "listening" {
-				r.VoiceState("ready")
+			currentToken, inFlight = "", false
+			gate.finish(time.Now())
+			idle()
+			if e := sendWake(); e != nil {
+				return e
 			}
+			if e := browser.Write(ctx, websocket.MessageText, event.Raw); e != nil {
+				return e
+			}
+			continue
 		case "error":
-			_ = sendBrowser(map[string]any{"type": "error", "message": "灵矽实时语音遇到问题，请重新说一次"})
-		default:
+			if inFlight {
+				currentToken, inFlight = "", false
+				idle()
+				_ = sendBrowser(map[string]any{"type": "error", "message": "灵矽实时语音遇到问题，请重新说一次"})
+			}
+			continue
+		}
+		if !inFlight || grants[event.ResponseID] != currentToken {
+			continue
+		}
+		if event.Type == "response.audio.delta" || event.Type == "response.output_audio.delta" {
+			if r.Snapshot().Voice != "speaking" {
+				r.VoiceState("speaking")
+			}
 		}
 		if shouldForward(event.Type) {
-			if e = browser.Write(ctx, websocket.MessageText, data); e != nil {
+			if e := browser.Write(ctx, websocket.MessageText, event.Raw); e != nil {
 				return e
 			}
 		}
@@ -263,18 +403,27 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 }
 
 type realtimeEvent struct {
-	Type string          `json:"type"`
-	Raw  json.RawMessage `json:"-"`
+	Type       string          `json:"type"`
+	ResponseID string          `json:"response_id"`
+	Raw        json.RawMessage `json:"-"`
 }
 
 func (e *realtimeEvent) UnmarshalJSON(data []byte) error {
 	var header struct {
-		Type string `json:"type"`
+		Type       string `json:"type"`
+		ResponseID string `json:"response_id"`
+		Response   struct {
+			ID string `json:"id"`
+		} `json:"response"`
 	}
 	if err := json.Unmarshal(data, &header); err != nil {
 		return err
 	}
 	e.Type, e.Raw = header.Type, append(e.Raw[:0], data...)
+	e.ResponseID = header.ResponseID
+	if e.ResponseID == "" {
+		e.ResponseID = header.Response.ID
+	}
 	return nil
 }
 
@@ -283,6 +432,7 @@ type functionCall struct {
 	Name      string `json:"name"`
 	CallID    string `json:"call_id"`
 	Arguments string `json:"arguments"`
+	Grant     string `json:"-"`
 }
 
 func realtimeURL(raw, model string) (string, error) {
@@ -302,10 +452,10 @@ func realtimeURL(raw, model string) (string, error) {
 func realtimeSessionUpdate(model string) map[string]any {
 	return map[string]any{"type": "session.update", "session": map[string]any{
 		"type": "realtime", "model": model, "output_modalities": []string{"audio"},
-		"instructions": "你是一起飞家庭飞行棋的语音搭子。用简短、亲切的中文交流。只用玩家昵称、棋子昵称或序号与玩家交流，不朗读内部ID、工具名和技术字段。棋局状态和规则以工具结果为准；掷骰或移动必须先查询状态，并且只能按玩家明确指令操作。棋子不明确时先追问。一次话语最多执行一个会改变棋局的动作。操作成功后根据工具返回播报结果，不得声称未执行的动作成功。",
+		"instructions": "你是一起飞家庭飞行棋的语音搭子。用简短、亲切的中文交流。只用玩家昵称、棋子昵称或序号与玩家交流，不朗读内部ID、工具名和技术字段。用户仅呼唤你时简短回应我在，不操作棋局。棋局状态和规则以工具结果为准；掷骰或移动必须先查询状态，并且只能按玩家明确指令操作。玩家明确指定合法棋子起飞或移动时，调用move_piece实际执行，再播报真实结果。多个候选且玩家没指定时先追问。起飞需要真实掷出六点，不能跳过规则。一次话语最多执行一个会改变棋局的动作。操作成功后根据工具返回播报结果，不得声称未执行的动作成功。",
 		"audio": map[string]any{
 			"input": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 16000}, "transcription": map[string]any{},
-				"turn_detection": map[string]any{"type": "server_vad", "create_response": true, "interrupt_response": true}},
+				"turn_detection": map[string]any{"type": "server_vad", "create_response": false, "interrupt_response": true}},
 			"output": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 24000}},
 		},
 		"tools": realtimeTools(), "tool_choice": "auto",
@@ -326,12 +476,15 @@ func (b *Bridge) executeTool(r *room.Room, call functionCall) string {
 		return `{"error":"工具参数无效"}`
 	}
 	if call.Name == "roll_dice" || call.Name == "move_piece" {
-		args["action_token"] = r.CurrentActionToken()
+		args["action_token"] = call.Grant
 	}
 	value, err := r.Tool(call.Name, args)
 	if err != nil {
 		encoded, _ := json.Marshal(map[string]string{"error": err.Error(), "instruction": "操作未执行。请按错误说明重新查询状态或向用户澄清。"})
 		return string(encoded)
+	}
+	if result, ok := value.(map[string]any); ok {
+		delete(result, "action_token")
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil {

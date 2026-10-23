@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AirplaneTilt, ArrowClockwise, ArrowRight, ArrowUpRight, Check, CheckCircle, DotsThree, GearSix, House, Info, Microphone, Question, Robot, SpeakerHigh, SpeakerSlash, Sparkle, Trophy, UsersThree, Waveform, X } from '@phosphor-icons/react';
 import { Board } from './components/Board';
 import { api, APIError, palette, socketURL } from './lib/types';
-import type { Config, Options, Piece, Player, Room } from './lib/types';
+import type { Config, Options, Piece, Player, Room, VoiceSettings } from './lib/types';
 import { VoiceClient } from './lib/voice';
 
 const defaults: Options = { names: ['小朋友', '爸爸', '灵矽'], board: 'cross', mode: 'quick', ai: true, demo: false };
+const defaultVoiceSettings: VoiceSettings = { wake_enabled: true, wake_word: '小灵同学' };
 const rules = [
   ['六点起飞', '掷到 6，可以把一架飞机从机场移到起飞位；还会再获得一次掷骰机会。'],
   ['同色跳跃', '落在自己的颜色格上会向前跳 4 格；到达星星飞行点，可以继续沿航线飞行。'],
@@ -40,7 +41,9 @@ export default function App() {
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [modal, setModal] = useState<'setup' | 'rules' | null>(null);
+  const [modal, setModal] = useState<'setup' | 'rules' | 'voice' | null>(null);
+  const [voiceOptions, setVoiceOptions] = useState<VoiceSettings>(defaultVoiceSettings);
+  const [voiceSaving, setVoiceSaving] = useState(false);
   const [options, setOptions] = useState<Options>(defaults);
   const [voiceState, setVoiceState] = useState('disconnected');
   const [speech, setSpeech] = useState({ text: '', who: '' });
@@ -60,7 +63,15 @@ export default function App() {
     try {
       const [configuration, session] = await Promise.all([api<Config>('/api/config'), api<{ room: Room | null }>('/api/session')]);
       setConfig(configuration);
-      accept(session.room || await api<Room>('/api/rooms', defaults));
+      let next = session.room || await api<Room>('/api/rooms', defaults);
+      try {
+        const saved = JSON.parse(localStorage.getItem('fly-voice-settings') || 'null');
+        if (saved && typeof saved.wake_word === 'string' && typeof saved.wake_enabled === 'boolean' &&
+          (saved.wake_word !== next.voice_settings?.wake_word || saved.wake_enabled !== next.voice_settings?.wake_enabled)) {
+          next = await api<Room>('/api/rooms/' + next.id + '/voice-settings', { wake_enabled: saved.wake_enabled, wake_word: saved.wake_word });
+        }
+      } catch { /* An invalid saved preference falls back to the room default. */ }
+      accept(next);
     } catch (error) { setFatal(error instanceof Error ? error.message : '暂时无法连接游戏'); }
     finally { setLoading(false); loadingRef.current = false; }
   }, [accept]);
@@ -158,10 +169,29 @@ export default function App() {
     try { await client.connect(); } catch (error) { setToast(error instanceof Error ? error.message : '语音连接失败'); }
   };
 
+  const saveVoiceSettings = async () => {
+    if (!room) return;
+    const settings = { ...voiceOptions, wake_word: voiceOptions.wake_word.trim() };
+    if ([...settings.wake_word].length < 2 || [...settings.wake_word].length > 16 || !/^[\p{L}\p{N} ]+$/u.test(settings.wake_word)) {
+      setToast('唤醒词请使用 2 到 16 个中文、字母或数字'); return;
+    }
+    setVoiceSaving(true);
+    try {
+      voice.current?.disconnect();
+      const next = await api<Room>('/api/rooms/' + room.id + '/voice-settings', settings);
+      accept(next);
+      localStorage.setItem('fly-voice-settings', JSON.stringify(next.voice_settings));
+      setModal(null); setSpeech({ text: '', who: '' });
+      setToast('语音设置已保存，点击开启语音即可使用');
+    } catch (error) { setToast(error instanceof Error ? error.message : '语音设置保存失败'); }
+    finally { setVoiceSaving(false); }
+  };
+
   if (loading) return <div className="loading-page"><AirplaneTilt className="loading-plane" weight="fill" /><h1>正在准备家庭机场</h1><p>把棋盘铺好，快乐马上起飞。</p></div>;
   if (fatal || !room || !state || !current) return <div className="loading-page"><House size={48} /><h1>机场暂时还没连接上</h1><p>{fatal}</p><button className="primary-button" onClick={() => void load()}>重新连接 <ArrowClockwise /></button></div>;
   const winner = state.players.find(p => p.id === state.winner);
-  const voiceLabels: Record<string, string> = { disconnected: '尚未连接', connecting: '正在连接', ready: '实时语音已连接，随时可以说话', listening: '正在听你说', thinking: '正在理解', speaking: '灵矽正在说' };
+  const voiceSettings = room.voice_settings || defaultVoiceSettings;
+  const voiceLabels: Record<string, string> = { disconnected: '尚未连接', connecting: '正在连接', standby: `说“${voiceSettings.wake_word}”唤醒我`, ready: voiceSettings.wake_enabled ? '已唤醒，可以继续说话' : '实时语音已连接，随时可以说话', listening: '正在听你说', thinking: '正在理解', speaking: '灵矽正在说' };
   const effectiveVoice = voiceBusy ? room.voice : voiceState;
   return (
     <div className="app-shell">
@@ -199,12 +229,14 @@ export default function App() {
             </section>
             <section className="voice-panel">
               <div className="voice-heading"><span className="voice-icon"><Waveform size={24} /></span><div><h2>灵矽，陪你一起飞</h2><p>你的家庭游戏搭子</p></div><span className="voice-spark"><Sparkle size={22} weight="duotone" /></span></div>
-              <div className="voice-bubble" aria-live="polite">{speech.text ? <><span className="speech-label">{speech.who === 'you' ? '你刚刚说' : '灵矽'}</span>{speech.text}</> : <><span className="bubble-quote">“</span>你可以问我，<br />哪架飞机能飞得更远？</>}</div>
+              <button className="wake-setting" onClick={() => { setVoiceOptions(voiceSettings); setModal('voice'); }} aria-label="编辑语音唤醒设置"><span>{voiceSettings.wake_enabled ? `唤醒词：${voiceSettings.wake_word}` : '自由对话模式'}</span><span>编辑 <GearSix size={13} /></span></button>
+              <div className="voice-bubble" aria-live="polite">{speech.text ? <><span className="speech-label">{speech.who === 'you' ? '你刚刚说' : '灵矽'}</span>{speech.text}</> : <><span className="bubble-quote">“</span>{voiceSettings.wake_enabled ? <>先叫我“{voiceSettings.wake_word}”，<br />再说：“掷骰子。”</> : <>你可以问我，<br />哪架飞机能飞得更远？</>}</>}</div>
               <div className="voice-status"><span className={'status-dot ' + (voiceState === 'ready' ? 'online' : '')} />{config?.voice_configured ? voiceLabels[effectiveVoice] || '等待连接' : '语音待配置 · 点击玩法已就绪'}</div>
-              {voiceState === 'disconnected' || voiceState === 'connecting' ? <button className="voice-button" disabled={!config?.voice_configured || voiceState === 'connecting'} onClick={() => void connectVoice()}><Microphone size={20} />{voiceState === 'connecting' ? '连接灵矽中…' : config?.voice_configured ? '开启实时语音' : '语音暂未开启'}</button> :
+              {voiceState === 'disconnected' || voiceState === 'connecting' ? <button className="voice-button" disabled={!config?.voice_configured || voiceState === 'connecting'} onClick={() => void connectVoice()}><Microphone size={20} />{voiceState === 'connecting' ? '连接灵矽中…' : config?.voice_configured ? (voiceSettings.wake_enabled ? '开启语音唤醒' : '开启实时语音') : '语音暂未开启'}</button> :
                 <button className={'voice-button ' + (effectiveVoice === 'listening' ? 'listening' : '')} onClick={() => voice.current?.disconnect()}><Microphone size={21} />断开实时语音</button>}
               {effectiveVoice === 'speaking' && <button className="stop-speech" onClick={() => voice.current?.stopPlayback()}>停止播报</button>}
-              <p className="voice-footnote">{config?.voice_configured ? '连接后可随时插话，试着说：“掷骰子” 或 “走小熊号”' : '语音连接完成后，就能开口操作和询问规则。'}</p>
+              {voiceSettings.wake_enabled && voiceState !== 'disconnected' && voiceState !== 'connecting' && effectiveVoice !== 'standby' && <button className="stop-speech" onClick={() => voice.current?.standby()}>回到待唤醒</button>}
+              <p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : voiceSettings.wake_enabled ? '唤醒后可连续对话 30 秒；等待唤醒时，音频也会发送给灵矽识别。' : '连接后可随时插话，试着说：“掷骰子” 或 “走小熊号”'}</p>
             </section>
             <section className="log-panel"><div className="log-heading"><h2>飞行小记</h2><DotsThree size={22} /></div><ol>{state.history.slice(-4).reverse().map((event, i) => <li key={event.id}><span className={'log-dot ' + (i === 0 ? 'latest' : '')} /><p>{event.text}</p></li>)}</ol></section>
           </aside>
@@ -212,6 +244,18 @@ export default function App() {
         <footer className="page-footer"><span><UsersThree size={18} /> 一张棋盘，一家人的好时光。</span><span>FlyTogether · 用声音，拉近一点距离 <AirplaneTilt size={15} /></span></footer>
       </main>
       {toast && <div className="toast" role="status"><Info size={19} /><span>{toast}</span><button aria-label="关闭提示" onClick={() => setToast('')}><X size={16} /></button></div>}
+      {modal === 'voice' && <Modal title="给灵矽一个专属称呼" onClose={() => setModal(null)}>
+        <form onSubmit={e => { e.preventDefault(); void saveVoiceSettings(); }}>
+          <p className="modal-description">网页打开并开启语音后，说出唤醒词就能开始对话。保存设置后，请重新开启语音。</p>
+          <label className="toggle-row"><span><strong>语音唤醒</strong><small>关闭后切换为自由对话</small></span><input type="checkbox" checked={voiceOptions.wake_enabled} onChange={e => setVoiceOptions(o => ({ ...o, wake_enabled: e.target.checked }))} /></label>
+          <label className="field-label" htmlFor="wake-word">自定义唤醒词</label>
+          <input className="wake-word-input" id="wake-word" value={voiceOptions.wake_word} minLength={2} maxLength={16} required onChange={e => setVoiceOptions(o => ({ ...o, wake_word: e.target.value }))} placeholder="例如：小灵同学、飞行助手" />
+          <p className="wake-help">使用 2～16 个中文、字母或数字。选一个容易辨认、较少在日常聊天中出现的称呼。</p>
+          <div className="wake-preview">试着说：“{voiceOptions.wake_word.trim() || '小灵同学'}，掷骰子。”</div>
+          <p className="modal-description">唤醒后可连续对话 30 秒；超时后等待下次唤醒。等待时麦克风持续开启，音频会发送给灵矽用于识别唤醒词。</p>
+          <button className="primary-button" type="submit" disabled={voiceSaving}>{voiceSaving ? '保存中…' : '保存语音设置'}<Check /></button>
+        </form>
+      </Modal>}
       {modal === 'rules' && <Modal title="一起飞，怎么玩？" onClose={() => setModal(null)}><p className="modal-description">这是一起飞的家庭规则。快速模式先送达一架飞机获胜；完整模式需要送达全部飞机。</p><div className="rules-list">{rules.map(([title, text], i) => <div key={title}><span>{String(i + 1).padStart(2, '0')}</span><section><h3>{title}</h3><p>{text}</p></section></div>)}</div><p className="rule-note">机库、起飞位和自己的终点航道不参与撞机。相同位置可以叠放；不使用三连六惩罚或终点反弹。</p><button className="primary-button" onClick={() => setModal(null)}>懂啦，一起出发 <Check /></button></Modal>}
       {modal === 'setup' && <Modal title="今天，谁一起飞？" onClose={() => setModal(null)}>
         <form onSubmit={e => { e.preventDefault(); void restart(false); }}>

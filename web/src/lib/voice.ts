@@ -12,6 +12,7 @@ export class VoiceClient {
   private recording = false;
   private generationDone = false;
   private assistantTranscript = '';
+  private waitingForWake = false;
   private activeSources = new Set<AudioBufferSourceNode>();
 
   constructor(private roomID: string, private onState: (s: string) => void, private onText: (s: string, who: string) => void, private onError: (s: string) => void) {}
@@ -47,6 +48,12 @@ export class VoiceClient {
             this.recording = true;
             this.onState('ready');
             resolve();
+          } else if (message.type === 'wake_state') {
+            const wasWaiting = this.waitingForWake;
+            this.waitingForWake = !!message.wake_enabled && !message.awake;
+            if (this.waitingForWake) {
+              this.clearPlayback(); this.generationDone = true; this.onState('standby');
+            } else if (wasWaiting) this.onState('thinking');
           } else if (message.type === 'error') {
             clearTimeout(timeout);
             const error = new Error(message.message || '语音连接没有成功');
@@ -56,10 +63,12 @@ export class VoiceClient {
           } else if (message.type === 'stt') {
             if (message.text) this.onText(message.text, 'you');
           } else if (message.type === 'response.audio.delta' || message.type === 'response.output_audio.delta') {
+            if (this.waitingForWake) return;
             this.generationDone = false;
             this.onState('speaking');
             this.playPCM(message.delta, message.sample_rate || 24000);
           } else if (message.type === 'response.audio_transcript.delta' || message.type === 'response.output_audio_transcript.delta' || message.type === 'response.output_text.delta') {
+            if (this.waitingForWake) return;
             if (message.delta) { this.assistantTranscript += message.delta; this.onText(this.assistantTranscript, 'linx'); }
           } else if (message.type === 'response.audio_transcript.done' || message.type === 'response.output_audio_transcript.done') {
             if (message.transcript) { this.assistantTranscript = message.transcript; this.onText(this.assistantTranscript, 'linx'); }
@@ -136,14 +145,22 @@ export class VoiceClient {
       return;
     }
     this.schedule = 0;
-    if (this.recording) this.onState('ready');
+    if (this.recording) this.onState(this.waitingForWake ? 'standby' : 'ready');
   }
 
   stopPlayback() {
     this.clearPlayback();
     this.generationDone = true;
     this.send({ type: 'abort' });
-    if (this.recording) this.onState('ready');
+    if (this.recording) this.onState(this.waitingForWake ? 'standby' : 'ready');
+  }
+
+  standby() {
+    this.waitingForWake = true;
+    this.clearPlayback();
+    this.generationDone = true;
+    this.send({ type: 'sleep' });
+    if (this.recording) this.onState('standby');
   }
 
   private send(value: unknown) { if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(value)); }

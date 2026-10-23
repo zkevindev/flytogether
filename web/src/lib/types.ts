@@ -14,7 +14,8 @@ export type Game = {
   current: number; phase: 'roll' | 'move' | 'finished'; dice: number; winner?: string;
   players: Player[]; legal_moves: Move[]; history: GameEvent[]; last_move?: Move;
 };
-export type Room = { id: string; seq: number; state: Game; voice: string };
+export type VoiceSettings = { wake_enabled: boolean; wake_word: string };
+export type Room = { id: string; seq: number; state: Game; voice: string; voice_settings: VoiceSettings };
 export type Options = { names: string[]; board: string; mode: string; ai: boolean; demo: boolean };
 export type Config = { voice_configured: boolean; version: string; ruleset: string; boards: BoardSpec[] };
 

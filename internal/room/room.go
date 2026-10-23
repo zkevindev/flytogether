@@ -3,17 +3,30 @@ package room
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/zkevindev/flytogether/internal/game"
 )
 
 type View struct {
-	ID    string          `json:"id"`
-	Seq   int             `json:"seq"`
-	State json.RawMessage `json:"state"`
-	Voice string          `json:"voice"`
+	ID            string          `json:"id"`
+	Seq           int             `json:"seq"`
+	State         json.RawMessage `json:"state"`
+	Voice         string          `json:"voice"`
+	VoiceSettings VoiceSettings   `json:"voice_settings"`
+}
+
+type VoiceSettings struct {
+	WakeEnabled bool   `json:"wake_enabled"`
+	WakeWord    string `json:"wake_word"`
+}
+
+func DefaultVoiceSettings() VoiceSettings {
+	return VoiceSettings{WakeEnabled: true, WakeWord: "小灵同学"}
 }
 
 type Command struct {
@@ -39,29 +52,54 @@ type cached struct {
 }
 
 type Room struct {
-	mu           sync.Mutex
-	ID           string
-	state        *game.State
-	seq          int
-	voice        string
-	busy         bool
-	grant        string
-	grantVersion int
-	grantGame    string
-	used         bool
-	cache        map[string]cached
-	listeners    map[chan []byte]bool
-	updated      time.Time
+	mu            sync.Mutex
+	ID            string
+	state         *game.State
+	seq           int
+	voice         string
+	voiceSettings VoiceSettings
+	busy          bool
+	grant         string
+	grantVersion  int
+	grantGame     string
+	used          bool
+	cache         map[string]cached
+	listeners     map[chan []byte]bool
+	updated       time.Time
 }
 
 func New(o game.Options) *Room {
-	return &Room{ID: game.ID(), state: game.New(o), voice: "disconnected", cache: map[string]cached{},
+	return &Room{ID: game.ID(), state: game.New(o), voice: "disconnected", voiceSettings: DefaultVoiceSettings(), cache: map[string]cached{},
 		listeners: map[chan []byte]bool{}, updated: time.Now()}
 }
 
 func (r *Room) view() View {
 	b, _ := json.Marshal(r.state)
-	return View{r.ID, r.seq, b, r.voice}
+	return View{ID: r.ID, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings}
+}
+
+func (r *Room) VoiceSettings() VoiceSettings {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.voiceSettings
+}
+
+func (r *Room) SetVoiceSettings(settings VoiceSettings) (View, error) {
+	settings.WakeWord = strings.TrimSpace(settings.WakeWord)
+	if count := utf8.RuneCountInString(settings.WakeWord); count < 2 || count > 16 {
+		return View{}, fail("INVALID_WAKE_WORD", "唤醒词需要 2 到 16 个字")
+	}
+	for _, c := range settings.WakeWord {
+		if !unicode.IsLetter(c) && !unicode.IsDigit(c) && c != ' ' {
+			return View{}, fail("INVALID_WAKE_WORD", "唤醒词请使用中文、字母或数字")
+		}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.voiceSettings = settings
+	r.grant, r.busy = "", false
+	r.publish()
+	return r.view(), nil
 }
 func (r *Room) Snapshot() View { r.mu.Lock(); defer r.mu.Unlock(); return r.view() }
 func (r *Room) publish() {
@@ -201,7 +239,7 @@ func (r *Room) VoiceState(state string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.voice = state
-	if state == "ready" || state == "disconnected" || state == "error" {
+	if state == "ready" || state == "standby" || state == "disconnected" || state == "error" {
 		r.busy = false
 		r.grant = ""
 	}

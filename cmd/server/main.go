@@ -49,6 +49,7 @@ func main() {
 	mux.HandleFunc("POST /api/rooms", s.create)
 	mux.HandleFunc("POST /api/rooms/{id}/matches", s.restart)
 	mux.HandleFunc("POST /api/rooms/{id}/commands", s.command)
+	mux.HandleFunc("POST /api/rooms/{id}/voice-settings", s.voiceSettings)
 	mux.HandleFunc("GET /ws/game", s.gameSocket)
 	mux.HandleFunc("GET /ws/voice", s.voiceSocket)
 	webDir := env("WEB_DIR", "web/dist")
@@ -311,6 +312,23 @@ func (s *server) gameSocket(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+func (s *server) voiceSettings(w http.ResponseWriter, r *http.Request) {
+	v := s.owned(w, r, r.PathValue("id"))
+	if v == nil {
+		return
+	}
+	var settings room.VoiceSettings
+	if e := decode(w, r, &settings); e != nil {
+		failure(w, e)
+		return
+	}
+	result, e := v.SetVoiceSettings(settings)
+	if e != nil {
+		failure(w, e)
+		return
+	}
+	writeJSON(w, 200, result)
 }
 func (s *server) voiceSocket(w http.ResponseWriter, r *http.Request) {
 	v := s.owned(w, r, r.URL.Query().Get("room_id"))

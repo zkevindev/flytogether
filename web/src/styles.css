@@ -120,6 +120,12 @@ h1>span { color: #b4c4a0; }
 .voice-heading h2 { font-size: 14px; font-weight: 600; margin: 0; }
 .voice-heading p { font-size: 9px; color: #99a58d; margin: 5px 0 0; letter-spacing: .5px; }
 .voice-spark { margin-left: auto; color: #9cac88; }
+.wake-setting { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; margin-top: 16px; padding: 9px 0; border: 0; border-bottom: 1px solid #d5dfcb; background: transparent; color: #728565; font-size: 10px; text-align: left; }
+.wake-setting>span:last-child { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.wake-word-input { display: block; width: 100%; min-height: 48px; padding: 12px; border: 1px solid #cfdcc5; border-radius: 11px; background: #f8faf4; color: #3d5e48; font: inherit; }
+.wake-word-input:focus { outline: 2px solid #8cae7d; outline-offset: 2px; }
+.wake-help { color: #89977d; font-size: 11px; line-height: 1.8; }
+.wake-preview { border-radius: 12px; padding: 15px; background: #edf3e6; color: #58704b; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
 .voice-bubble { background: #f8faf3; border: 1px solid #e1e8d8; border-radius: 13px 13px 13px 3px; padding: 17px 18px; margin-top: 18px; font-size: 13px; color: #7b8c6b; line-height: 1.9; position: relative; min-height: 86px; overflow-wrap: anywhere; }
 .bubble-quote { position: absolute; right: 14px; top: 1px; font-size: 45px; font-family: Georgia,sans-serif; color: #dce5d1; line-height: 1.5; }
 .speech-label { display: block; color: #a0aa96; font-size: 9px; margin-bottom: 4px; }
