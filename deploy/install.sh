@@ -73,26 +73,37 @@ systemctl restart flytogether
 
 if [ -n "$APP_DOMAIN" ]; then
   fresh_caddy=0
+  caddy_changed=0
   if ! command -v caddy >/dev/null 2>&1; then
     apt-get update -qq
     apt-get install -y -qq caddy
     fresh_caddy=1
+    caddy_changed=1
   fi
   install -d -m 755 /etc/caddy/flytogether.d
   if [ "$fresh_caddy" = 1 ]; then
     printf 'import /etc/caddy/flytogether.d/*.caddy\n' > /etc/caddy/Caddyfile
   elif ! grep -Fq 'import /etc/caddy/flytogether.d/*.caddy' /etc/caddy/Caddyfile; then
     printf '\nimport /etc/caddy/flytogether.d/*.caddy\n' >> /etc/caddy/Caddyfile
+    caddy_changed=1
   fi
-  cat > /etc/caddy/flytogether.d/app.caddy <<EOF
+  candidate_caddy=$(mktemp)
+  cat > "$candidate_caddy" <<EOF
 $APP_DOMAIN {
     encode zstd gzip
     reverse_proxy 127.0.0.1:$APP_PORT
 }
 EOF
+  if ! cmp -s "$candidate_caddy" /etc/caddy/flytogether.d/app.caddy; then
+    install -m 644 "$candidate_caddy" /etc/caddy/flytogether.d/app.caddy
+    caddy_changed=1
+  fi
+  rm -f "$candidate_caddy"
   caddy validate --config /etc/caddy/Caddyfile
   systemctl enable caddy >/dev/null
-  systemctl reload-or-restart caddy
+  if [ "$caddy_changed" = 1 ] || ! systemctl is-active --quiet caddy; then
+    systemctl reload-or-restart caddy
+  fi
   if command -v ufw >/dev/null 2>&1 && ufw status | grep -q 'Status: active'; then
     ufw allow 80/tcp
     ufw allow 443/tcp
@@ -100,7 +111,7 @@ EOF
 fi
 
 for attempt in 1 2 3 4 5; do
-  if curl -fsS "http://127.0.0.1:$APP_PORT/healthz"; then
+  if curl --max-time 5 -fsS "http://127.0.0.1:$APP_PORT/healthz"; then
     printf '\nFlyTogether service is healthy.\n'
     exit 0
   fi
