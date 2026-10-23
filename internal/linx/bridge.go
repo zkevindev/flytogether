@@ -237,7 +237,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 		if strings.TrimSpace(script) == "" || hostActive() || inFlight {
 			return nil
 		}
-		if e := sendBrowser(map[string]any{"type": "host_cue"}); e != nil {
+		if e := sendBrowser(map[string]any{"type": "host_cue", "text": script}); e != nil {
 			return e
 		}
 		pendingHost = true
@@ -337,16 +337,11 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 		}
 		switch event.Type {
 		case "input_audio_buffer.speech_started":
-			// Revoke the previous utterance before accepting a new transcript.
-			if hostActive() {
+			// Only a real turn interrupts the host. Table noise while waiting for the wake word lets the line finish.
+			if hostActive() && gate.awake(time.Now()) {
 				_ = sendUp(map[string]any{"type": "response.cancel"})
 				pendingHost = false
 				hostIDs = map[string]bool{}
-				if !gate.awake(time.Now()) {
-					if e := sendBrowser(map[string]any{"type": "host_cancel"}); e != nil {
-						return e
-					}
-				}
 			}
 			currentToken, inFlight = "", false
 			r.VoiceState("standby")
@@ -388,6 +383,14 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 				continue
 			}
 			r.VoiceState("standby")
+			if hostActive() {
+				_ = sendUp(map[string]any{"type": "response.cancel"})
+				pendingHost = false
+				hostIDs = map[string]bool{}
+				if e := sendBrowser(map[string]any{"type": "host_handoff"}); e != nil {
+					return e
+				}
+			}
 			if e := r.BeginSpeech(); e != nil {
 				return e
 			}

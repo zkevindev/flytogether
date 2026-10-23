@@ -34,7 +34,7 @@ func planVoiceAction(r *room.Room, text string) (voiceAction, bool) {
 }
 
 func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
-	text = normalizeWake(text)
+	text = spoken(text)
 	if len(state.Players) == 0 || state.Current < 0 || state.Current >= len(state.Players) {
 		return voiceAction{}, false
 	}
@@ -49,16 +49,16 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 			return voiceAction{Name: "get_game_state", Notice: "先不这么做。" + hostCue(state)}, true
 		}
 	}
-	for _, phrase := range []string{"为什么", "怎么", "能不能", "可不可以", "能否", "吗", "哪", "规则", "怎么办", "该我", "现在怎么样"} {
+	for _, phrase := range []string{"为什么", "怎么", "能不能", "可不可以", "能否", "哪", "规则", "怎么办", "该我", "现在怎么样"} {
 		if strings.Contains(text, phrase) {
 			return voiceAction{Name: "get_game_state", Notice: hostCue(state)}, true
 		}
 	}
-	if n, ok := calledDie(text); ok && !rollVerb(text) {
-		if state.Phase != "roll" {
-			return voiceAction{Name: "get_game_state", Notice: "这把已经掷过了，是" + strconv.Itoa(state.Dice) + "点。" + hostCue(state)}, true
-		}
-		return voiceAction{Name: "get_game_state", Notice: "好，你喊" + strconv.Itoa(n) + "点。说「掷骰子」，我不会改点数。", Cheer: n}, true
+	if strings.Contains(text, "可以") && !agree(text) {
+		return voiceAction{Name: "get_game_state", Notice: hostCue(state)}, true
+	}
+	if n, ok := calledDie(text); ok && state.Phase != "roll" {
+		return voiceAction{Name: "get_game_state", Notice: "这把已经掷过了，是" + strconv.Itoa(state.Dice) + "点。" + hostCue(state), Cheer: n}, true
 	}
 	var props []string
 	for _, id := range []string{"launch", "boost", "luck", "bomb", "shield"} {
@@ -148,9 +148,22 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		}
 		return voiceAction{Name: "use_prop", PropID: id}, true
 	}
-	cheer, _ := calledDie(text)
-	if rollVerb(text) {
+	cheer, called := calledDie(text)
+	if rollVerb(text) || (called && state.Phase == "roll") {
 		return voiceAction{Name: "roll_dice", Cheer: cheer}, true
+	}
+	if agree(text) {
+		switch state.Phase {
+		case "roll":
+			return voiceAction{Name: "roll_dice"}, true
+		case "move":
+			if len(state.Legal) == 1 {
+				return voiceAction{Name: "move_piece", PieceID: state.Legal[0].PieceID}, true
+			}
+			return voiceAction{Name: "get_game_state", Notice: "还没选飞机。" + hostCue(state)}, true
+		default:
+			return voiceAction{Name: "get_game_state", Notice: hostCue(state)}, true
+		}
 	}
 	move := false
 	for _, verb := range []string{"起飞", "移动", "前进", "走", "撞", "打回", "送回"} {
@@ -198,6 +211,20 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		}
 	}
 	return resolveCandidates(state, candidates, "")
+}
+
+func spoken(text string) string {
+	text = normalizeWake(text)
+	return strings.TrimRight(text, "吗吧呀啊呢哦哈嘛啦")
+}
+
+func agree(text string) bool {
+	switch text {
+	case "好", "好的", "行", "可以", "来", "来吧", "飞", "飞吧", "出发", "走起", "就这样", "就它", "就这个":
+		return true
+	default:
+		return false
+	}
 }
 
 func rollVerb(text string) bool {
@@ -433,13 +460,13 @@ func moveCue(state game.State, name string) string {
 	}
 	if len(state.Legal) == 1 {
 		option := state.Legal[0]
-		return name + "掷出" + strconv.Itoa(state.Dice) + "点，只能走" + option.Label + "，" + option.Summary + "。说「走" + option.Label + "」就出发。"
+		return name + "掷出" + strconv.Itoa(state.Dice) + "点，" + option.Label + "会" + option.Summary + "。回「好」就飞。"
 	}
 	for _, option := range state.Legal {
 		if len(option.Captured) == 0 {
 			continue
 		}
-		return name + "，" + option.Label + "可以撞" + capturedNames(state, option) + "。说「撞」加上对方名字，或者说「走最前面」。"
+		return name + "，" + option.Label + "能把" + capturedNames(state, option) + "撞回去。说「撞」，或者说「最前面」。"
 	}
 	for _, option := range state.Legal {
 		if option.Finish {
@@ -450,7 +477,7 @@ func moveCue(state game.State, name string) string {
 	for _, option := range state.Legal {
 		labels = append(labels, option.Label)
 	}
-	return name + "掷出" + strconv.Itoa(state.Dice) + "点，可以走" + strings.Join(labels, "或") + "。说「最前面」，或直接说飞机名字。"
+	return name + "掷出" + strconv.Itoa(state.Dice) + "点，" + strings.Join(labels, "和") + "都能走。说「最前面」，或者说飞机名字。"
 }
 
 func capturedNames(state game.State, option game.Move) string {
@@ -472,19 +499,19 @@ func rollCue(state game.State, name string) string {
 	id, target := state.SuggestedPropTarget()
 	if player, piece, ok := findPiece(state, target); ok && (id == "bomb" || id == "shield") {
 		if id == "bomb" {
-			return name + "，" + player.Name + "的" + piece.Label + "飞在前面。说「炸" + player.Name + "的" + piece.Label + "」，或者说「掷骰子」。"
+			return name + "，" + player.Name + "的" + piece.Label + "跑在前面。要炸就说「炸" + player.Name + "」，或者说「好」直接掷。"
 		}
-		return name + "，" + piece.Label + "已经飞得挺远。说「给" + piece.Label + "加护盾」，或者说「掷骰子」。"
+		return name + "，" + piece.Label + "已经飞得挺远。说「加护盾」，或者说「好」直接掷。"
 	}
 	switch id {
 	case "launch":
-		return name + "，飞机还在机场。说「用起飞卡」，任意点数都能起飞；也可以直接说「掷骰子」。"
+		return name + "，飞机还在机场。说「用起飞卡」，或者说「好」，我来掷。"
 	case "boost":
-		return name + "，说「用加速卡」可以多走两格，或者说「掷骰子」。"
+		return name + "，说「用加速卡」能多走两格，或者说「好」直接掷。"
 	case "luck":
-		return name + "，说「用幸运骰」会掷两次取大的，或者说「掷骰子」。"
+		return name + "，说「用幸运骰」会掷两次取大的，或者说「好」直接掷。"
 	default:
-		return name + "，说「掷骰子」。想好玩一点，可以先喊「我要六点」。"
+		return name + "，骰子给你。先喊一个点数，比如「我要六点」，或者说「好」，我来掷。"
 	}
 }
 

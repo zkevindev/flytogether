@@ -69,12 +69,14 @@ test('standby suppresses final captions and interruption detaches old playback c
  assert.equal(playback[0].onended,null);assert.equal(playback[0].disconnected,true);assert.equal(states.at(-1),'standby');client.disconnect();
 });
 test('host line still plays while waiting for the wake word', async () => {
-  const {client, ws} = await connected();
+  const {client, ws, texts} = await connected();
   ws.emit({type: 'wake_state', wake_enabled: true, awake: false});
   ws.emit({type: 'response.created', response: {id: 'late'}});
   ws.emit(audio('late'));
   assert.equal(playback.length, 0);
-  ws.emit({type: 'host_cue'});
+  ws.emit({type: 'host_cue', text: '骰子给你'});
+  assert.equal(texts.at(-1).text, '骰子给你');
+  assert.equal(texts.at(-1).who, 'linx');
   ws.emit({type: 'response.created', response: {id: 'host'}});
   ws.emit(audio('host'));
   assert.equal(playback.length, 1);

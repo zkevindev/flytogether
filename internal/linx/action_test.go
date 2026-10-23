@@ -149,8 +149,8 @@ func TestVoiceBombPhraseAndDiceCheerDoNotInventResults(t *testing.T) {
 		t.Fatalf("spoken bomb missed: %+v", bomb)
 	}
 	cheer, ok := resolveVoiceAction(*s, "我要六点")
-	if !ok || cheer.Name == "roll_dice" || cheer.Cheer != 6 || cheer.Notice == "" {
-		t.Fatalf("dice call changed or dropped the roll: %+v", cheer)
+	if !ok || cheer.Name != "roll_dice" || cheer.Cheer != 6 || cheer.Notice != "" {
+		t.Fatalf("calling a number should roll without changing the die: %+v", cheer)
 	}
 	both, ok := resolveVoiceAction(*s, "我要六点掷骰子")
 	if !ok || both.Name != "roll_dice" || both.Cheer != 6 {
@@ -159,6 +159,45 @@ func TestVoiceBombPhraseAndDiceCheerDoNotInventResults(t *testing.T) {
 	before := s.Version
 	if _, ok := resolveVoiceAction(*s, "我喜欢小熊号"); ok || s.Version != before {
 		t.Fatal("casual speech became a command")
+	}
+}
+
+func TestShortReplyPlaysTheOfferedTurn(t *testing.T) {
+	roll := game.New(game.Options{Names: []string{"小朋友", "爸爸"}})
+	yes, ok := resolveVoiceAction(*roll, "好")
+	if !ok || yes.Name != "roll_dice" || yes.Notice != "" {
+		t.Fatalf("agree did not roll: %+v", yes)
+	}
+	if refused, ok := resolveVoiceAction(*roll, "我不要六点"); !ok || refused.Name == "roll_dice" {
+		t.Fatalf("negated cheer rolled: %+v", refused)
+	}
+	if asked, ok := resolveVoiceAction(*roll, "怎么掷骰子"); !ok || asked.Name == "roll_dice" {
+		t.Fatalf("a how-to question rolled: %+v", asked)
+	}
+
+	fight := game.New(game.Options{Names: []string{"小朋友", "爸爸"}})
+	fight.Players[0].Pieces[0].Progress = 20
+	fight.Players[0].Pieces[1].Progress = 4
+	fight.Players[1].Pieces[0].Progress = 10
+	if err := fight.Roll(3); err != nil {
+		t.Fatal(err)
+	}
+	polite, ok := resolveVoiceAction(*fight, "撞爸爸吗")
+	if !ok || polite.Name != "move_piece" || polite.PieceID != "p0-0" || polite.Notice != "" {
+		t.Fatalf("polite capture missed: %+v", polite)
+	}
+	unsure, ok := resolveVoiceAction(*fight, "好")
+	if !ok || unsure.PieceID != "" || unsure.Notice == "" {
+		t.Fatalf("agree guessed among several planes: %+v", unsure)
+	}
+
+	only := game.New(game.Options{Names: []string{"小朋友", "爸爸"}})
+	only.Phase = "move"
+	only.Dice = 2
+	only.Legal = []game.Move{{PieceID: "p0-1", Label: "兔子号", Summary: "前进 2 格"}}
+	goOn, ok := resolveVoiceAction(*only, "好呀")
+	if !ok || goOn.Name != "move_piece" || goOn.PieceID != "p0-1" || goOn.Notice != "" {
+		t.Fatalf("agree did not take the only plane: %+v", goOn)
 	}
 }
 
@@ -175,7 +214,7 @@ func TestHostLineSpeaksOnHumanTurnAndDramaticHits(t *testing.T) {
 		t.Fatalf("dramatic handoff missing: %s", script)
 	}
 	cue := hostCue(*s)
-	if !strings.Contains(cue, "爸爸") || !strings.Contains(cue, "掷骰子") {
+	if !strings.Contains(cue, "爸爸") || !strings.Contains(cue, "好") {
 		t.Fatal(cue)
 	}
 }

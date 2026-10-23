@@ -78,6 +78,10 @@ export class VoiceClient {
             } else if (!this.waitingForWake && wasWaiting) this.onState('thinking');
           } else if (message.type === 'host_cue') {
             this.expectHost = true;
+            if (typeof message.text === 'string' && message.text) this.onText(message.text, 'linx');
+          } else if (message.type === 'host_handoff') {
+            this.expectHost = false; this.hostLive = false; this.hostResponses.clear();
+            this.clearPlayback(); this.generationDone = true;
           } else if (message.type === 'host_cancel') {
             this.expectHost = false; this.dropHost = true; this.hostLive = false;
             this.clearPlayback(); this.generationDone = true;
