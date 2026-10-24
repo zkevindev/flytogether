@@ -11,7 +11,7 @@
 | --- | --- | --- | --- |
 | M1：Realtime 语音接入 | [#1](https://github.com/zkevindev/flytogether/issues/1) | 已验证 Bearer 鉴权、合成中文语音查询、掷骰和实际选子起飞 | 直接提交 main，未创建 PR |
 | M2：家庭飞行棋玩法 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 点击玩法和三种棋盘已同步到 main；实际浏览器演示通过 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
-| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | PR #58 已合并；演示/发布手册完成，切网、后台、长听等现场稳定性继续跟踪 | [PR #58](https://github.com/zkevindev/flytogether/pull/58) · merge `802c893` · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
+| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | PR #58 已合并；浏览器断网恢复、可见性事件和 30 分钟累计回复队列模拟已完成；真实手机切网/后台/声学与灵矽长连仍待现场 | [PR #58](https://github.com/zkevindev/flytogether/pull/58) · merge `802c893` · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 | 产品化 1.0 | [#17](https://github.com/zkevindev/flytogether/issues/17) | 星河救援合作挑战和首轮试玩平衡流程已合并；跨家庭玩法/道具反馈仍在收集 | [PR #59](https://github.com/zkevindev/flytogether/pull/59) · merge `29e4019` · [PLAYTEST-BALANCE](PLAYTEST-BALANCE.md) |
 | 自定义语音唤醒（历史） | [#4](https://github.com/zkevindev/flytogether/issues/4) | 历史验收已完成，当前交互由 #14 直接对话替代 | [a85e63b](https://github.com/zkevindev/flytogether/commit/a85e63b)、[87a0d09](https://github.com/zkevindev/flytogether/commit/87a0d09)，直接 main |
 | 棋盘重做 | [#5](https://github.com/zkevindev/flytogether/issues/5) | 四角机场、连续彩色航线、中央骰子、放大和手机布局已实现并演示 | 直接 main，提交回链见 Issue |
@@ -37,7 +37,7 @@
 | 起飞卡、加速卡、幸运骰 | 规则和真实语音已验证 | 语音用起飞卡后实际掷 1 点并起飞；幸运骰 4/3 取 4；加速卡按真实点数 +2 生成合法走法 |
 | 星河救援合作挑战 | 已合并并完成自动试玩 | 2～4 席各送达一架后全队获胜；同屏、邀请、战绩、观赛、语音与回顾卡一致；[试玩/平衡记录](PLAYTEST-BALANCE.md) |
 | 真实家庭试玩与实体手机 | 已由用户确认完成 | 用户 2026-10-24 明确确认，详见 #3/#17 |
-| 专项稳定性与三分钟比赛交付 | 继续跟踪 | 切网/后台/噪声/回声/长监听现场记录仍待采集；演示及回滚手册见 [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
+| 专项稳定性与三分钟比赛交付 | 模拟项已完成；现场项继续跟踪 | 浏览器断网恢复、页面可见性事件、累计 30 分钟合成回复压力测试已通过；真实手机后台挂起、Wi-Fi/蜂窝切换、声学环境及真实灵矽长连仍需现场记录，详见 [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 
 ## 当前下一步
 

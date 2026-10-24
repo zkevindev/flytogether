@@ -134,6 +134,28 @@ test('a fast 24-second reply stays connected and only schedules a short audio ho
  assert.ok(playback.length>=240,'all audio eventually drains, not discarded at twelve seconds');
  assert.equal(states.at(-1),'ready');assert.equal(ws.readyState,1);client.disconnect();
 });
+test('a simulated 30-minute session drains repeated long replies without queue growth',async()=>{
+ const {client,ws,states,errors}=await connected();const ctx=contexts[0];
+ const oneSecond=Buffer.alloc(24000*2).toString('base64');
+ // 75 fast-generated 24-second replies model 30 minutes of listening without
+ // waiting for wall-clock audio playback or contacting the realtime provider.
+ for(let reply=0;reply<75;reply++){
+  const id=`long-${reply}`;ws.emit({type:'response.created',response:{id}});
+  for(let chunk=0;chunk<24;chunk++)ws.emit({...audio(id),delta:oneSecond});
+  ws.emit({type:'response.done',response:{id,status:'completed'}});
+  for(let tick=0;tick<250&&(states.at(-1)==='speaking'||reply<74);tick++){
+   ctx.currentTime+=.1;
+   const ended=[...playback].filter(node=>!node.ended&&!node.stopped&&node.onended&&node.startAt+node.buffer.duration<=ctx.currentTime);
+   for(const source of ended){source.ended=true;source.onended?.();}
+   // End this reply once the client has drained it and is ready for another.
+   if(states.at(-1)==='ready')break;
+  }
+  assert.equal(ws.readyState,1,`socket disconnected after reply ${reply}`);
+  assert.equal(states.at(-1),'ready',`reply ${reply} did not drain`);
+  assert.ok(playback.filter(node=>!node.ended&&!node.stopped).length<10,'active audio sources should stay bounded');
+ }
+ assert.deepEqual(errors,[]);client.disconnect();
+});
 test('suspended audio keeps bounded pending PCM, then resumes without a reconnect',async()=>{
  const {client,ws,errors}=await connected();const ctx=contexts[0];ctx.state='suspended';
  ws.emit({type:'response.created',response:{id:'paused'}});

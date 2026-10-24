@@ -24,6 +24,7 @@
     "test:network:voice": "node scripts/network-voice-browser.mjs",
     "test:network:bot": "node scripts/network-bot-browser.mjs",
     "test:network:browser": "node scripts/network-browser.mjs",
+    "test:lifecycle:simulation": "node scripts/lifecycle-simulation-browser.mjs",
     "test:coach:browser": "node scripts/coach-browser.mjs",
     "test:saves:browser": "node scripts/saves-browser.mjs",
     "test:audio:browser": "node scripts/audio-settings-browser.mjs",
