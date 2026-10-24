@@ -7,7 +7,7 @@ const outputDir = process.env.QA_OUTPUT_DIR || 'test-results/voice';
 await mkdir(outputDir, { recursive: true });
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--use-file-for-fake-audio-capture=' + resolve(process.env.QA_AUDIO_FILE),...(process.platform==='darwin'?['--use-angle=metal']:[])]});
 try {
- const context=await browser.newContext({baseURL:process.env.QA_BASE_URL,permissions:['microphone'],viewport:{width:1280,height:1050}});
+ const context=await browser.newContext({baseURL:process.env.QA_BASE_URL,permissions:['microphone'],reducedMotion:process.env.QA_REDUCED_MOTION==='1'?'reduce':'no-preference',viewport:{width:1280,height:1050}});
  const page=await context.newPage();const errors=[];const output=[];
  const log=value=>{output.push(value);console.log(JSON.stringify(value));};
  page.on('pageerror',e=>errors.push(e.message));
@@ -43,6 +43,7 @@ try {
   const dice=page.getByRole('dialog',{name:'3D 掷骰结果'});await dice.waitFor({state:'visible'});await dice.getByRole('button',{name:'继续飞行',exact:true}).click();
  }
  await page.getByRole('button',{name:'关闭对讲麦克风',exact:true}).waitFor({state:'visible',timeout:30000});
+ if(process.env.QA_KEYBOARD_BEFORE_SPEECH==='1')await page.keyboard.press('Tab');
  log({phase:'connected_without_voice_button',version:room.state.version});
  const state=async()=>{room=(await(await page.request.get('/api/session')).json()).room;return room.state;};
 
@@ -96,6 +97,7 @@ try {
   assert.ok(shown.some(d=>d.values.length===1),'voice roll must actually display a dice popup');
  }
  if(process.env.QA_COMPANION_FREQUENCY==='quiet') {const unsolicited=await page.evaluate(()=>window.__qa.events.filter(e=>e.type==='host_cue'));assert.equal(unsolicited.length,0,'quiet mode emitted unsolicited host cues');log({phase:'quiet_mode_still_answers_and_operates',unsolicited_host_cues:0,style:process.env.QA_COMPANION_STYLE});}
+ if(process.env.QA_REDUCED_MOTION==='1'){await page.waitForFunction(()=>!document.querySelector('dialog[aria-label="3D 掷骰结果"]'),null,{timeout:6000});const final=await state();await page.waitForFunction(v=>Number(document.querySelector('.flight-board')?.getAttribute('data-version'))===v,final.version);log({phase:'reduced_motion_voice_auto_continues',version:final.version});}
  const replies=await page.evaluate(()=>window.__qa.events.filter(e=>e.type.endsWith('audio_transcript.done')||e.type==='response.output_text.done').map(e=>({at:e.at,text:e.text})));
  log({phase:'actual_spoken_replies',replies});
  if(process.env.QA_REQUIRE_FACTUAL==='1'&&!coaching&&!lucky){

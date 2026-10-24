@@ -45,6 +45,7 @@ export default function App() {
   const focusPreview = useRef(false);
   const hadPreview = useRef(false);
   const keyboardInput = useRef(false);
+  const [keyboardMode, setKeyboardMode] = useState(false);
   const [invite, setInvite] = useState(() => new URLSearchParams(location.hash.slice(1)).get('join') || '');
   const [joinName, setJoinName] = useState('');
   const [joinProfile, setJoinProfile] = useState('');
@@ -257,8 +258,8 @@ export default function App() {
     hadPreview.current = !!preview;
   }, [preview?.piece_id]);
   useEffect(() => {
-    const keyboard = (e: KeyboardEvent) => { keyboardInput.current = true; if(e.repeat && (e.key==='Enter'||e.code==='Space') && e.target instanceof Element && !e.target.closest('input,textarea,select,[contenteditable]')) e.preventDefault(); };
-    const pointer = () => { keyboardInput.current = false; };
+    const keyboard = (e: KeyboardEvent) => { keyboardInput.current = true; setKeyboardMode(true); if(e.repeat && (e.key==='Enter'||e.code==='Space') && e.target instanceof Element && !e.target.closest('input,textarea,select,[contenteditable]')) e.preventDefault(); };
+    const pointer = () => { keyboardInput.current = false; setKeyboardMode(false); };
     addEventListener('keydown', keyboard, true); addEventListener('pointerdown', pointer, true);
     return () => { removeEventListener('keydown', keyboard, true); removeEventListener('pointerdown', pointer, true); };
   }, []);
@@ -325,7 +326,7 @@ export default function App() {
     autoVoiceAttempt.current = r.id + ':' + r.state.id;
     setAutoVoiceError('');
     voice.current?.disconnect();
-    const client = new VoiceClient(r.id, setVoiceState, (text, who) => setSpeech({ text, who }), message => {
+    const client = new VoiceClient(r.id, setVoiceState, (text, who) => { if(who === 'you') { keyboardInput.current = false; setKeyboardMode(false); } setSpeech({ text, who }); }, message => {
       setAutoVoiceError(message); setToast(message);
     }, companionRef.current, next => { if (roomRef.current?.id === next.id) accept(next); });
     voice.current = client;
@@ -493,7 +494,7 @@ export default function App() {
         </div>
       </main>}
       {tutorialOpen && !modal && !presentation.active && <Tutorial gentle={state.preset === 'gentle'} voiceConfigured={!!config?.voice_configured} propsEnabled={state.props_enabled} quick={state.mode === 'quick'} onClose={closeTutorial} />}
-      {presentation.active?.kind === 'dice' && <DiceRollModal key={presentation.active.id} reducedMotion={reducedMotion} roll={presentation.active.roll} onClose={() => { if (presentation.active) present({ type: 'advance', id: presentation.active.id }); }} />}
+      {presentation.active?.kind === 'dice' && <DiceRollModal key={presentation.active.id} waitForConfirm={keyboardMode} reducedMotion={reducedMotion} roll={presentation.active.roll} onClose={() => { if (presentation.active) present({ type: 'advance', id: presentation.active.id }); }} />}
       {toast && <div className="toast" role="status"><Info size={19} /><span>{toast}</span><button aria-label="关闭提示" onClick={() => setToast('')}><X size={16} /></button></div>}
       {modal === 'experience' && <Modal title="显示与操作设置" onClose={()=>setModal(null)}><Suspense fallback={<p role="status">正在准备显示设置…</p>}><ExperienceSettings preferences={experience} onChange={changeExperience} systemReduced={systemReduced} onDone={()=>setModal(null)} /></Suspense></Modal>}
       {modal === 'family' && <Modal title="家庭飞行员与战绩" onClose={()=>setModal(null)}><FamilyPanel onChange={setFamily}/></Modal>}
