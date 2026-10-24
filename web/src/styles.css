@@ -382,6 +382,47 @@ main { padding-top: 12px; }
 .play-main { width: calc(100% - 32px); max-width: 1720px; margin: 12px auto; }
 .play-layout { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 16px; align-items: start; }
 .play-layout .board-panel { padding: 0 12px; border-radius: 18px; box-shadow: none; min-width: 0; }
+.theme-star-rescue { background: radial-gradient(ellipse at 50% 0%,#243d69 0%,#121f3d 55%,#101a32 100%); border: 1px solid #47618c; color: #f6f4e9; box-shadow: 0 14px 42px #10214433; }
+.theme-star-rescue .board-turnbar>strong { color: #d9e4ff; }
+.theme-star-rescue .crew-list { border-color: #44577d; background: #172744; }
+.theme-star-rescue .crew-seat { color: #f4f4ee; border-color: #405477; }
+.theme-star-rescue .crew-detail>span { color: #c0cbe0; }
+.theme-star-rescue .seat-turn { color: #ffe6a3; }
+.mission-card { display:flex; align-items:center; gap:14px; position:relative; overflow:hidden; margin:2px 0 10px; padding:13px 16px; border:1px solid #6278a3; border-radius:14px; background:linear-gradient(110deg,#283f68,#1a2c4d 62%,#26375d); color:#fff; box-shadow:inset 0 1px #ffffff1c; }
+.mission-orbit { display:grid; place-items:center; width:38px; height:38px; flex:none; border:1px solid #f4cf78aa; border-radius:50%; color:#ffdc83; font-size:22px; box-shadow:0 0 18px #ffd56a35; }
+.mission-copy { display:grid; gap:3px; min-width:0; flex:1; }
+.mission-copy>span { color:#f4d88f; font-size:10px; font-weight:800; letter-spacing:1.1px; text-transform:uppercase; }
+.mission-copy strong { font-size:14px; }
+.mission-copy small { color:#d2dbee; line-height:1.45; }
+.mission-progress { display:grid; justify-items:end; gap:2px; flex:none; color:#ffe5a1; }
+.mission-progress strong { font-size:21px; font-variant-numeric:tabular-nums; }
+.mission-progress i { margin:0 3px; font-style:normal; opacity:.6; }
+.mission-progress small { color:#d2dbee; font-size:10px; }
+.mission-progress.completed { color:#a4efc1; }
+.mission-progress.incomplete { color:#ffc0a5; }
+.play-shell.theme-star-rescue .site-header { background:#111e39; border-bottom-color:#344b70; }
+.play-shell.theme-star-rescue .board-panel .match-rules { color:#e7edf9; border-color:#53698a; }
+.play-shell.theme-star-rescue .board-panel .match-rules p { color:#cbd6ea; }
+.play-shell.theme-star-rescue .modal { border-color:#53698a; background:#182743; color:#f5f2e9; }
+.play-shell.theme-star-rescue .modal-head { border-bottom-color:#405578; }
+.play-shell.theme-star-rescue .modal input,.play-shell.theme-star-rescue .modal select { background:#0f1c34; border-color:#53698a; color:#f5f2e9; }
+.play-shell.theme-star-rescue .prop-heading { color:#f4dda3; }
+.play-shell.theme-star-rescue .prop-heading>span { color:#c3cee0; }
+.play-shell.theme-star-rescue .prop-card { background:#172744; border-color:color-mix(in srgb,var(--prop-color) 62%,#2a3c5e); box-shadow:inset 0 1px #ffffff0c; }
+.play-shell.theme-star-rescue .prop-card:not(:disabled):hover,.play-shell.theme-star-rescue .prop-card.selected { background:color-mix(in srgb,var(--prop-color) 22%,#182743); }
+.play-shell.theme-star-rescue .prop-card .prop-copy>span,.play-shell.theme-star-rescue .prop-card .prop-availability { color:#d1daeb; }
+.play-shell.theme-star-rescue .prop-targets { border-color:#53698a; background:#203456; color:#f5f2e9; }
+.play-shell.theme-star-rescue .prop-targets p { color:#cad6ea; }
+.play-shell.theme-star-rescue .voice-panel { background:#172744; border-color:#405578; color:#f5f2e9; }
+.play-shell.theme-star-rescue .voice-panel>p,.play-shell.theme-star-rescue .voice-panel .voice-heading p,.play-shell.theme-star-rescue .voice-panel .wake-help,.play-shell.theme-star-rescue .voice-panel .voice-footnote { color:#c0cbe0; }
+.play-shell.theme-star-rescue .voice-panel .voice-icon { background:#263c60; color:#d4def1; }
+.play-shell.theme-star-rescue .voice-panel .wake-setting { border-color:#405578; color:#d7e1f3; }
+.play-shell.theme-star-rescue .voice-panel .text-button { color:#e2e9f5; }
+.play-shell.theme-star-rescue .voice-panel .voice-bubble { background:#f8faf3; border-color:#e1e8d8; color:#42563d; }
+.play-shell.theme-star-rescue .audience-chat,.play-shell.theme-star-rescue .audience-host { background:#172744; border-color:#405578; color:#f5f2e9; }
+.play-shell.theme-star-rescue .audience-chat li,.play-shell.theme-star-rescue .audience-host li { border-color:#405578; }
+.play-shell.theme-star-rescue .audience-chat li span,.play-shell.theme-star-rescue .audience-chat p,.play-shell.theme-star-rescue .audience-host p { color:#c0cbe0; }
+.play-shell.theme-star-rescue .audience-chat-head .text-button { color:#e2e9f5; }
 .play-layout .board-turnbar { margin: 0; min-height: 56px; background: transparent; padding: 8px 0; }
 .play-turn-actions { display: flex; flex-wrap: wrap; max-width: 100%; gap: 8px; align-items: center; }
 .play-turn-actions .roll-button { margin: 0; width: auto; padding: 8px 14px; min-height: 38px; font-size: 12px; border-radius: 9px; }
@@ -564,6 +605,7 @@ html[data-motion="reduce"] .confetti-rain {display:none;}
 .app-shell main:focus-visible {outline:2px solid #27694f;outline-offset:4px;}
 .site-header .brand-button {min-height:44px;min-width:44px;}
 @media(max-width:700px){.play-shell .site-header {height:auto;min-height:72px;padding:10px 12px;}.play-shell .header-actions{gap:4px;justify-content:flex-end;}.header-actions button{flex-shrink:0;}}
+@media(max-width:700px){.mission-card{gap:9px;padding:10px;border-radius:12px}.mission-orbit{width:30px;height:30px;font-size:18px}.mission-copy>span{font-size:9px;letter-spacing:.7px}.mission-copy strong{font-size:12px}.mission-copy small{font-size:10px}.mission-progress strong{font-size:18px}.mission-progress small{font-size:9px}}
 
 /* Network room ownership: management is separate from each player's turn. */
 .host-offline-hint{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:10px;padding-top:8px}.host-offline-hint p{margin:0;font-size:12px}

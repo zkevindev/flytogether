@@ -124,7 +124,7 @@ func TestCoverage90AudienceVoiceGuards(t *testing.T) {
 	}
 	fan := sessionCookie(t, joined)
 	path := "/ws/audience-voice?room_id=" + v.ID
-	coverage90Response(t, send(mux, "GET", path, "", fan), 503, "", "灵犀尚未配置，仍可安静观看棋局")
+	coverage90Response(t, send(mux, "GET", path, "", fan), 503, "", "灵矽尚未配置，仍可安静观看棋局")
 	// Invalid preferences are rejected before upgrading or dialing any provider.
 	s.bridge.Config = linx.Config{URL: "ws://127.0.0.1:1", APIKey: "local-only", Model: "test"}
 	coverage90Response(t, send(mux, "GET", path+"&style=invalid", "", fan), 400, "BAD_REQUEST", "请选择温暖、教练或简洁风格")

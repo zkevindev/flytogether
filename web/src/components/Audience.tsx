@@ -68,8 +68,8 @@ export function AudienceChat({ room, onRoom, players }: { room: Room; onRoom: (r
   const canSpeak = room.status !== 'ended' && (!!room.me || (audience.me && audience.chat_enabled));
   return <section className="audience-chat" aria-label="观赛互动">
     <div className="audience-chat-head"><strong>互动</strong><span>{audience.online} 人正在看</span><button type="button" className="text-button" onClick={() => { const next = !hidden; setHidden(next); localStorage.setItem('fly-chat-hidden', next ? 'on' : 'off'); }}>{hidden ? '显示消息' : '隐藏消息'}</button></div>
-    {hidden ? <p>消息已隐藏。这不影响棋局，也不关闭你的私人灵犀。</p> : <>
-      <p>这里只显示发出的互动，不含棋步，也不含对灵犀说的话。</p>
+    {hidden ? <p>消息已隐藏。这不影响棋局，也不关闭你的私人灵矽。</p> : <>
+      <p>这里只显示发出的互动，不含棋步，也不含对灵矽说的话。</p>
       <ol>{(audience.messages || []).map((message, index, all) => <li key={message.id} aria-live={index === all.length - 1 ? 'polite' : undefined}><span>{message.role === 'spectator' ? '观众' : message.role === 'host' ? '房主' : '选手'} · {message.name} · <time dateTime={message.at}>{spokenAt(message.at)}</time></span><p>{message.kind === 'emoji' ? message.emoji : message.text}{message.target_player_id ? ` · 给${players.find(p => p.id === message.target_player_id)?.name || '选手'}` : ''}</p>{message.from_id !== mine && <button type="button" className="text-button" onClick={() => void block(message.from_id)}>屏蔽</button>}</li>)}</ol>
       {(audience.messages || []).length === 0 && <p>还没有互动。表情和文字不会变成走棋指令。</p>}
     </>}
@@ -80,7 +80,7 @@ export function AudienceChat({ room, onRoom, players }: { room: Room; onRoom: (r
       <label className="field-label" htmlFor={'cheer-text-' + room.id}>短消息</label>
       <div className="chat-compose"><input id={'cheer-text-' + room.id} maxLength={40} value={text} onChange={e => setText(e.target.value)} placeholder="最多 40 字" /><button className="primary-button" type="submit">发送</button></div>
     </form>}
-    {audience.me && !audience.chat_enabled && <p>房主已关闭观众发言，你仍可以安静观看，或只问自己的灵犀。</p>}
+    {audience.me && !audience.chat_enabled && <p>房主已关闭观众发言，你仍可以安静观看，或只问自己的灵矽。</p>}
     {room.status === 'ended' && <p>本局已结束，互动记录保留到房主再玩或删除房间。</p>}
     {error && <p role="alert">{error}</p>}
   </section>;

@@ -92,7 +92,7 @@ func (p CompanionPreferences) Next(state game.State, seen string) (string, strin
 	if p.Frequency == "highlights" {
 		significant := false
 		for _, e := range eventsAfter(state.History, seen) {
-			if e.Kind == "won" || (e.Kind == "moved" && dramatic(e.Text)) {
+			if e.Kind == "won" || e.Kind == "mission_completed" || (e.Kind == "moved" && dramatic(e.Text)) {
 				significant = true
 			}
 		}

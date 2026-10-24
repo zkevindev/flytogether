@@ -14,6 +14,7 @@
     "test:scene:browser": "node scripts/scene-browser.mjs",
     "test:auto-voice:browser": "node scripts/auto-voice-browser.mjs",
     "test:voice:realtime": "node scripts/realtime-browser.mjs",
+    "test:mcp:realtime": "node scripts/mcp-realtime-browser.mjs",
     "test:pages:browser": "node scripts/pages-browser.mjs",
     "test:fun:browser": "node scripts/fun-browser.mjs",
     "test:narration": "node --experimental-strip-types --test scripts/narration.test.mjs scripts/sfx.test.mjs",

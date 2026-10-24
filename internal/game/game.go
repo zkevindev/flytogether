@@ -115,6 +115,8 @@ type State struct {
 	Difficulty   string    `json:"difficulty"`
 	Board        BoardSpec `json:"board"`
 	Mode         string    `json:"mode"`
+	ThemeID      string    `json:"theme_id,omitempty"`
+	Mission      *Mission  `json:"mission,omitempty"`
 	Demo         bool      `json:"demo"`
 	Version      int       `json:"version"`
 	Turn         int       `json:"turn"`
@@ -139,6 +141,8 @@ type Options struct {
 	Difficulty string   `json:"difficulty"`
 	Waiting    bool     `json:"waiting"`
 	Mode       string   `json:"mode"`
+	ThemeID    string   `json:"theme_id,omitempty"`
+	MissionID  string   `json:"mission_id,omitempty"`
 	Board      string   `json:"board"`
 	Names      []string `json:"names"`
 	AI         bool     `json:"ai"`
@@ -181,8 +185,15 @@ func New(o Options) *State {
 	if !ok {
 		board, _ = FindBoard("cross")
 	}
-	s := &State{Preset: o.Preset, ID: ID(), Ruleset: "family-v1", Difficulty: o.Difficulty, Board: board, Mode: o.Mode, Demo: o.Demo, Version: 1,
+	themeID := o.ThemeID
+	if o.Mode == "coop" && themeID == "" {
+		themeID = "star-rescue"
+	}
+	s := &State{Preset: o.Preset, ID: ID(), Ruleset: "family-v1", Difficulty: o.Difficulty, Board: board, Mode: o.Mode, ThemeID: themeID, Demo: o.Demo, Version: 1,
 		Turn: 1, Phase: "roll", Legal: []Move{}, History: []Event{}, Players: []Player{}, PropsEnabled: o.Props, DiceRolls: []int{}}
+	if o.Mode == "coop" && o.MissionID != "" {
+		s.Mission = newMission(o.MissionID)
+	}
 	if o.Props {
 		s.Ruleset = "family-props-v3"
 	}
@@ -220,6 +231,7 @@ func New(o Options) *State {
 			s.Players[2].Pieces[0].Progress = 32
 		}
 	}
+	s.RefreshMission("playing")
 	s.add("started", "欢迎登机！轮到"+s.Players[0].Name+"掷骰子。", "")
 	return s
 }
