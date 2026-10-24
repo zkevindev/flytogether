@@ -21,7 +21,7 @@ try {
   await p.getByRole('dialog',{name:'3D 掷骰结果'}).waitFor();await p.waitForTimeout(900);const shown=p.getByRole('dialog',{name:'3D 掷骰结果'});if(await shown.isVisible())await shown.getByRole('button',{name:'继续飞行'}).click();
   if(r.state.dice===5&&r.state.phase==='move'&&r.state.legal_moves.some(m=>m.launch)){
    const m=r.state.legal_moves.find(m=>m.launch),actor=r.state.current;
-   await p.getByRole('button',{name:m.label,exact:true}).click();await p.getByRole('button',{name:'确认飞行',exact:true}).click();const after=await state();assert.equal(after.state.players[actor].pieces.find(x=>x.id===m.piece_id).progress,0);assert.equal(after.state.current,(actor+1)%2);five=true;break;
+   await p.getByRole('button',{name:m.label,exact:true}).click();const moved=p.waitForResponse(res=>res.url().endsWith('/commands')&&res.request().postDataJSON()?.action==='move');await p.getByRole('button',{name:'确认飞行',exact:true}).click();const movedResponse=await moved;assert.equal(movedResponse.status(),200,await movedResponse.text());const after=await movedResponse.json();assert.equal(after.state.players[actor].pieces.find(x=>x.id===m.piece_id).progress,0);assert.equal(after.state.current,(actor+1)%2);five=true;break;
   }
  }
  assert.equal(five,true,'no natural five launch observed in bounded real turns');

@@ -32,3 +32,17 @@ func TestActionNarrationStatesActualCardRuleAndNames(t *testing.T) {
 		t.Fatal(text)
 	}
 }
+
+func TestConciseReplyOmitsTacticalMenuButKeepsFacts(t *testing.T) {
+	r := room.New(game.Options{Names: []string{"孩子", "家长"}, Props: true})
+	state, _, _ := roomGame(r)
+	a, _ := resolveVoiceAction(state, "现在轮到谁")
+	reply := actionNarration(r, a, "", actionOutput(r, a.Notice), CompanionPreferences{Style: "concise"})
+	if reply != "现在轮到孩子。" {
+		t.Fatal(reply)
+	}
+	p := CompanionPreferences{Style: "concise"}
+	if p.Cue(state) != "轮到孩子掷骰子。" {
+		t.Fatal("concise cue retained optional card menu")
+	}
+}

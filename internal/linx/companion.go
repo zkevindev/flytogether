@@ -57,11 +57,28 @@ func companionTip(state game.State) string {
 	}
 	return "抵达终点需要恰好的点数，超过终点不能走。"
 }
+func (p CompanionPreferences) Cue(state game.State) string {
+	if p.Style != "concise" || state.Phase == "finished" {
+		return hostCue(state)
+	}
+	player := state.Players[state.Current]
+	if player.AI {
+		return "轮到" + player.Name + "自动行动。"
+	}
+	if state.Phase == "move" {
+		labels := []string{}
+		for _, m := range state.Legal {
+			labels = append(labels, m.Label)
+		}
+		return "请选择" + strings.Join(labels, "或") + "。"
+	}
+	return "轮到" + player.Name + "掷骰子。"
+}
 func (p CompanionPreferences) Opening(state game.State) string {
 	if p.Frequency == "quiet" || (p.Frequency == "highlights" && state.Turn != 1 && state.Phase != "finished") {
 		return ""
 	}
-	line := hostCue(state)
+	line := p.Cue(state)
 	if p.Style == "coach" && state.Turn == 1 {
 		line += "先看落点再确认，不着急。"
 	}
@@ -69,6 +86,9 @@ func (p CompanionPreferences) Opening(state game.State) string {
 }
 func (p CompanionPreferences) Next(state game.State, seen string) (string, string) {
 	line, mark := nextHostLine(state, seen)
+	if p.Style == "concise" {
+		line = strings.ReplaceAll(line, hostCue(state), p.Cue(state))
+	}
 	if p.Frequency == "quiet" {
 		return "", mark
 	}

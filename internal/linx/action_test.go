@@ -214,7 +214,7 @@ func TestHostLineSpeaksOnHumanTurnAndDramaticHits(t *testing.T) {
 		t.Fatalf("dramatic handoff missing: %s", script)
 	}
 	cue := hostCue(*s)
-	if !strings.Contains(cue, "爸爸") || !strings.Contains(cue, "好") {
+	if !strings.Contains(cue, "爸爸") || !strings.Contains(cue, "掷骰子") {
 		t.Fatal(cue)
 	}
 }

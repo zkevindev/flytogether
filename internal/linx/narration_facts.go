@@ -8,7 +8,15 @@ import (
 )
 
 // Action replies describe committed events; voice style may change delivery, not facts.
-func actionNarration(r room.GameSession, a voiceAction, before, output string) string {
+func actionNarration(r room.GameSession, a voiceAction, before, output string, preferences ...CompanionPreferences) string {
+	p := CompanionPreferences{}
+	if len(preferences) > 0 {
+		p = preferences[0]
+	}
+	state, _, ok := roomGame(r)
+	if !ok {
+		return "暂时无法读取棋局，请查看页面。"
+	}
 	var failure struct {
 		Error string `json:"error"`
 	}
@@ -17,13 +25,18 @@ func actionNarration(r room.GameSession, a voiceAction, before, output string) s
 		return "没有执行这个操作。" + failure.Error + "。"
 	}
 	if a.Notice != "" {
+		if p.Style == "concise" {
+			if strings.HasPrefix(a.Notice, "现在轮到") {
+				return "现在轮到" + state.Players[state.Current].Name + "。"
+			}
+			return strings.ReplaceAll(a.Notice, hostCue(state), p.Cue(state))
+		}
 		return a.Notice
 	}
-	state, _, ok := roomGame(r)
-	if !ok {
-		return "暂时无法读取棋局，请查看页面。"
-	}
 	if a.Name == "use_prop" && a.PropID == "launch" {
+		if p.Style == "concise" {
+			return "起飞卡已生效，任意点数都能起飞，请掷骰子。"
+		}
 		return "起飞卡已生效，接下来掷骰，任意点数都能让机库里的飞机起飞到起飞位。"
 	}
 	lines := []string{}
@@ -37,9 +50,9 @@ func actionNarration(r room.GameSession, a voiceAction, before, output string) s
 		lines = lines[len(lines)-4:]
 	}
 	if len(lines) > 0 {
-		return strings.Join(lines, "。") + "。" + hostCue(state)
+		return strings.Join(lines, "。") + "。" + p.Cue(state)
 	}
-	return hostCue(state)
+	return p.Cue(state)
 }
 func readFactsInstruction(script string, p CompanionPreferences) string {
 	delivery := "用温暖亲切的语气。"

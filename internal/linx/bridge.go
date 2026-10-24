@@ -534,7 +534,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 					instructions += narrationFacts(state, before)
 				}
 				// The model reads a server-composed script instead of paraphrasing rules.
-				script := actionNarration(r, action, before, output) + spokenCheer
+				script := actionNarration(r, action, before, output, companion) + spokenCheer
 				instructions = readFactsInstruction(script, companion)
 				// Keep the current facts in conversation context as well as response
 				// instructions; the provider can otherwise repeat an earlier host cue.
