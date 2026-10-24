@@ -415,6 +415,10 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 				args, _ := json.Marshal(map[string]string{"piece_id": action.PieceID})
 				if action.Name == "use_prop" {
 					args, _ = json.Marshal(map[string]string{"prop_id": action.PropID, "piece_id": action.PieceID})
+				} else if action.Name == "coach_move" {
+					args, _ = json.Marshal(map[string]string{"choice": action.Choice})
+				} else if action.Name == "confirm_coach" {
+					args, _ = json.Marshal(map[string]string{"coach_id": action.CoachID})
 				} else if action.Name != "move_piece" {
 					args = []byte(`{}`)
 				}
@@ -424,6 +428,13 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 					output = actionOutput(r, action.Notice)
 				} else {
 					output = b.executeTool(r, call)
+				}
+				if action.Name == "coach_move" && !strings.Contains(output, `"error"`) {
+					if action.Choice == "cancel" {
+						action.Notice = "建议已取消，没有移动飞机或掷骰。"
+					} else {
+						action.Notice = coachCue(r.Snapshot())
+					}
 				}
 				// Commit explicit commands before requesting any success narration.
 				for _, item := range []any{
@@ -435,6 +446,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Roo
 					}
 				}
 				instructions := "只根据本轮工具结果用一两句日常中文回答，语气像主持人，优先说实际效果或一条具体建议；除非玩家问库存，不要逐项报剩余道具。结果含error或notice时没有执行操作，按真实棋局回答问题、解释原因或追问选择，不能宣称已操作成功。需要掷骰时请玩家说‘掷骰子’，点数由游戏服务随机生成，不能询问、接受或编造玩家自报点数。本轮不要再调用工具。玩家称呼只取工具中的昵称，唤醒词是助手的名字，不是玩家姓名。不要朗读内部ID和技术字段，不要提授权或操作次数用完；幸运骰使用时已实际掷两次，不能要求玩家为了让幸运骰生效再掷一次；其他道具使用后玩家在下一句话掷骰。"
+				if action.Name == "coach_move" {
+					instructions += "本轮是教练建议，还没有走棋。只能说相对稳妥或有被撞的可能，必须说明后续走棋或道具会改变局面。禁止称没有风险、不会被撞、很安全或保证安全。简短说明推荐的飞机和真实效果，再邀请说就它确认，不要逐项念操作菜单。"
+				}
 				if action.Notice != "" {
 					instructions += "本轮具体要求（必须遵守）：“" + action.Notice + "”。"
 				}
@@ -636,6 +650,8 @@ func realtimeTools() []map[string]any {
 	return []map[string]any{
 		{"type": "function", "name": "get_game_state", "description": "查询当前棋局、当前玩家、棋子位置、骰子和合法走法。执行任何棋局操作前先调用。", "parameters": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}},
 		{"type": "function", "name": "roll_dice", "description": "按当前真人玩家的明确指令掷一次骰子。不能指定骰子点数。", "parameters": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}},
+		{"type": "function", "name": "coach_move", "description": "只提供当前合法走法的建议和棋盘落点预览，不移动飞机。best 推荐，next 另一架，safe 风险较少，previous 刚才那个，cancel 取消。仅在玩家询问或要求比较时调用，等待下一句话明确确认。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"choice": map[string]any{"type": "string", "enum": []string{"best", "next", "safe", "previous", "cancel"}}}, "required": []string{"choice"}, "additionalProperties": false}},
+		{"type": "function", "name": "confirm_coach", "description": "仅当玩家本句话明确说就它、确认飞行等，才执行当前建议。建议ID来自当前room.coach.id，不能确认已变化或被取消的建议；询问或比较不执行。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"coach_id": map[string]any{"type": "string"}}, "required": []string{"coach_id"}, "additionalProperties": false}},
 		{"type": "function", "name": "move_piece", "description": "移动玩家明确指定的一架合法飞机。piece_id 必须来自刚查询的棋局状态。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"piece_id": map[string]any{"type": "string"}}, "required": []string{"piece_id"}, "additionalProperties": false}},
 		{"type": "function", "name": "use_prop", "description": "按玩家明确指令，在掷骰前使用一张库存道具。launch 起飞卡、boost 加速卡、luck 幸运骰、bomb 炸弹、shield 护盾。炸弹和护盾需在prop_targets中明确选择piece_id；其他道具不填写piece_id。幸运骰使用后立即真实掷两次取较大值，其余道具使用后不自动掷骰。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"prop_id": map[string]any{"type": "string", "enum": []string{"launch", "boost", "luck", "bomb", "shield"}}, "piece_id": map[string]any{"type": "string", "description": "炸弹或护盾的目标ID，必须来自prop_targets；其他道具省略"}}, "required": []string{"prop_id"}, "additionalProperties": false}},
 	}
@@ -655,7 +671,7 @@ func (b *Bridge) executeTool(r *room.Room, call functionCall) string {
 	if call.Arguments != "" && json.Unmarshal([]byte(call.Arguments), &args) != nil {
 		return `{"error":"工具参数无效"}`
 	}
-	if call.Name == "roll_dice" || call.Name == "move_piece" || call.Name == "use_prop" {
+	if call.Name == "roll_dice" || call.Name == "move_piece" || call.Name == "use_prop" || call.Name == "coach_move" || call.Name == "confirm_coach" {
 		args["action_token"] = call.Grant
 	}
 	value, err := r.Tool(call.Name, args)

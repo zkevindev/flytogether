@@ -15,6 +15,8 @@ type voiceAction struct {
 	PropID  string
 	Notice  string
 	Cheer   int
+	Choice  string
+	CoachID string
 }
 
 // Cheer is a spoken dice call. It never changes the roll; it is resolved after a real roll event.
@@ -26,6 +28,9 @@ type Cheer struct {
 // Resolve explicit game commands before narration so success always follows a
 // committed game action. Questions and ambiguous selections never choose a piece.
 func planVoiceAction(r *room.Room, text string) (voiceAction, bool) {
+	if action, handled := planCoachAction(r, text); handled {
+		return action, true
+	}
 	var state game.State
 	if json.Unmarshal(r.Snapshot().State, &state) != nil {
 		return voiceAction{}, false

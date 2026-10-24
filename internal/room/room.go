@@ -20,6 +20,8 @@ type View struct {
 	State         json.RawMessage `json:"state"`
 	Voice         string          `json:"voice"`
 	VoiceSettings VoiceSettings   `json:"voice_settings"`
+	Coach         *Coach          `json:"coach,omitempty"`
+	CoachExpired  bool            `json:"coach_expired,omitempty"`
 }
 
 type VoiceSettings struct {
@@ -39,6 +41,8 @@ type Command struct {
 	PieceID string `json:"piece_id,omitempty"`
 	PropID  string `json:"prop_id,omitempty"`
 	Token   string `json:"action_token,omitempty"`
+	Choice  string `json:"choice,omitempty"`
+	CoachID string `json:"coach_id,omitempty"`
 }
 
 type Error struct {
@@ -71,6 +75,9 @@ type Room struct {
 	cache         map[string]cached
 	listeners     map[chan []byte]bool
 	updated       time.Time
+	coach         *Coach
+	coachPrevious string
+	coachExpired  bool
 }
 
 func New(o game.Options) *Room {
@@ -88,7 +95,7 @@ func New(o game.Options) *Room {
 
 func (r *Room) view() View {
 	b, _ := json.Marshal(r.state)
-	return View{ID: r.ID, Name: r.name, Status: r.status, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings}
+	return View{ID: r.ID, Name: r.name, Status: r.status, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings, Coach: r.coach, CoachExpired: r.coachExpired}
 }
 
 func (r *Room) VoiceSettings() VoiceSettings {
@@ -109,6 +116,7 @@ func (r *Room) SetVoiceSettings(settings VoiceSettings) (View, error) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.invalidateCoach()
 	r.voiceSettings = settings
 	r.grant, r.busy = "", false
 	r.publish()
@@ -150,6 +158,7 @@ func (r *Room) Restart(o game.Options) (View, error) {
 	if r.busy {
 		return View{}, fail("VOICE_BUSY", "请等这次语音操作结束，再开始新游戏")
 	}
+	r.invalidateCoach()
 	r.state = game.New(o)
 	r.status = "playing"
 	if o.Waiting {
@@ -188,6 +197,7 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 		if err := r.control(c.Action); err != nil {
 			return View{}, err
 		}
+		r.invalidateCoach()
 		r.publish()
 		v := r.view()
 		r.cache[c.ID] = cached{c, v}
@@ -213,6 +223,13 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 	}
 	var err error
 	switch c.Action {
+	case "coach":
+		err = r.propose(c.Choice)
+	case "confirm_coach":
+		if r.coach == nil || c.CoachID == "" || r.coach.ID != c.CoachID || r.coach.GameID != r.state.ID || r.coach.Version != r.state.Version || r.coach.PlayerID != r.state.Players[r.state.Current].ID {
+			return View{}, fail("STALE_COACH", "建议已经变化，请重新点或说“帮我选”")
+		}
+		err = r.state.Move(r.coach.Move.PieceID)
 	case "roll":
 		err = r.state.RollRandom()
 	case "prop":
@@ -229,6 +246,10 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 	}
 	if err != nil {
 		return View{}, fail("ILLEGAL_MOVE", err.Error())
+	}
+	if c.Action != "coach" {
+		r.invalidateCoach()
+		r.coachExpired = false
 	}
 	if voice {
 		r.used = true
@@ -301,6 +322,9 @@ func (r *Room) VoiceState(state string) {
 		state = "disconnected"
 	}
 	r.voice = state
+	if state == "disconnected" || state == "error" {
+		r.invalidateCoach()
+	}
 	if state == "ready" || state == "standby" || state == "disconnected" || state == "error" {
 		r.busy = false
 		r.grant = ""
@@ -322,13 +346,19 @@ func (r *Room) Tool(name string, args map[string]string) (any, error) {
 			"prop_targets": map[string][]string{"bomb": r.state.PropTargets("bomb"), "shield": r.state.PropTargets("shield")}, "suggested_prop": map[string]string{"prop_id": suggested, "piece_id": target},
 			"current_player": r.state.Players[r.state.Current], "legal_moves": r.state.Legal}, nil
 	}
-	if name != "roll_dice" && name != "move_piece" && name != "use_prop" {
+	if name != "roll_dice" && name != "move_piece" && name != "use_prop" && name != "coach_move" && name != "confirm_coach" {
 		return nil, fail("UNKNOWN_TOOL", "未知游戏工具")
 	}
 	token := args["action_token"]
 	r.mu.Lock()
 	// Derive identity/version from the grant; a model cannot select another room or game.
 	c := Command{ID: "voice:" + token, GameID: r.grantGame, Version: r.grantVersion, Token: token, Action: "roll"}
+	if name == "coach_move" {
+		c.Action, c.Choice = "coach", args["choice"]
+	}
+	if name == "confirm_coach" {
+		c.Action, c.CoachID = "confirm_coach", args["coach_id"]
+	}
 	if name == "move_piece" {
 		c.Action = "move"
 		c.PieceID = args["piece_id"]
@@ -342,6 +372,9 @@ func (r *Room) Tool(name string, args map[string]string) (any, error) {
 	v, err := r.Do(c, true)
 	if err != nil {
 		return nil, err
+	}
+	if name == "coach_move" {
+		return map[string]any{"room": v, "message": "仅更新建议或取消建议，没有走棋、掷骰或扣道具。下一句话明确确认后才可移动。"}, nil
 	}
 	return map[string]any{"room": v, "message": "操作已执行。以返回棋局为准，简短说明结果。本句话不要再执行第二次游戏操作。"}, nil
 }
@@ -427,6 +460,7 @@ func (r *Room) control(action string) error {
 	default:
 		return fail("INVALID_TRANSITION", "当前状态不能执行这个房间操作")
 	}
+	r.invalidateCoach()
 	r.status, r.grant, r.busy, r.voice = next, "", false, "disconnected"
 	r.used = false
 	r.state.Version++
