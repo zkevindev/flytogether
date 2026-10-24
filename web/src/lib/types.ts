@@ -1,5 +1,6 @@
 export type Piece = { id: string; label: string; number: number; progress: number; shield?: boolean };
-export type Player = { id: string; name: string; color: string; ai: boolean; pieces: Piece[]; props: Record<string, number> };
+export type MatchStats = { rolls: number; takeoffs: number; arrivals: number; captures: number; props_used: number };
+export type Player = { stats: MatchStats; id: string; name: string; color: string; ai: boolean; pieces: Piece[]; props: Record<string, number> };
 export type Move = {
   piece_id: string; label: string; from: number; to: number; captured: string[]; blocked?: string[];
   jump: boolean; fly: boolean; launch: boolean; finish: boolean; summary: string;
@@ -17,8 +18,8 @@ export type Game = {
 };
 export type VoiceSettings = { wake_enabled: boolean; wake_word: string };
 export type Coach = { id: string; game_id: string; version: number; player_id: string; move: Move; reason: string; risk: string; threats: number };
-export type Room = { id: string; name: string; status: 'waiting' | 'playing' | 'paused' | 'ended'; seq: number; state: Game; voice: string; voice_settings: VoiceSettings; coach?: Coach; coach_expired?: boolean };
-export type Options = { room_name: string; difficulty: 'easy' | 'normal' | 'hard'; waiting: boolean; names: string[]; board: string; mode: string; ai: boolean; demo: boolean; props: boolean };
+export type Room = { id: string; name: string; status: 'waiting' | 'playing' | 'paused' | 'ended'; seq: number; state: Game; voice: string; voice_settings: VoiceSettings; coach?: Coach; coach_expired?: boolean; network?: { invite: string; seats: { player_id: string; occupied: boolean; ready: boolean; online: boolean }[] }; me?: { player_id: string; host: boolean } };
+export type Options = { network?: boolean; room_name: string; difficulty: 'easy' | 'normal' | 'hard'; waiting: boolean; names: string[]; board: string; mode: string; ai: boolean; demo: boolean; props: boolean };
 export type Config = { voice_configured: boolean; version: string; ruleset: string; boards: BoardSpec[] };
 
 export class APIError extends Error {

@@ -21,6 +21,7 @@
     "capture:docs": "node scripts/capture-docs.mjs",
     "test:onboarding:browser": "node scripts/onboarding-browser.mjs",
     "test:flows:browser": "node scripts/flow-regressions-browser.mjs",
+    "test:network:browser": "node scripts/network-browser.mjs",
     "test:coach:browser": "node scripts/coach-browser.mjs"
   },
   "dependencies": {
