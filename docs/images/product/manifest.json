@@ -1,0 +1,32 @@
+{
+  "captured_on": "2026-10-24",
+  "source_commit": "e81b049b1aee9ea493ac59f336da606ff2ad0fc6",
+  "browser": "Chrome 155.0.8059.85",
+  "scope": "Actual local Chrome product route and responsive phone viewport. Board is an explicitly labelled illustrative preview, no server game, microphone or WebGL created. Not a real match or physical phone claim.",
+  "captures": [
+    {
+      "file": "product-hero.png",
+      "sha256": "c748e31b9012ab38a3b5fed6b1b2c9c046b27dda13c2ad1ffd6c1ec881c73a9f",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    {
+      "file": "product-desktop.png",
+      "sha256": "7e1ba5a663a995b870ccad28bcbfb7dec49cca8e071310f8644d3c8b4f08fc19",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    {
+      "file": "product-mobile.png",
+      "sha256": "77962a6f1e18383c12ad44d37576e1be4b3e208b12dca62d8d87b31d27d99448",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    }
+  ]
+}

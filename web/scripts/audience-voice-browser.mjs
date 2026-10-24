@@ -12,7 +12,7 @@ const launch = async name => {
   browsers.push(b);
   const c = await b.newContext({ baseURL: base, permissions: ['microphone'], viewport: { width: 1360, height: 1000 } });
   await c.addInitScript(() => {
-    localStorage.setItem('fly-auto-voice', 'off'); localStorage.setItem('fly-host-voice', 'off'); localStorage.setItem('fly-tutorial-v1', 'skipped'); localStorage.setItem('fly-experience', JSON.stringify({ board: 'flat', motion: 'reduced' }));
+    localStorage.setItem('fly-auto-voice', 'off'); localStorage.setItem('fly-host-voice', 'off'); localStorage.setItem('fly-companion', JSON.stringify({style:'warm',frequency:'quiet'})); localStorage.setItem('fly-tutorial-v1', 'skipped'); localStorage.setItem('fly-experience', JSON.stringify({ board: 'flat', motion: 'reduced' }));
     window.__voice = { events: [], tracks: [], binary: 0, audio: 0, scheduled: 0, nonSilent: 0, active: 0, interrupts: 0, endpoints: [], room: null };
     const media = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async (...args) => { const stream = await media(...args); window.__voice.tracks.push(...stream.getTracks()); return stream; };
@@ -37,7 +37,7 @@ const launch = async name => {
           if (!voice) return;
           if (e.type.endsWith('audio.delta')) window.__voice.audio++;
           if (e.type === 'speech_started' && window.__voice.active > 0) window.__voice.interrupts++;
-          if (['hello', 'stt', 'game_action', 'speech_started', 'error', 'response.created', 'response.done', 'response.audio_transcript.done', 'response.output_audio_transcript.done'].includes(e.type)) window.__voice.events.push({ type: e.type, text: e.text || e.transcript, response: e.response?.id || e.response_id, action: e.action, version: e.room?.state.version, at: Date.now(), current: window.__voice.room?.state.players[window.__voice.room.state.current].name });
+          if (['hello', 'stt', 'game_action', 'speech_started', 'error', 'response.created', 'response.done', 'response.audio_transcript.done', 'response.output_audio_transcript.done'].includes(e.type)) window.__voice.events.push({ type: e.type, text: e.text || e.transcript, response: e.response?.id || e.response_id, status:e.response?.status, action: e.action, version: e.room?.state.version, at: Date.now(), current: window.__voice.room?.state.players[window.__voice.room.state.current].name });
         });
       }
       send(data) { if (data instanceof ArrayBuffer) window.__voice.binary++; return super.send(data); }
@@ -81,9 +81,9 @@ try {
   r = (await (await h.request.get('/api/session')).json()).room;
   assert.equal(r.state.players[0].stats.rolls, rollsBefore + 1); assert.equal(r.state.players[0].props.luck, 0); assert.equal(r.state.dice_rolls.length, 2);
   const stableVersion = r.state.version;
-  for (const p of [ap, bp]) await p.waitForFunction(() => window.__voice.events.some(e => e.type.endsWith('audio_transcript.done')), null, { timeout: 35000 });
+  for (const p of [ap, bp]) await p.waitForFunction(() => {const a=window.__voice.events, first=a.find(e=>e.type==='stt');return first&&a.some(e=>e.type.endsWith('audio_transcript.done')&&e.text?.includes(first.current)&&a.some(done=>done.type==='response.done'&&done.response===e.response&&done.status==='completed'));}, null, { timeout: 65000 });
   for (const p of [ap, bp]) {
-    const v = await view(p), first = v.events.find(e => e.type === 'stt'), reply = v.events.find(e => e.type.endsWith('audio_transcript.done'));
+    const v = await view(p), first = v.events.find(e => e.type === 'stt'), reply = v.events.find(e => e.type.endsWith('audio_transcript.done')&&e.text?.includes(first.current)&&v.events.some(done=>done.type==='response.done'&&done.response===e.response&&done.status==='completed'));
     assert.ok(first && reply && first.current && reply.text.includes(first.current), JSON.stringify({ first, reply }));
     assert.ok(v.binary > 0 && v.audio > 0 && v.nonSilent > 0, 'no real AudioWorklet upload/playback');
     assert.deepEqual(v.endpoints, ['/ws/audience-voice']);
@@ -92,7 +92,7 @@ try {
   // then asks for a forbidden write. No transcripts are injected by this script.
   await ap.waitForFunction(() => window.__voice.events.some(e => e.type === 'stt' && /炸弹/.test(e.text)), null, { timeout: 90000 });
   await ap.waitForFunction(() => { const e = window.__voice.events, i = e.findLastIndex(e => e.type === 'stt' && /炸弹/.test(e.text)); return i >= 0 && e.slice(i + 1).some(e => e.type.endsWith('audio_transcript.done')); }, null, { timeout: 30000 });
-  await bp.waitForFunction(() => window.__voice.events.filter(e => e.type.endsWith('audio_transcript.done')).length >= 3, null, { timeout: 30000 });
+  await bp.waitForFunction(() => {const e=window.__voice.events;return e.filter(item=>item.type.endsWith('audio_transcript.done')&&e.some(done=>done.type==='response.done'&&done.response===item.response&&done.status==='completed')).length >= 2;}, null, { timeout: 30000 });
   const av = await view(ap), bv = await view(bp), hv = await view(hp);
   assert.ok(av.interrupts >= 1, 'synthetic speech did not actually interrupt playing audio');
   assert.ok(!av.events.some(e => e.text?.includes('橘子')) && !bv.events.some(e => e.text?.includes('蓝莓')), 'private dialogue crossed sessions');

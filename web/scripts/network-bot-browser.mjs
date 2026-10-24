@@ -85,7 +85,7 @@ try {
     const actor = r.state.current === 0 ? h : g, s = r.state;
     if (s.phase === 'roll') {
       const player = s.players[s.current];
-      if (!s.active_prop && player.props.launch > 0 && player.pieces.every(p => p.progress < 0)) await command(actor, 'prop', { prop_id: 'launch' });
+      if (!s.active_prop && player.props.launch > 0 && player.pieces.every(p => p.progress < 0)) await command(actor, 'prop', { prop_id: 'launch', piece_id: player.pieces[0].id });
       else await command(actor, 'roll');
     } else await command(actor, 'move', { piece_id: [...s.legal_moves].sort((a, b) => Number(b.finish) - Number(a.finish) || b.to - a.to)[0].piece_id });
   }

@@ -165,6 +165,7 @@ try {
   );
   await hp.getByRole("button", { name: /道具口袋/ }).click();
   await hp.getByRole("button", { name: "使用起飞卡", exact: true }).click();
+  await hp.locator('.prop-targets .prop-target').first().click();
   await wait(
     async () =>
       await hp
@@ -188,19 +189,17 @@ try {
       (await hp.getByRole("dialog", { name: "3D 掷骰结果" }).count()) === 0,
     "dice did not automatically finish",
   );
-  await hp
-    .locator(".play-turn-actions")
-    .getByRole("button", { name: "小熊号", exact: true })
-    .click();
-  await hp
-    .locator(".move-preview")
-    .getByRole("button", { name: /确认.*飞行/ })
-    .click();
+  if ((await session(h)).state.phase === 'move') {
+    await hp.locator('.play-turn-actions').getByRole('button', { name: '小熊号', exact: true }).click();
+    await hp.locator('.move-preview').getByRole('button', { name: /确认.*飞行/ }).click();
+  }
   await wait(
     async () => (await session(h)).state.players[0].stats.takeoffs === 1,
     "original seat could not take off",
   );
   const inPlay = (await session(h)).state;
+  assert.equal(inPlay.players[0].stats.rolls, 1);
+  assert.ok(inPlay.players[0].pieces[0].progress > 0, 'direct launch card and real die did not move the original seat');
   const transferInPlay = async (p, target) => {
     await p.getByRole("button", { name: "房间管理", exact: true }).click();
     const d = p.getByRole("dialog", { name: "房间管理" });

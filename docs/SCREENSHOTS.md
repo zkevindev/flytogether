@@ -100,4 +100,9 @@ npm --prefix web run capture:docs
 
 ## 家人观赛（#39～#44）
 
-`images/audience/` 收录桌面立体、手机轻量、自然获胜和独立灵犀问答四张实际截图。来源提交、视口与 SHA-256 见 [manifest](images/audience/manifest.json)，复跑见 [QA-AUDIENCE](QA-AUDIENCE.md)。手机是桌面Chrome视口；语音图来自合成WAV经实际AudioWorklet、Go和真实灵犀，不能当成实体麦克风或真人听感。所有棋步与骰子由正式规则推进，未注入棋盘。截图不含真实部署地址或访问凭据。
+`images/audience/` 收录桌面立体、手机轻量、自然获胜和独立灵犀问答五张实际截图（含重启恢复）。来源提交、视口与 SHA-256 见 [manifest](images/audience/manifest.json)，复跑见 [QA-AUDIENCE](QA-AUDIENCE.md)。手机是桌面Chrome视口；语音图来自合成WAV经实际AudioWorklet、Go和真实灵犀，不能当成实体麦克风或真人听感。所有棋步与骰子由正式规则推进，未注入棋盘。截图不含真实部署地址或访问凭据。
+
+
+## 产品介绍页（#51）
+
+`images/product/` 保存首屏、完整桌面和手机视口三张页面截图。它们展示的是明确标注的玩法预览，不是正在进行的真实对局。使用项目FlatBoard组件，无图片生成、虚构评价或统计；来源/视口/哈希见 [manifest](images/product/manifest.json)，复跑见 [QA-PRODUCT](QA-PRODUCT.md)。

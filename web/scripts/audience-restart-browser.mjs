@@ -29,6 +29,9 @@ try {
   assert.equal((await a.request.post(`/api/rooms/${id}/chat`, { data: message })).status(), 200);
   const saved = await state();
   await promisify(execFile)(process.env.QA_RESTART_PYTHON || 'python3', [process.env.QA_RESTART_SCRIPT], { timeout: 45000, maxBuffer: 65536 });
+  let ready=false;
+  for(let i=0;i<150;i++){if(await h.request.get('/readyz').then(r=>r.ok()).catch(()=>false)){ready=true;break;}await new Promise(resolve=>setTimeout(resolve,150));}
+  assert.ok(ready,'restarted service did not become ready');
   for (const p of pages) await p.reload({ waitUntil: 'networkidle' });
   r = await state(); assert.equal(r.status, 'paused'); assert.notEqual(r.instance_id, saved.instance_id); assert.deepEqual(r.state, saved.state); assert.equal(r.audience.count, 2);
   for (const [i, c] of [a,b].entries()) {
