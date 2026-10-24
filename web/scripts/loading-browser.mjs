@@ -1,0 +1,19 @@
+import {chromium} from 'playwright';
+import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+assert.ok(process.env.QA_BASE_URL,'Set QA_BASE_URL');const out=process.env.QA_OUTPUT_DIR||'test-results/loading';await mkdir(out,{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true,args:process.platform==='darwin'?['--use-angle=metal']:[]});
+try {
+ const context=await browser.newContext({baseURL:process.env.QA_BASE_URL,viewport:{width:1360,height:1000}});const p=await context.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
+ await p.addInitScript(()=>{localStorage.setItem('fly-tutorial-v1','skipped');localStorage.setItem('fly-auto-voice','off');localStorage.setItem('fly-host-voice','off');window.__mic=0;navigator.mediaDevices.getUserMedia=async()=>{window.__mic++;throw Error('No microphone in loading test')};});
+ const resources=()=>p.evaluate(()=>performance.getEntriesByType('resource').filter(e=>new URL(e.name).pathname.endsWith('.js')).map(e=>({file:new URL(e.name).pathname.split('/').at(-1),encoded_bytes:e.encodedBodySize,decoded_bytes:e.decodedBodySize,transfer_bytes:e.transferSize})));
+ await p.goto('/',{waitUntil:'networkidle'});const home=await resources();assert.equal(await p.locator('.flight-host').count(),0);const canvasBefore=await p.locator('.flight-host canvas').count();
+ await p.getByRole('button',{name:'创建游戏',exact:true}).click();const modal=p.getByRole('dialog',{name:'创建家庭房间',exact:true});await modal.getByRole('checkbox',{name:/添加机器人陪玩/}).uncheck();await modal.getByRole('button',{name:'2 位',exact:true}).click();await modal.getByRole('button',{name:'创建并开始游戏',exact:true}).click();await p.waitForURL('**/play');await p.locator('.flight-host canvas').waitFor();await p.waitForTimeout(500);const play=await resources();
+ await p.getByRole('button',{name:'返回首页',exact:true}).click();await p.locator('.flight-host').waitFor({state:'detached'});assert.equal(await p.locator('.flight-host').count(),0);await p.getByRole('button',{name:/继续当前游戏/}).click();await p.locator('.flight-host canvas').waitFor();await p.waitForTimeout(300);const again=await resources();assert.equal(again.length,play.length,'returning to board redownloaded JS');assert.equal(await p.evaluate(()=>window.__mic),0);assert.deepEqual(errors,[]);
+ if(process.env.QA_EXPECT_LAZY==='1') {assert.equal(home.some(e=>e.file.startsWith('Board-')),false);assert.equal(play.some(e=>e.file.startsWith('Board-')),true);assert.ok(home.reduce((n,e)=>n+e.decoded_bytes,0)<400000);}
+ let chunkFailureRecovered=false;
+ if(process.env.QA_EXPECT_LAZY==='1') {
+  const f=await context.newPage();await f.goto('/',{waitUntil:'networkidle'});await f.route('**/assets/Board-*.js',route=>route.abort());await f.getByRole('button',{name:/继续当前游戏/}).click();await f.getByRole('button',{name:'重新加载棋盘',exact:true}).waitFor();const before=(await(await context.request.get('/api/session')).json()).room.state;await f.screenshot({path:out+'/board-load-retry.png'});await f.unroute('**/assets/Board-*.js');await f.getByRole('button',{name:'重新加载棋盘',exact:true}).click();await f.locator('.flight-host canvas').waitFor();const after=(await(await context.request.get('/api/session')).json()).room.state;assert.equal(after.id,before.id);assert.deepEqual(after.players,before.players);chunkFailureRecovered=true;await f.close();
+ }
+ const report={passed:true,chunk_failure_recovered:chunkFailureRecovered,home,first_play:play,second_play:again,cold_home_js_decoded_bytes:home.reduce((n,e)=>n+e.decoded_bytes,0),cold_home_js_encoded_bytes:home.reduce((n,e)=>n+e.encoded_bytes,0),canvas_on_home:canvasBefore,microphone_requests:0,console_errors:errors};await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+}finally{await browser.close();}
