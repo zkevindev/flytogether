@@ -44,6 +44,7 @@ func DefaultVoiceSettings() VoiceSettings {
 }
 
 type Command struct {
+	Lease          string `json:"-"`
 	TargetPlayerID string `json:"target_player_id,omitempty"`
 	Actor          string `json:"-"`
 	ID             string `json:"command_id"`
@@ -71,6 +72,7 @@ type cached struct {
 }
 
 type Room struct {
+	delegationDelay  time.Duration
 	hostChange       *HostChange
 	hostOfflineSince time.Time
 	hostClaimable    bool
@@ -188,11 +190,13 @@ func (r *Room) SubscribeFor(session string) (chan []byte, func()) {
 	ch := make(chan []byte, 1)
 	r.listeners[ch] = session
 	r.updateHostPresence(time.Now())
+	r.updateDelegationPresence(time.Now())
 	r.publish()
 	return ch, func() {
 		r.mu.Lock()
 		delete(r.listeners, ch)
 		r.updateHostPresence(time.Now())
+		r.updateDelegationPresence(time.Now())
 		r.publish()
 		r.mu.Unlock()
 	}
@@ -265,6 +269,9 @@ func (r *Room) Do(c Command, voice bool) (result View, err error) {
 	if c.GameID != r.state.ID || (c.Version != r.state.Version && c.Action != "pause" && c.Action != "end") {
 		return View{}, fail("STALE_STATE", "棋局已经更新，请重新选择")
 	}
+	if c.Action == "delegate" || c.Action == "reclaim" || c.Action == "auto_delegate_on" || c.Action == "auto_delegate_off" {
+		return r.changeDelegation(c, voice)
+	}
 	if c.Action == "transfer_host" || c.Action == "claim_host" {
 		return r.changeHost(c, voice)
 	}
@@ -281,6 +288,10 @@ func (r *Room) Do(c Command, voice bool) (result View, err error) {
 			for session, m := range r.members {
 				r.state.Players[m.index].Name = r.names[session]
 				m.ready = session == r.owner
+				m.delegated = false
+				m.autoDelegate = false
+				m.delegationReason = ""
+				m.offlineSince = time.Time{}
 				r.members[session] = m
 			}
 			r.status = "waiting"
@@ -329,7 +340,7 @@ func (r *Room) Do(c Command, voice bool) (result View, err error) {
 	if !voice && r.busy {
 		return View{}, fail("VOICE_BUSY", "正在处理这次语音，请稍等")
 	}
-	if voice && (c.Token == "" || c.Token != r.grant || r.used || r.grantGame != r.state.ID || r.grantVersion != r.state.Version || r.grantActor != c.Actor) {
+	if voice && ((c.Lease != "" && c.Lease != r.voiceLease) || c.Token == "" || c.Token != r.grant || r.used || r.grantGame != r.state.ID || r.grantVersion != r.state.Version || r.grantActor != c.Actor) {
 		return View{}, fail("STALE_ACTION", "请重新查看棋局，再说一次操作")
 	}
 	if len(r.cache) >= 4096 {
@@ -380,15 +391,23 @@ func (r *Room) Do(c Command, voice bool) (result View, err error) {
 func (r *Room) AI() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.status != "playing" || r.busy || r.state.Phase == "finished" || !r.state.Players[r.state.Current].AI {
+	if r.status != "playing" || r.busy || r.state.Phase == "finished" || (!r.state.Players[r.state.Current].AI && !r.delegated(r.state.Current)) {
+		return
+	}
+	delegated := r.delegated(r.state.Current)
+	if delegated && !r.humanOnline() {
 		return
 	}
 	before := r.beforeMutation()
+	oldEvents := map[string]bool{}
+	for _, e := range r.state.History {
+		oldEvents[e.ID] = true
+	}
 	if r.state.Phase == "roll" {
 		prop, target := "", ""
-		if r.state.Difficulty == "hard" {
+		if !delegated && r.state.Difficulty == "hard" {
 			prop, target = r.state.SuggestedPropTarget()
-		} else if r.state.Difficulty != "easy" {
+		} else if !delegated && r.state.Difficulty != "easy" {
 			prop = r.state.SupportProp()
 		}
 		if prop != "" {
@@ -401,6 +420,13 @@ func (r *Room) AI() {
 		}
 	} else {
 		_ = r.state.Move(r.state.AIMove().PieceID)
+	}
+	if delegated {
+		for i, e := range r.state.History {
+			if !oldEvents[e.ID] {
+				r.state.History[i].Text = "【托管】" + e.Text
+			}
+		}
 	}
 	if _, err := r.finish(nil, saveChange{}); err != nil {
 		r.restore(before)
@@ -466,10 +492,13 @@ func (r *Room) voiceState(state string) {
 }
 
 func (r *Room) Tool(name string, args map[string]string) (any, error) { return r.tool(name, args, "") }
-func (r *Room) tool(name string, args map[string]string, actor string) (any, error) {
+func (r *Room) tool(name string, args map[string]string, actor string, leases ...string) (any, error) {
 	if name == "get_game_state" || name == "get_legal_moves" {
 		r.mu.Lock()
 		defer r.mu.Unlock()
+		if len(leases) > 0 && leases[0] != r.voiceLease {
+			return nil, fail("STALE_ACTION", "原语音连接已失效，请重新开启麦克风")
+		}
 		token := ""
 		if r.status == "playing" && r.busy && !r.used && r.grantActor == actor && r.grantGame == r.state.ID && r.grantVersion == r.state.Version {
 			token = r.grant
@@ -512,6 +541,9 @@ func (r *Room) tool(name string, args map[string]string, actor string) (any, err
 		c.PropID = args["prop_id"]
 		c.PieceID = args["piece_id"]
 	}
+	if len(leases) > 0 {
+		c.Lease = leases[0]
+	}
 	r.mu.Unlock()
 	v, err := r.Do(c, true)
 	if err != nil {
@@ -526,6 +558,7 @@ func (r *Room) tool(name string, args map[string]string, actor string) (any, err
 }
 
 type Store struct {
+	delegationDelay  time.Duration
 	hostReclaimDelay time.Duration
 	storage          *database
 	retention        time.Duration
@@ -555,6 +588,7 @@ func (s *Store) Create(session string, o game.Options) (*Room, error) {
 	r.initOwner(session, o.Network)
 	r.storage = s.storage
 	r.hostReclaimDelay = s.hostReclaimDelay
+	r.delegationDelay = s.delegationDelay
 	if _, err := r.finish(nil, saveChange{Session: session}); err != nil {
 		return nil, err
 	}
@@ -624,6 +658,7 @@ func (s *Store) Run(ctxDone <-chan struct{}) {
 				default:
 				}
 				r.refreshHostPresence()
+				r.refreshDelegationAt(time.Now())
 				r.AI()
 			}
 		}
@@ -650,6 +685,7 @@ func (r *Room) control(action string) error {
 	r.voiceLease = ""
 	r.voiceActor = ""
 	r.used = false
+	r.updateDelegationPresence(time.Now())
 	r.state.Version++
 	r.state.History = append(r.state.History, game.Event{ID: game.ID(), Kind: action, Text: text})
 	if len(r.state.History) > 24 {
@@ -684,6 +720,7 @@ func (s *Store) CreateNew(session string, o game.Options) (*Room, error) {
 	r.initOwner(session, o.Network)
 	r.storage = s.storage
 	r.hostReclaimDelay = s.hostReclaimDelay
+	r.delegationDelay = s.delegationDelay
 	r.voiceSettings = settings
 	if _, err := r.finish(nil, saveChange{Session: session, DeleteRoom: deleteID}); err != nil {
 		return nil, err

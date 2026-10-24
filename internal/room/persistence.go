@@ -20,13 +20,16 @@ import (
 
 const saveSchema = 1
 
-// Version 5 permits a persisted host in any human seat. Older binaries must not quarantine transferred rooms.
-const databaseSchema = 5
+// Version 6 persists delegation consent/control. Older binaries must not ignore seat control state.
+const databaseSchema = 6
 const DefaultRetention = 7 * 24 * time.Hour
 
 type savedMember struct {
-	Index int  `json:"index"`
-	Ready bool `json:"ready"`
+	Delegated        bool   `json:"delegated,omitempty"`
+	AutoDelegate     bool   `json:"auto_delegate,omitempty"`
+	DelegationReason string `json:"delegation_reason,omitempty"`
+	Index            int    `json:"index"`
+	Ready            bool   `json:"ready"`
 }
 type roomRecord struct {
 	HostChange    *HostChange            `json:"host_change,omitempty"`
@@ -64,7 +67,7 @@ type database struct {
 func (r *Room) record() roomRecord {
 	members := map[string]savedMember{}
 	for key, m := range r.members {
-		members[key] = savedMember{m.index, m.ready}
+		members[key] = savedMember{Index: m.index, Ready: m.ready, Delegated: m.delegated, AutoDelegate: m.autoDelegate, DelegationReason: m.delegationReason}
 	}
 	return roomRecord{HostChange: r.hostChange, Schema: saveSchema, ID: r.ID, Owner: r.owner, Invite: r.invite, Members: members, Names: r.names, Options: r.options, Name: r.name, Status: r.status, State: r.state, Seq: r.seq, Updated: r.updated, SavedAt: r.savedAt, VoiceSettings: r.voiceSettings}
 }
@@ -75,7 +78,7 @@ func (r *Room) readRecord(p roomRecord) {
 	r.voiceSettings = p.VoiceSettings
 	r.members = map[string]member{}
 	for key, m := range p.Members {
-		r.members[key] = member{m.Index, m.Ready}
+		r.members[key] = member{index: m.Index, ready: m.Ready, delegated: m.Delegated, autoDelegate: m.AutoDelegate, delegationReason: m.DelegationReason}
 	}
 }
 
@@ -91,6 +94,7 @@ type rollbackPoint struct {
 	busy, used, restored                                   bool
 	hostOfflineSince                                       time.Time
 	hostClaimable                                          bool
+	offlineSince                                           map[string]time.Time
 }
 
 func (r *Room) beforeMutation() *rollbackPoint {
@@ -98,7 +102,11 @@ func (r *Room) beforeMutation() *rollbackPoint {
 		return nil
 	}
 	data, _ := json.Marshal(r.record())
-	return &rollbackPoint{data, r.cache, r.coach, r.coachPrevious, r.coachExpired, r.voice, r.grant, r.grantGame, r.grantActor, r.voiceActor, r.voiceLease, r.grantVersion, r.busy, r.used, r.restored, r.hostOfflineSince, r.hostClaimable}
+	offline := map[string]time.Time{}
+	for key, m := range r.members {
+		offline[key] = m.offlineSince
+	}
+	return &rollbackPoint{data, r.cache, r.coach, r.coachPrevious, r.coachExpired, r.voice, r.grant, r.grantGame, r.grantActor, r.voiceActor, r.voiceLease, r.grantVersion, r.busy, r.used, r.restored, r.hostOfflineSince, r.hostClaimable, offline}
 }
 func (r *Room) rollback(p *rollbackPoint, err *error) {
 	if p == nil || *err == nil {
@@ -117,6 +125,10 @@ func (r *Room) restore(p *rollbackPoint) {
 	r.voice, r.grant, r.grantGame, r.grantActor, r.voiceActor, r.voiceLease = p.voice, p.grant, p.grantGame, p.grantActor, p.voiceActor, p.lease
 	r.grantVersion, r.busy, r.used, r.restored = p.grantVersion, p.busy, p.used, p.restored
 	r.hostOfflineSince, r.hostClaimable = p.hostOfflineSince, p.hostClaimable
+	for key, m := range r.members {
+		m.offlineSince = p.offlineSince[key]
+		r.members[key] = m
+	}
 }
 
 // finish commits both game and idempotency key before any client can observe success.
@@ -205,7 +217,7 @@ func OpenStore(path string, retention time.Duration) (*Store, error) {
 		`CREATE TABLE IF NOT EXISTS diagnostic_events (id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL UNIQUE,at TEXT NOT NULL,room_id TEXT NOT NULL,game_id TEXT NOT NULL,version INTEGER NOT NULL,kind TEXT NOT NULL,source TEXT NOT NULL,session_id TEXT NOT NULL,input_id TEXT NOT NULL,ref TEXT NOT NULL,text TEXT NOT NULL,action TEXT NOT NULL,code TEXT NOT NULL,duration_ms INTEGER NOT NULL)`,
 		`CREATE INDEX IF NOT EXISTS diagnostic_events_game ON diagnostic_events(game_id,id DESC)`,
 		`CREATE INDEX IF NOT EXISTS diagnostic_events_at ON diagnostic_events(at)`,
-		"PRAGMA user_version=5",
+		"PRAGMA user_version=6",
 	} {
 		if _, err = tx.Exec(query); err != nil {
 			tx.Rollback()
@@ -424,6 +436,9 @@ func validRecord(p roomRecord) bool {
 		used := map[int]bool{}
 		for key, m := range p.Members {
 			if key == "" || m.Index < 0 || m.Index >= len(p.State.Players) || p.State.Players[m.Index].AI || used[m.Index] || p.Names[key] == "" {
+				return false
+			}
+			if (m.Delegated && m.DelegationReason != "manual" && m.DelegationReason != "offline") || (!m.Delegated && m.DelegationReason != "") {
 				return false
 			}
 			used[m.Index] = true

@@ -46,6 +46,9 @@ func (s *server) announcement(w http.ResponseWriter, req *http.Request) {
 			return false
 		}
 		_, text = preferences.Announcement(state)
+		if text != "" && state.Phase == "roll" && view.Network != nil && view.Network.Seats[state.Current].Delegated {
+			text = "托管正在替" + state.Players[state.Current].Name + "操作，只掷骰与走棋，不使用道具。"
+		}
 		return true
 	}
 	if !current() {

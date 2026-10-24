@@ -90,6 +90,12 @@ func main() {
 		os.Exit(1)
 	}
 	savedStore.SetHostReclaimDelay(time.Duration(hostDelay) * time.Second)
+	delegationDelay, err := positiveEnv("ROOM_DELEGATION_SECONDS", 60, 5, 600)
+	if err != nil {
+		slog.Error("invalid delegation delay")
+		os.Exit(1)
+	}
+	savedStore.SetDelegationDelay(time.Duration(delegationDelay) * time.Second)
 	s.bridge.Observe = savedStore.Diagnostic
 	s.bridge.MaxConnections = limits["LINGXI_MAX_CONNECTIONS"]
 	s.bridge.SessionTimeout = time.Duration(limits["LINGXI_SESSION_SECONDS"]) * time.Second
@@ -106,7 +112,7 @@ func main() {
 		writeJSON(w, 200, map[string]any{"status": "ok", "voice_configured": s.bridge.Config.Enabled(), "storage": "sqlite"})
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "host_reclaim_seconds": hostDelay, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "boards": game.Boards(), "diagnostics": savedStore.DiagnosticStatus()})
+		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "host_reclaim_seconds": hostDelay, "delegation_seconds": delegationDelay, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "boards": game.Boards(), "diagnostics": savedStore.DiagnosticStatus()})
 	})
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("GET /api/family", s.family)
@@ -239,7 +245,7 @@ func failure(w http.ResponseWriter, err error) {
 		if code == "SAVE_UNAVAILABLE" {
 			status = 503
 		}
-		if code == "HOST_ONLY" || code == "NOT_YOUR_TURN" || code == "NOT_AUTHORIZED" {
+		if code == "HOST_ONLY" || code == "NOT_YOUR_TURN" || code == "NOT_AUTHORIZED" || code == "SEAT_DELEGATED" {
 			status = 403
 		}
 		if code == "STALE_STATE" || code == "VOICE_BUSY" || code == "COMMAND_CONFLICT" || code == "HOST_GRACE_PERIOD" || code == "HOST_ONLINE" {

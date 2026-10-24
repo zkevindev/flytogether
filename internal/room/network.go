@@ -9,14 +9,19 @@ import (
 )
 
 type Seat struct {
-	Host     bool   `json:"host,omitempty"`
-	Robot    bool   `json:"robot,omitempty"`
-	PlayerID string `json:"player_id"`
-	Occupied bool   `json:"occupied"`
-	Ready    bool   `json:"ready"`
-	Online   bool   `json:"online"`
+	Delegated           bool   `json:"delegated,omitempty"`
+	DelegationReason    string `json:"delegation_reason,omitempty"`
+	AutoDelegate        bool   `json:"auto_delegate,omitempty"`
+	DelegateWaitSeconds int    `json:"delegate_wait_seconds,omitempty"`
+	Host                bool   `json:"host,omitempty"`
+	Robot               bool   `json:"robot,omitempty"`
+	PlayerID            string `json:"player_id"`
+	Occupied            bool   `json:"occupied"`
+	Ready               bool   `json:"ready"`
+	Online              bool   `json:"online"`
 }
 type Lobby struct {
+	DelegationSeconds    int        `json:"delegation_seconds"`
 	HostPlayerID         string     `json:"host_player_id"`
 	HostOnline           bool       `json:"host_online"`
 	HostClaimAt          *time.Time `json:"host_claim_at,omitempty"`
@@ -30,8 +35,12 @@ type Me struct {
 	Host     bool   `json:"host"`
 }
 type member struct {
-	index int
-	ready bool
+	delegated        bool
+	autoDelegate     bool
+	delegationReason string
+	offlineSince     time.Time
+	index            int
+	ready            bool
 }
 
 // Credentials and the membership map never enter a room snapshot.
@@ -95,6 +104,9 @@ func (r *Room) actorOK(session string, host bool) error {
 		}
 		return nil
 	}
+	if m.delegated {
+		return fail("SEAT_DELEGATED", "你的席位正在托管，请先回来接管")
+	}
 	if m.index != r.state.Current {
 		return fail("NOT_YOUR_TURN", "还没轮到你的席位，请等待当前玩家")
 	}
@@ -135,7 +147,7 @@ func (r *Room) lobbyView() *Lobby {
 	if r.invite == "" {
 		return nil
 	}
-	l := &Lobby{Invite: r.invite, Seats: make([]Seat, len(r.state.Players)), HostPlayerID: r.state.Players[r.members[r.owner].index].ID, HostOnline: r.online(r.owner)}
+	l := &Lobby{DelegationSeconds: int(r.delegationWait() / time.Second), Invite: r.invite, Seats: make([]Seat, len(r.state.Players)), HostPlayerID: r.state.Players[r.members[r.owner].index].ID, HostOnline: r.online(r.owner)}
 	if !r.hostOfflineSince.IsZero() {
 		at := r.hostOfflineSince.Add(r.hostDelay())
 		l.HostClaimAt = &at
@@ -148,7 +160,14 @@ func (r *Room) lobbyView() *Lobby {
 		l.Seats[i] = Seat{PlayerID: p.ID, Robot: p.AI, Occupied: p.AI, Ready: p.AI, Online: p.AI}
 	}
 	for session, m := range r.members {
-		l.Seats[m.index] = Seat{Host: session == r.owner, PlayerID: r.state.Players[m.index].ID, Occupied: true, Ready: m.ready, Online: r.online(session)}
+		remaining := 0
+		if !m.offlineSince.IsZero() {
+			wait := time.Until(m.offlineSince.Add(r.delegationWait()))
+			if wait > 0 {
+				remaining = int((wait + time.Second - 1) / time.Second)
+			}
+		}
+		l.Seats[m.index] = Seat{Delegated: m.delegated, DelegationReason: m.delegationReason, AutoDelegate: m.autoDelegate, DelegateWaitSeconds: remaining, Host: session == r.owner, PlayerID: r.state.Players[m.index].ID, Occupied: true, Ready: m.ready, Online: r.online(session)}
 	}
 	return l
 }
@@ -346,7 +365,7 @@ func (v *VoiceRoom) VoiceState(state string) {
 	}
 }
 func (v *VoiceRoom) Tool(name string, args map[string]string) (any, error) {
-	return v.r.tool(name, args, v.actor)
+	return v.r.tool(name, args, v.actor, v.lease)
 }
 
 func (s *Store) Leave(session, id string) error {
