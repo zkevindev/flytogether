@@ -1,7 +1,7 @@
 # 一起飞 · 项目进展
 
 - 更新日期：2026-10-24（Asia/Shanghai）
-- 当前阶段：P1陪玩风格/频率、亲子/经典预设与按需棋盘已部署；用户确认亲子/实体手机完成；家庭档案/真实跨局历史已交付；轻量棋盘/减少动画/键盘首版已交付；八种策略道具/反馈特效已交付；原生Realtime MCP已核对，玩法平衡继续迭代
+- 当前阶段：P1陪玩风格/频率、亲子/经典预设与按需棋盘已部署；用户确认亲子/实体手机完成；家庭档案/真实跨局历史已交付；轻量棋盘/减少动画/键盘首版已交付；星河救援合作挑战已合并；玩法平衡继续收集真实家庭反馈
 - 比赛安排：三天两晚，一人开发
 - 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
 
@@ -11,7 +11,8 @@
 | --- | --- | --- | --- |
 | M1：Realtime 语音接入 | [#1](https://github.com/zkevindev/flytogether/issues/1) | 已验证 Bearer 鉴权、合成中文语音查询、掷骰和实际选子起飞 | 直接提交 main，未创建 PR |
 | M2：家庭飞行棋玩法 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 点击玩法和三种棋盘已同步到 main；实际浏览器演示通过 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
-| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | 真实亲子与实体手机由用户确认完成；专项稳定性和比赛演示/发布资料继续跟踪 | 每项单独分支与关联 PR；本轮手册见 [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
+| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | PR #58 已合并；演示/发布手册完成，切网、后台、长听等现场稳定性继续跟踪 | [PR #58](https://github.com/zkevindev/flytogether/pull/58) · merge `802c893` · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
+| 产品化 1.0 | [#17](https://github.com/zkevindev/flytogether/issues/17) | 星河救援合作挑战和首轮试玩平衡流程已合并；跨家庭玩法/道具反馈仍在收集 | [PR #59](https://github.com/zkevindev/flytogether/pull/59) · merge `29e4019` · [PLAYTEST-BALANCE](PLAYTEST-BALANCE.md) |
 | 自定义语音唤醒（历史） | [#4](https://github.com/zkevindev/flytogether/issues/4) | 历史验收已完成，当前交互由 #14 直接对话替代 | [a85e63b](https://github.com/zkevindev/flytogether/commit/a85e63b)、[87a0d09](https://github.com/zkevindev/flytogether/commit/87a0d09)，直接 main |
 | 棋盘重做 | [#5](https://github.com/zkevindev/flytogether/issues/5) | 四角机场、连续彩色航线、中央骰子、放大和手机布局已实现并演示 | 直接 main，提交回链见 Issue |
 | 家庭道具 | [#6](https://github.com/zkevindev/flytogether/issues/6) | 三种道具、库存、AI 与语音用卡已实现 | [37b1a7c](https://github.com/zkevindev/flytogether/commit/37b1a7c)，界面提交见 Issue |
@@ -34,6 +35,7 @@
 | 直接语音对话 | 已实现并联调 | 开局自动连接，直接下指令；旧唤醒交互已按最新反馈移除 |
 | 传统棋盘布局与缩放 | 已重做并浏览器演示 | 1280×800、375×812、812×375 下检查；页面无横向溢出，放大仅在棋盘内滚动 |
 | 起飞卡、加速卡、幸运骰 | 规则和真实语音已验证 | 语音用起飞卡后实际掷 1 点并起飞；幸运骰 4/3 取 4；加速卡按真实点数 +2 生成合法走法 |
+| 星河救援合作挑战 | 已合并并完成自动试玩 | 2～4 席各送达一架后全队获胜；同屏、邀请、战绩、观赛、语音与回顾卡一致；[试玩/平衡记录](PLAYTEST-BALANCE.md) |
 | 真实家庭试玩与实体手机 | 已由用户确认完成 | 用户 2026-10-24 明确确认，详见 #3/#17 |
 | 专项稳定性与三分钟比赛交付 | 继续跟踪 | 切网/后台/噪声/回声/长监听现场记录仍待采集；演示及回滚手册见 [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 
@@ -359,10 +361,10 @@ Go race/vet、前端单测/构建及Chrome实际道具流程通过；11项道具
 
 `e81b049`优化用户新增的/product：暖白绿色版式、真实FlatBoard组件的明确玩法示意，点击看起飞/护盾/幸运骰，切换两种节奏；同屏/联网/观赛、八种道具、FAQ与实际创建入口。产品页独立加载，访问时无游戏API、麦克风、WebGL。四种Chrome视口（1440/820/390/320）、预览/FAQ/创建/返回/刷新通过；前端43项单测/构建和Go路由检查通过。产品页应用6dba4f2已部署，公网四档Chrome/键盘/减少动画/创建入口和无游戏API/麦克风/WebGL检查通过，页面错误0；17份网页资源与运行二进制核对一致，升级前在线备份、schema7和配置/数据库权限600保留。CI与Codecov通过，截图已换成公网版本。详见QA-PRODUCT。
 
-## 星河救援合作挑战（#17，待 PR 合并）
+## 星河救援合作挑战（#17，已合并）
 
-独立分支 `codex/issue-17-cooperative-mode` · [PR #59](https://github.com/zkevindev/flytogether/pull/59)。新增2～4人合作目标：各自送达一架飞机后全队获胜；同屏、邀请房间、机器人、服务端状态校验、家庭战绩、观赛、回顾卡与灵矽播报均识别团队结算。没有改动随机骰子和现有道具数量。
+独立分支 `codex/issue-17-cooperative-mode` · [PR #59](https://github.com/zkevindev/flytogether/pull/59) 已于 2026-10-24 合并，merge commit [`29e4019`](https://github.com/zkevindev/flytogether/commit/29e4019e3a3b5c77bb504bca7536a275b098cd9a)。新增2～4人合作目标：各自送达一架飞机后全队获胜；同屏、邀请房间、机器人、服务端状态校验、家庭战绩、观赛、回顾卡与灵矽播报均识别团队结算。没有改动随机骰子和现有道具数量。
 
 通过：`go test -race ./...`、`npm run test:unit`、`npm run build`；本地 Chrome 使用真实随机骰子/合法走法完成整局，刷新显示团队胜利与回顾卡，家庭历史记录全员获胜；同配置重玩保留玩法；两台隔离浏览器通过合作房间邀请、入座和房主开局。详细规则及持续反馈/配平门槛见 [PLAYTEST-BALANCE](PLAYTEST-BALANCE.md)。
 
-道具平衡继续按多个家庭、自然结束对局和主观反馈收集样本；本轮没有依据不足的任意调参。PR #59 已回链 [Issue #17](https://github.com/zkevindev/flytogether/issues/17)。
+道具平衡继续按多个家庭、自然结束对局和主观反馈收集样本；本轮没有依据不足的任意调参。PR #59 已回链 [Issue #17](https://github.com/zkevindev/flytogether/issues/17)，后续真实反馈继续在该 Issue 记录。
