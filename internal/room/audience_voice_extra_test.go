@@ -113,6 +113,9 @@ func TestSpectatorToolOmitsChatAndClosesAfterManualEnd(t *testing.T) {
 	if err = voice.BeginSpeech(); err == nil || err.(*Error).Code != "GAME_NOT_ACTIVE" {
 		t.Fatalf("ended match still accepted speech: %v", err)
 	}
+	if _, err = voice.Tool("get_game_state", nil); err == nil || err.(*Error).Code != "GAME_NOT_ACTIVE" {
+		t.Fatalf("late read survived manual end: %v", err)
+	}
 }
 
 func TestSpectatorVoiceRejectsClosedChannelAndNewMatch(t *testing.T) {
@@ -137,9 +140,8 @@ func TestSpectatorVoiceRejectsClosedChannelAndNewMatch(t *testing.T) {
 	if err = voice.BeginSpeech(); err == nil || err.(*Error).Code != "STALE_ACTION" {
 		t.Fatalf("lease survived a new match: %v", err)
 	}
-	// Read-only tools still answer about the new match; the lease only gates speech.
-	if _, err = voice.Tool("get_legal_moves", nil); err != nil {
-		t.Fatalf("read tool after a new match: %v", err)
+	if _, err = voice.Tool("get_legal_moves", nil); err == nil || err.(*Error).Code != "STALE_ACTION" {
+		t.Fatalf("late read crossed into a new match: %v", err)
 	}
 	voice.Close()
 

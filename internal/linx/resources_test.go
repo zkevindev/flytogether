@@ -50,3 +50,46 @@ func TestBridgeDeadlineReleasesSlotAndNeverDialsOverBudget(t *testing.T) {
 		t.Fatal("TTS quota failed or leaked busy slot")
 	}
 }
+
+func TestSpectatorBudgetsAndDeadlineStaySeparateFromPlayer(t *testing.T) {
+	store := room.NewStore()
+	r, err := store.Create("host", game.Options{Names: []string{"房主", "朋友"}, Network: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.Watch("fan", r.ID, r.SnapshotFor("host").Audience.Token, "观众"); err != nil {
+		t.Fatal(err)
+	}
+	v, err := r.VoiceForSpectator("fan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+	b := &Bridge{MaxConnections: 1, SpectatorMax: 1, active: 1, spectators: 1}
+	if err = b.Serve(context.Background(), nil, v); err == nil || !strings.Contains(err.Error(), "观赛助手名额") || b.active != 1 || b.spectators != 1 {
+		t.Fatal("spectator connection limit", err)
+	}
+	b.spectators = 0
+	playerReservations := 0
+	b.Reserve = func(context.Context) error { playerReservations++; return nil }
+	b.ReserveSpectator = func(context.Context) error { return room.ErrVoiceBudget }
+	if err = b.Serve(context.Background(), nil, v); err == nil || !strings.Contains(err.Error(), "额度") || b.spectators != 0 || b.active != 1 || playerReservations != 0 {
+		t.Fatal("shared or leaked budget", err)
+	}
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) { <-req.Context().Done() }))
+	defer provider.Close()
+	old := http.DefaultClient
+	http.DefaultClient = provider.Client()
+	defer func() { http.DefaultClient = old }()
+	b.Config = Config{URL: strings.Replace(provider.URL, "https:", "wss:", 1) + "/v1/realtime", APIKey: "test-only", Model: "test"}
+	b.ReserveSpectator = nil
+	b.SessionTimeout = time.Minute
+	b.SpectatorTimeout = 80 * time.Millisecond
+	started := time.Now()
+	if err = b.Serve(context.Background(), nil, v); err == nil || !strings.Contains(err.Error(), "观赛助手已到时限") || time.Since(started) > time.Second {
+		t.Fatal("spectator deadline", err)
+	}
+	if b.active != 1 || b.spectators != 0 {
+		t.Fatal("spectator timeout released player slot or leaked its own")
+	}
+}

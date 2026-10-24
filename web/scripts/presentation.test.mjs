@@ -66,3 +66,14 @@ test('area prop holds one board beat, ignores duplicate snapshots and discards o
  const duplicate=sync(p,game(2,12,[e]));assert.equal(duplicate,p);
  p=sync(p,game(2,12,[e]),'paused');assert.equal(p.effect,undefined);assert.equal(p.active,undefined);
 });
+
+test('spectator reconnect binds current board without replaying missed rolls or effects',()=>{
+ let p=sync(initialPresentation,game(1,-1,[]));
+ p=sync(p,game(2,-1,[rolled('old-roll')]));
+ const latest=game(4,4,[rolled('old-roll'),launched('launch'),rolled('missed-roll'),moved('move')]);
+ p=reduce(p,{type:'reset',game:latest});
+ assert.equal(position(p),4);assert.equal(p.active,undefined);assert.equal(p.effect,undefined);assert.equal(p.queue.length,0);
+ assert.equal(sync(p,latest),p);
+ p=sync(p,game(5,4,[...latest.history,rolled('live-roll')]));
+ assert.equal(p.active.id,'live-roll');
+});

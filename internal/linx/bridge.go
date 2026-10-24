@@ -90,6 +90,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	if prefErr != nil {
 		return prefErr
 	}
+	if spectator {
+		companion.Frequency = "quiet"
+	}
 	limit := b.MaxConnections
 	if limit <= 0 {
 		limit = 4
@@ -421,6 +424,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			return errors.New("灵矽实时会话已断开")
 		case preference := <-preferencesChanged:
+			if spectator {
+				preference.Frequency = "quiet"
+			}
 			companion = preference
 			cancelHost()
 			if state, _, ok := roomGame(r); ok {
@@ -452,6 +458,13 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			continue
 		case now := <-ticker.C:
+			if spectator {
+				// Revoke even an idle or currently speaking connection. A delayed
+				// provider response must not outlive this spectator's game/lease.
+				if e := r.BeginSpeech(); e != nil {
+					return e
+				}
+			}
 			if pendingResponse != nil && now.Sub(pendingResponseSince) > 8*time.Second {
 				pendingResponse = nil
 				if inFlight && currentToken == pendingResponseToken {
@@ -510,6 +523,10 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				pendingHost = false
 				hostIDs = map[string]bool{}
 			}
+			if inFlight && gate.awake(time.Now()) {
+				_ = sendUp(map[string]any{"type": "response.cancel"})
+				pendingResponse = nil
+			}
 			currentToken, inFlight = "", false
 			r.VoiceState("standby")
 			if gate.awake(time.Now()) {
@@ -564,7 +581,18 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			if e := r.BeginSpeech(); e != nil {
 				return e
 			}
+			if inFlight {
+				// Some providers split one utterance into adjacent ASR items.
+				// Cancel the previous generation before the new response request.
+				_ = sendUp(map[string]any{"type": "response.cancel"})
+				pendingResponse = nil
+			}
 			currentToken, inFlight = r.CurrentActionToken(), true
+			if spectator {
+				// This correlates a private response; it is never a game grant.
+				// Spectators deliberately have no CurrentActionToken.
+				currentToken = game.ID()
+			}
 			r.VoiceState("thinking")
 			if e := sendWake(); e != nil {
 				return e
@@ -601,8 +629,11 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			} else if action.Name == "use_prop" && action.PropID == "launch" {
 				awaitingLaunchChoice = false
 			}
-			if spectator && handled && (action.Name != "get_game_state" || strings.Contains(action.Notice, "掷骰") || strings.Contains(action.Notice, "飞机") || strings.Contains(action.Notice, "操作")) {
-				action = voiceAction{Name: "get_game_state", Notice: "这是只属于你的观赛助手。我不能替选手掷骰、走棋、用卡或控制房间，也不会把这句话转成比赛指令。你可以继续问现在轮到谁、谁更接近终点，或刚才发生了什么。"}
+			if spectator {
+				// Spectators ask questions, even when they mention a move or card.
+				// Their independent prompt and read-only tool object reject writes;
+				// the player's intent parser must not convert a question to an action.
+				handled = false
 				awaitingLaunchChoice = false
 			}
 			if handled {
@@ -702,8 +733,15 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			if spectator && !handled {
 				fresh := b.executeTool(r, functionCall{Type: "function_call", Name: "get_game_state", CallID: "watch-" + game.ID(), Arguments: "{}"})
+				trace(room.DiagnosticEvent{Kind: "tool", InputID: body.ItemID, Ref: body.ItemID, Action: "get_game_state", Code: "read_only"})
 				session := sessionInstructions["session"].(map[string]any)
 				session["instructions"] = session["instructions"].(string) + "本轮已刷新的权威棋局，回答必须以此为准。recent_events 没有记录的过去事件要明确说明不知道，禁止编造点数、胜负，禁止声称已替选手操作：" + fresh
+				if script, exact := spectatorNarration(voiceText, fresh); exact {
+					allowModelTools = false
+					instructions := readFactsInstruction(script, companion)
+					session["instructions"] = instructions
+					response["response"] = map[string]any{"tool_choice": "none", "instructions": instructions}
+				}
 			}
 			if e := sendUp(sessionInstructions); e != nil {
 				return e
@@ -814,6 +852,15 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			continue
 		case "error":
+			var failure struct {
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			_ = json.Unmarshal(event.Raw, &failure)
+			if failure.Error.Code == "response_cancel_not_active" {
+				continue
+			}
 			trace(room.DiagnosticEvent{Kind: "error", Code: "upstream_error"})
 			if hostActive() {
 				pendingHost = false
@@ -915,7 +962,7 @@ func realtimeSessionUpdate(model string) map[string]any {
 func realtimeSpectatorSessionUpdate(model string) map[string]any {
 	return map[string]any{"type": "session.update", "session": map[string]any{
 		"type": "realtime", "model": model, "output_modalities": []string{"audio"},
-		"instructions": "你是一位观众的私人飞行棋讲解员，只和这一位观众对话。用简短中文回答谁领先、轮到谁、刚才发生了什么、规则和道具。每次回答棋局问题都以本轮刷新的工具结果为准，不凭旧对话记忆编造点数或胜负；没有记录的过去事件要直接说明不知道。你不能掷骰、走棋、使用道具、暂停、结束或把观众的话转成选手指令。回复只给这位观众，不提及其他人的私人对话。不要朗读内部ID、授权或技术字段。",
+		"instructions": "你是一位观众的私人飞行棋讲解员，只和这一位观众对话。用简短中文回答谁领先、轮到谁、刚才发生了什么、规则和道具。每次回答棋局问题都以本轮刷新的工具结果为准，不凭旧对话记忆编造点数或胜负；没有记录的过去事件要直接说明不知道。你不能掷骰、走棋、使用道具、暂停、结束或把观众的话转成选手指令。回复只给这位观众，不提及其他人的私人对话。不要朗读内部ID、授权或技术字段。进度负一只说还在机库，不要报负数或字段名。只回答本轮问题，别补充推测的历史、点数或额外动作。",
 		"audio": map[string]any{
 			"input": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 16000}, "transcription": map[string]any{},
 				"turn_detection": map[string]any{"type": "server_vad", "create_response": false, "interrupt_response": true}},

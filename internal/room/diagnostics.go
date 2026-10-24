@@ -352,7 +352,7 @@ func (s *Store) DiagnosticTimeline(ctx context.Context, id string, q DiagnosticQ
 	}
 	if q.Kind != "" {
 		if q.Kind == "voice" {
-			where += " AND source IN ('realtime','tts','voice')"
+			where += " AND source IN ('realtime','tts','voice','spectator')"
 		} else {
 			where += " AND kind=?"
 			args = append(args, q.Kind)

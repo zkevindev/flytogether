@@ -11,7 +11,7 @@ export type Presentation = {
   effect?: { id: string; events: GameEvent[] };
 };
 export const initialPresentation: Presentation = { sourceID: '', seen: [], queue: [] };
-export type PresentationAction = { type: 'sync'; game: Game; status: string } | { type: 'advance'; id: string };
+export type PresentationAction = { type: 'sync'; game: Game; status: string; catchUp?: boolean } | { type: 'reset'; game: Game } | { type: 'advance'; id: string };
 
 // Presentation follows server events without delaying or replaying game commands.
 // A dice beat keeps the preceding board visible; its result is released on close.
@@ -20,9 +20,14 @@ export function presentationReducer(state: Presentation, action: PresentationAct
     if (state.active?.id !== action.id) return state;
     return activate({ ...state, active: undefined });
   }
-  const { game, status } = action;
+  const { game } = action;
   const seen = game.history.map(event => event.id);
-  if (state.sourceID !== game.id || status !== 'playing') {
+  if (action.type === 'reset' || state.sourceID !== game.id || action.status !== 'playing') {
+    return { sourceID: game.id, seen, game, queue: [] };
+  }
+  // A spectator who falls far behind follows the latest board instead of
+  // spending minutes replaying old dice. Live steps retain normal ordering.
+  if (action.catchUp && state.game && game.version - state.game.version > 8) {
     return { sourceID: game.id, seen, game, queue: [] };
   }
   const fresh = game.history.filter(event => !state.seen.includes(event.id));

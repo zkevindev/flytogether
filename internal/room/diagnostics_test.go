@@ -17,6 +17,26 @@ func enableDiagnostic(t *testing.T, s *Store, text bool) {
 		t.Fatal(e)
 	}
 }
+
+func TestVoiceTimelineIncludesIndependentSpectatorSessions(t *testing.T) {
+	s := openTestSaves(t, filepath.Join(t.TempDir(), "games.db"))
+	enableDiagnostic(t, s, true)
+	r, err := s.Create("host", game.Options{Names: []string{"房主", "朋友"}, Network: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := current(r)
+	for _, session := range []string{"spectator-one", "spectator-two"} {
+		s.Diagnostic(DiagnosticEvent{RoomID: r.ID, GameID: g.ID, Kind: "user_text", Source: "spectator", SessionID: session, InputID: session + "-input", Text: "现在轮到谁"})
+	}
+	page, err := s.DiagnosticTimeline(context.Background(), g.ID, DiagnosticQuery{Kind: "voice"})
+	if err != nil || len(page.Events) != 2 {
+		t.Fatal("spectator missing from voice filter", page, err)
+	}
+	if page.Events[0].Source != "spectator" || page.Events[0].SessionID == page.Events[1].SessionID {
+		t.Fatal("spectator sessions not distinguishable", page)
+	}
+}
 func TestDiagnosticLifecycleAtomicReplayAndRestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "games.db")
 	s := openTestSaves(t, path)

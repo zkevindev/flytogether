@@ -235,3 +235,30 @@ func mustJSON(v any) []byte {
 	b, _ := json.Marshal(v)
 	return b
 }
+
+func TestDiscardRevokesLiveSpectatorAndVoiceAccess(t *testing.T) {
+	s, r, _ := spectatorFixture(t)
+	v, err := r.VoiceForSpectator("fan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch, stop := r.SubscribeFor("fan")
+	defer stop()
+	<-ch
+	if err = s.Discard("host", r.ID); err != nil {
+		t.Fatal(err)
+	}
+	var notice map[string]any
+	if err = json.Unmarshal(<-ch, &notice); err != nil || notice["type"] != "audience_closed" {
+		t.Fatal("no deletion notice", notice, err)
+	}
+	if r.HasAccess("fan") || s.AudienceRoom("fan", r.ID) != nil {
+		t.Fatal("discard retained audience access")
+	}
+	if err = v.BeginSpeech(); err == nil {
+		t.Fatal("discard retained voice")
+	}
+	if _, err = v.Tool("get_game_state", nil); err == nil {
+		t.Fatal("discard retained late tools")
+	}
+}

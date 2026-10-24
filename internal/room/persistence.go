@@ -508,6 +508,8 @@ func (s *Store) Discard(session, id string) error {
 	if r.status != "ended" {
 		_ = r.control("end")
 	}
+	r.spectateOn = false
+	r.revokeSpectatorsLocked("房主已删除房间，观赛已结束")
 	r.savedAt = time.Time{}
 	r.publish()
 	delete(s.rooms, id)

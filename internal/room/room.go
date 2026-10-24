@@ -670,6 +670,10 @@ func (s *Store) Run(ctxDone <-chan struct{}) {
 							continue
 						}
 					}
+					r.mu.Lock()
+					r.spectateOn = false
+					r.revokeSpectatorsLocked("房间已过期，观赛已结束")
+					r.mu.Unlock()
 					delete(s.rooms, id)
 					for key, rid := range s.sessions {
 						if rid == id {

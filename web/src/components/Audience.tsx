@@ -62,7 +62,7 @@ export function AudienceChat({ room, onRoom, players }: { room: Room; onRoom: (r
     try { onRoom(await api<Room>('/api/rooms/' + room.id + '/chat/block', { from_id: fromID, blocked: true })); }
     catch (e) { setError(e instanceof Error ? e.message : '没有屏蔽成功'); }
   };
-  const canSpeak = !!room.me || (audience.me && audience.chat_enabled);
+  const canSpeak = room.status !== 'ended' && (!!room.me || (audience.me && audience.chat_enabled));
   return <section className="audience-chat" aria-label="观赛互动">
     <div className="audience-chat-head"><strong>互动</strong><span>{audience.online} 人正在看</span><button type="button" className="text-button" onClick={() => { const next = !hidden; setHidden(next); localStorage.setItem('fly-chat-hidden', next ? 'on' : 'off'); }}>{hidden ? '显示消息' : '隐藏消息'}</button></div>
     {hidden ? <p>消息已隐藏。这不影响棋局，也不关闭你的私人灵犀。</p> : <>
@@ -78,6 +78,7 @@ export function AudienceChat({ room, onRoom, players }: { room: Room; onRoom: (r
       <div className="chat-compose"><input id={'cheer-text-' + room.id} maxLength={40} value={text} onChange={e => setText(e.target.value)} placeholder="最多 40 字" /><button className="primary-button" type="submit">发送</button></div>
     </form>}
     {audience.me && !audience.chat_enabled && <p>房主已关闭观众发言，你仍可以安静观看，或只问自己的灵犀。</p>}
+    {room.status === 'ended' && <p>本局已结束，互动记录保留到房主再玩或删除房间。</p>}
     {error && <p role="alert">{error}</p>}
   </section>;
 }

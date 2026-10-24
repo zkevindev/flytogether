@@ -57,21 +57,25 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
     let stopped = false, socket: WebSocket, timer: ReturnType<typeof setTimeout>;
     const connect = () => {
       if (stopped || !navigator.onLine) { setConnected(false); return; }
+      let firstSnapshot = true;
       socket = new WebSocket(socketURL('/ws/game?room_id=' + encodeURIComponent(room.id)));
       socket.onopen = () => setConnected(false);
       socket.onmessage = e => {
         try {
           const data = JSON.parse(e.data);
           if (stopped || roomRef.current?.id !== room.id) return;
-          if (data.type === 'audience_closed') { setClosed(data.message || '观赛已结束'); setConnected(false); voice.current?.disconnect(); socket.close(); return; }
-          if (data.type === 'state' && data.room) { accept(data.room); setConnected(true); }
+          if (data.type === 'audience_closed') { closedRef.current = data.message || '观赛已结束'; setClosed(closedRef.current); setConnected(false); voice.current?.disconnect(); socket.close(); return; }
+          if (data.type === 'state' && data.room) {
+            if (firstSnapshot) { present({ type: 'reset', game: data.room.state }); setImpact(undefined); firstSnapshot = false; }
+            accept(data.room); setConnected(true);
+          }
         } catch { /* Ignore a damaged frame and keep the last good snapshot. */ }
       };
       socket.onclose = () => { setConnected(false); if (!stopped && !closedRef.current && navigator.onLine) timer = setTimeout(connect, 1800); };
       socket.onerror = () => socket.close();
     };
     connect();
-    const offline = () => { clearTimeout(timer); setConnected(false); socket?.close(); voice.current?.disconnect(); };
+    const offline = () => { clearTimeout(timer); setConnected(false); socket?.close(); voice.current?.disconnect(); setImpact(undefined); };
     const online = () => { clearTimeout(timer); connect(); };
     addEventListener('offline', offline); addEventListener('online', online);
     return () => { stopped = true; clearTimeout(timer); socket?.close(); removeEventListener('offline', offline); removeEventListener('online', online); };
@@ -79,11 +83,11 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
 
   useEffect(() => {
     const id = room?.state.id || '';
-    if (gameRef.current && id && gameRef.current !== id) { voice.current?.disconnect(); setSpeech(''); setVoiceState('disconnected'); }
+    if (gameRef.current && id && gameRef.current !== id) { voice.current?.disconnect(); setSpeech(''); setVoiceState('disconnected'); setError(''); setImpact(undefined); }
     gameRef.current = id;
   }, [room?.state.id]);
 
-  useEffect(() => { if (room) present({ type: 'sync', game: room.state, status: room.status }); }, [room]);
+  useEffect(() => { if (room) present({ type: 'sync', game: room.state, status: room.status, catchUp: true }); }, [room]);
   useEffect(() => {
     const beat = presentation.active;
     if (beat?.kind !== 'board') return;
@@ -118,6 +122,7 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
   };
   const ask = async () => {
     if (!room || muted) return;
+    setError('');
     voice.current?.disconnect();
     const client = new VoiceClient(room.id, setVoiceState, (text, who) => { if (who !== 'you') setSpeech(text); }, setError, { style: 'warm', frequency: 'quiet' }, next => { if (next.audience?.me) accept(next); }, '/ws/audience-voice');
     voice.current = client;
@@ -148,12 +153,14 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
       </section>
       <aside className="side-column">
         <section className="voice-panel" aria-label="我的灵犀"><h2>问我的灵犀</h2><p>只回答你本人，不广播给选手，也不能替他们操作。</p><div className="voice-bubble" aria-live="polite">{speech || '可以问现在轮到谁、谁更接近终点，或刚才为什么被送回。'}</div>
+          <p role="status">{{ connecting: '正在连接你的灵犀…', ready: '正在听你说', standby: '正在听你说', listening: '正在听你说', thinking: '正在了解当前棋局…', speaking: '灵犀正在回答' }[voiceState] || '安静观赛中，提问时才开启麦克风。'}</p>
           {voiceState === 'disconnected' ? <button className="voice-button" disabled={muted || !config?.voice_configured || !!closed || room.status === 'ended'} onClick={() => void ask()}><Microphone />{room.status === 'ended' ? '本局已结束' : muted ? '静音中' : config?.voice_configured ? '开始提问' : '灵犀未配置，可继续观看'}</button> : <button className="voice-button" onClick={() => voice.current?.disconnect()}>停止提问</button>}
           {voiceState === 'speaking' && <button className="text-button" onClick={() => voice.current?.stopPlayback()}>停止播放</button>}
           {error && <p role="alert">{error}</p>}
+          {config?.diagnostics?.enabled && config.diagnostics.transcripts && <p className="voice-footnote">语音文本用于故障排查，保留{Math.ceil(config.diagnostics.retention_hours / 24)}天，不保存录音。你的对话不会展示给其他观众或选手。</p>}
           <button className="text-button" onClick={() => void leave()}>退出观赛 <ArrowClockwise /></button>
         </section>
-        <AudienceChat room={room} onRoom={accept} players={state.players} />
+        {!closed && <AudienceChat key={room.state.id} room={room} onRoom={accept} players={state.players} />}
       </aside>
     </div></main>
     {presentation.active?.kind === 'dice' && <DiceRollModal key={presentation.active.id} reducedMotion={reducedMotion} roll={presentation.active.roll} onClose={() => { if (presentation.active) present({ type: 'advance', id: presentation.active.id }); }} />}

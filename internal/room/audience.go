@@ -214,6 +214,7 @@ func (r *Room) audienceBody(session string, spectator bool) *Audience {
 
 func (r *Room) audienceView(session string) View {
 	v := r.view()
+	v.Voice = "disconnected"
 	v.ProfileIDs = nil
 	v.Coach = nil
 	v.CoachExpired = false
@@ -682,6 +683,9 @@ func (v *SpectatorVoice) VoiceSettings() VoiceSettings {
 func (v *SpectatorVoice) BeginSpeech() error {
 	v.r.mu.Lock()
 	defer v.r.mu.Unlock()
+	return v.validLocked()
+}
+func (v *SpectatorVoice) validLocked() error {
 	if !v.r.spectateOn || !v.r.isSpectator(v.actor) {
 		return fail("SPECTATE_CLOSED", "观赛助手已关闭，仍可刷新查看棋局")
 	}
@@ -701,8 +705,8 @@ func (v *SpectatorVoice) Tool(name string, _ map[string]string) (any, error) {
 	}
 	v.r.mu.Lock()
 	defer v.r.mu.Unlock()
-	if v.r.spectatorLeases[v.actor] != v.lease || !v.r.isSpectator(v.actor) {
-		return nil, fail("STALE_ACTION", "观赛助手连接已失效")
+	if err := v.validLocked(); err != nil {
+		return nil, err
 	}
 	recent := []string{}
 	for _, event := range v.r.state.History {
