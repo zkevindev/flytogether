@@ -33,6 +33,7 @@ try {
   const tp = await page(tv, displayLink.slice(new URL(base).origin.length));
   await tp.getByLabel('只读棋盘').waitFor();
   await tp.getByText('家庭大屏', { exact: true }).waitFor();
+  await tp.getByText('实时同步中', { exact: true }).waitFor();
   assert.equal(await tp.locator('.living-room-screen button:not([disabled])').count(), 0, 'display has an enabled game or room control');
   assert.equal(await tp.evaluate(() => window.__screen.mic), 0, 'display requested microphone');
   await hp.screenshot({ path: `${out}/phone-before.png` }); await tp.screenshot({ path: `${out}/tv-before.png` });
