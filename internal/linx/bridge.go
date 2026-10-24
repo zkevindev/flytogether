@@ -302,6 +302,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	var seenEvent string
 	var cheered Cheer
 	var narrationContext string
+	var pendingResponse map[string]any
+	var pendingResponseToken, pendingInstructions string
+	var pendingResponseSince time.Time
 	hostIDs := map[string]bool{}
 	grants := map[string]string{}
 	calls := map[string][]functionCall{}
@@ -396,6 +399,17 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			continue
 		case now := <-ticker.C:
+			if pendingResponse != nil && now.Sub(pendingResponseSince) > 8*time.Second {
+				pendingResponse = nil
+				if inFlight && currentToken == pendingResponseToken {
+					currentToken, inFlight = "", false
+					idle()
+					trace(room.DiagnosticEvent{Kind: "error", Code: "session_ack_timeout"})
+					if e := sendBrowser(map[string]any{"type": "error", "message": "操作结果已保留，语音配置暂未确认，请重新连接"}); e != nil {
+						return e
+					}
+				}
+			}
 			if settings := r.VoiceSettings(); settings != gate.settings {
 				gate.settings = settings
 				if e := sleep(); e != nil {
@@ -615,6 +629,26 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			if e := sendUp(sessionInstructions); e != nil {
 				return e
 			}
+			// Session updates may be applied asynchronously by the provider.
+			// Generate only after the matching instructions have been acknowledged.
+			pendingResponse, pendingResponseToken = response, currentToken
+			pendingResponseSince = time.Now()
+			pendingInstructions = sessionInstructions["session"].(map[string]any)["instructions"].(string)
+			continue
+		case "session.updated":
+			if pendingResponse == nil || !inFlight || pendingResponseToken != currentToken {
+				continue
+			}
+			var updated struct {
+				Session struct {
+					Instructions string `json:"instructions"`
+				} `json:"session"`
+			}
+			if json.Unmarshal(event.Raw, &updated) != nil || updated.Session.Instructions != pendingInstructions {
+				continue
+			}
+			response := pendingResponse
+			pendingResponse = nil
 			if e := sendUp(response); e != nil {
 				return e
 			}

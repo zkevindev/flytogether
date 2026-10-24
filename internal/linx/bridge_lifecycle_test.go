@@ -43,7 +43,7 @@ func TestBridgeLateToolsStayBoundToTheirOriginalTurn(t *testing.T) {
 						continue
 					}
 					if event["type"] == "session.update" {
-						if writeEvent(ctx, c, map[string]any{"type": "session.updated"}) != nil {
+						if writeEvent(ctx, c, map[string]any{"type": "session.updated", "session": event["session"]}) != nil {
 							return
 						}
 						if !announced {

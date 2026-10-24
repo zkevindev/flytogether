@@ -98,7 +98,19 @@ func (s *State) UsePropOn(id, pieceID string) error {
 		p.Props[id]--
 		s.ActiveProp = id
 		s.Version++
-		s.add("prop", p.Name+"使用了"+name+"："+strings.Join(descriptions, "；")+"。请继续掷骰子。", pieceID)
+		description := strings.Join(descriptions, "；")
+		if id == "escort" {
+			labels := []string{}
+			for _, effect := range effects {
+				for _, piece := range p.Pieces {
+					if piece.ID == effect.PieceID {
+						labels = append(labels, piece.Label)
+					}
+				}
+			}
+			description = strings.Join(labels, "、") + "获得护盾，抵挡一次攻击或撞机"
+		}
+		s.add("prop", p.Name+"使用了"+name+"："+description+"。请继续掷骰子。", pieceID)
 		s.History[len(s.History)-1].PropID = id
 		s.History[len(s.History)-1].Effects = effects
 		return nil

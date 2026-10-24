@@ -28,6 +28,7 @@ func TestDiceSpeechCommitsAndAcknowledgesBeforeNarration(t *testing.T) {
 		defer c.CloseNow()
 		_ = writeEvent(ctx, c, map[string]any{"type": "session.created"})
 		announced := false
+		updates := 0
 		for {
 			_, data, err := c.Read(ctx)
 			if err != nil {
@@ -38,7 +39,12 @@ func TestDiceSpeechCommitsAndAcknowledgesBeforeNarration(t *testing.T) {
 				continue
 			}
 			if e["type"] == "session.update" {
-				_ = writeEvent(ctx, c, map[string]any{"type": "session.updated"})
+				updates++
+				if updates == 2 {
+					requests <- e
+					continue
+				}
+				_ = writeEvent(ctx, c, map[string]any{"type": "session.updated", "session": e["session"]})
 				if !announced {
 					peers <- c
 					announced = true
@@ -121,10 +127,28 @@ func TestDiceSpeechCommitsAndAcknowledgesBeforeNarration(t *testing.T) {
 	if !strings.Contains(ack["text"].(string), strconv.Itoa(rolled.Dice)) || !strings.Contains(ack["text"].(string), "请选择") {
 		t.Fatal("not actual die/next step", ack["text"])
 	}
+	contextBound := false
 	for {
 		select {
 		case e := <-requests:
+			if e["type"] == "conversation.item.create" {
+				item := e["item"].(map[string]any)
+				encoded, _ := json.Marshal(item["content"])
+				contextBound = item["role"] == "system" && strings.Contains(string(encoded), ack["text"].(string))
+			}
+			if e["type"] == "session.update" {
+				send(map[string]any{"type": "session.updated", "session": map[string]any{"instructions": "old host cue"}})
+				select {
+				case early := <-requests:
+					t.Fatalf("generation before matching acknowledgement: %v", early["type"])
+				case <-time.After(100 * time.Millisecond):
+				}
+				send(map[string]any{"type": "session.updated", "session": e["session"]})
+			}
 			if e["type"] == "response.create" {
+				if !contextBound {
+					t.Fatal("reply must receive latest committed facts as its input before generation")
+				}
 				response := e["response"].(map[string]any)
 				if response["tool_choice"] != "none" || !strings.Contains(response["instructions"].(string), ack["text"].(string)) {
 					t.Fatal("narration not bound to receipt")

@@ -72,7 +72,7 @@ func TestLiveCompanionChangesDoNotReconnectOrWriteGame(t *testing.T) {
 				continue
 			}
 			if event["type"] == "session.update" {
-				_ = writeEvent(ctx, c, map[string]any{"type": "session.updated"})
+				_ = writeEvent(ctx, c, map[string]any{"type": "session.updated", "session": event["session"]})
 			}
 			select {
 			case requests <- event:
