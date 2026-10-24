@@ -24,6 +24,9 @@ func (s *State) Validate() error {
 	if s.Mode != "quick" && s.Mode != "classic" && s.Mode != "coop" {
 		return fmt.Errorf("unsupported mode")
 	}
+	if err := validateMission(s); err != nil {
+		return err
+	}
 	count := 2
 	if s.Mode == "classic" {
 		count = 4

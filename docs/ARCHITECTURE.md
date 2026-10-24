@@ -99,6 +99,8 @@ flowchart LR
     V <-->|"上游语音 WebSocket"| L["灵矽：语音、对话、工具选择"]
     L -->|"Realtime 工具调用事件"| V
     V -->|"游戏工具"| G
+    L -->|"原生 Realtime MCP：只读查询"| M["Go：短时授权的 MCP 网关"]
+    M -->|"当前语音会话绑定的快照"| G
     G --> R["纯 Go 规则引擎"]
     G --> A["Go AI 策略"]
     G --> S["SQLite 房间与命令去重"]
@@ -111,6 +113,7 @@ flowchart LR
 | Go HTTP | 标准库 net/http；业务逻辑不依赖 HTTP 类型 |
 | WebSocket | 候选 coder/websocket；游戏与音频用两条连接，防止音频积压阻塞棋局 |
 | 工具调用 | 在 Realtime 会话声明项目游戏工具，由 Go 网关处理 function call 事件 |
+| Realtime MCP | 通过 `session.update` 声明只读 MCP；短时 bearer 绑定当前会话/房间/玩家，可撤销、限流；不授予写动作 |
 | 状态 | Go 为唯一真实来源，前端负责呈现，不保留第二套权威规则 |
 | 存储 | SQLite 事务保存，确认前落盘，重启暂停，原 Cookie 恢复席位 |
 | API 类型 | 简单 REST 契约与 TypeScript 类型；初版人工对照，后续可生成客户端 |

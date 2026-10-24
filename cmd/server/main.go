@@ -44,6 +44,7 @@ type runtimeConfig struct {
 	LinxURL         string
 	LinxAPIKey      string
 	LinxModel       string
+	MCPPublicURL    string
 	Retention       int
 	DiagnosticHours int
 	HostDelay       int
@@ -98,7 +99,7 @@ func main() {
 // newServer wires storage, limits, diagnostics and the Linx bridge from a
 // validated configuration. It never reaches the network by itself.
 func newServer(store *room.Store, cfg runtimeConfig) (*server, error) {
-	s := &server{store: store, bridge: &linx.Bridge{Config: linx.Config{URL: cfg.LinxURL, APIKey: cfg.LinxAPIKey, Model: cfg.LinxModel}}, publicHost: cfg.PublicHost, secureCookie: cfg.SecureCookie}
+	s := &server{store: store, bridge: &linx.Bridge{Config: linx.Config{URL: cfg.LinxURL, APIKey: cfg.LinxAPIKey, Model: cfg.LinxModel}, MCP: linx.NewReadonlyMCP(cfg.MCPPublicURL)}, publicHost: cfg.PublicHost, secureCookie: cfg.SecureCookie}
 	admin, err := newAdminAuth(os.Getenv("ADMIN_ACCESS_KEY"))
 	if err != nil {
 		return nil, err
@@ -140,6 +141,17 @@ func loadConfig() (runtimeConfig, error) {
 	}
 	public, _ := url.Parse(os.Getenv("PUBLIC_URL"))
 	cfg.PublicHost, cfg.SecureCookie = public.Host, public.Scheme == "https"
+	cfg.MCPPublicURL = strings.TrimSpace(os.Getenv("MCP_PUBLIC_URL"))
+	if cfg.MCPPublicURL == "" && cfg.SecureCookie {
+		cfg.MCPPublicURL = "https://" + public.Host
+	}
+	if cfg.MCPPublicURL != "" {
+		mcpURL, parseErr := url.Parse(cfg.MCPPublicURL)
+		if parseErr != nil || mcpURL.Scheme != "https" || mcpURL.Host == "" || mcpURL.User != nil || mcpURL.RawQuery != "" || mcpURL.Fragment != "" || (mcpURL.Path != "" && mcpURL.Path != "/") {
+			return cfg, errors.New("MCP_PUBLIC_URL must be an HTTPS site origin without a path")
+		}
+		cfg.MCPPublicURL = "https://" + mcpURL.Host
+	}
 	var err error
 	if cfg.Retention, err = positiveEnv("SAVE_RETENTION_HOURS", 168, 1, 8760); err != nil {
 		return cfg, err
@@ -182,8 +194,9 @@ func (s *server) registerRoutes(mux *http.ServeMux, cfg runtimeConfig) {
 		writeJSON(w, 200, map[string]any{"status": "ok", "voice_configured": s.bridge.Config.Enabled(), "storage": "sqlite"})
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": cfg.Retention, "host_reclaim_seconds": cfg.HostDelay, "delegation_seconds": cfg.DelegationDelay, "persistence_enabled": true, "voice_session_seconds": cfg.Limits["LINGXI_SESSION_SECONDS"], "spectator_session_seconds": cfg.Limits["SPECTATOR_SESSION_SECONDS"], "spectator_capacity": cfg.Limits["SPECTATOR_CAPACITY"], "boards": game.Boards(), "diagnostics": s.store.DiagnosticStatus()})
+		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": cfg.Retention, "host_reclaim_seconds": cfg.HostDelay, "delegation_seconds": cfg.DelegationDelay, "persistence_enabled": true, "voice_session_seconds": cfg.Limits["LINGXI_SESSION_SECONDS"], "spectator_session_seconds": cfg.Limits["SPECTATOR_SESSION_SECONDS"], "spectator_capacity": cfg.Limits["SPECTATOR_CAPACITY"], "boards": game.Boards(), "missions": game.MissionChoices(true), "diagnostics": s.store.DiagnosticStatus()})
 	})
+	mux.Handle("/api/mcp/game", s.bridge.MCP)
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("GET /api/family", s.family)
 	mux.HandleFunc("POST /api/family/profiles", s.saveProfile)
@@ -347,6 +360,21 @@ func options(w http.ResponseWriter, r *http.Request) (game.Options, error) {
 	}
 	if o.Mode != "" && o.Mode != "quick" && o.Mode != "classic" && o.Mode != "coop" {
 		return o, errors.New("游戏模式无效")
+	}
+	if o.ThemeID != "" && o.ThemeID != "star-rescue" {
+		return o, errors.New("主题包无效")
+	}
+	if o.MissionID != "" {
+		valid := false
+		for _, mission := range game.MissionChoices(o.Props) {
+			if mission.ID == o.MissionID {
+				valid = true
+				break
+			}
+		}
+		if !valid || o.Mode != "coop" {
+			return o, errors.New("合作任务卡无效或当前模式不支持")
+		}
 	}
 	if _, ok := game.FindBoard(o.Board); !ok {
 		return o, errors.New("棋盘路线无效")

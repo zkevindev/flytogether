@@ -164,6 +164,17 @@ func (r *Room) restore(p *rollbackPoint) {
 // finish commits both game and idempotency key before any client can observe success.
 // Called with the room lock held. The database never acquires a store/room lock.
 func (r *Room) finish(c *Command, change saveChange) (View, error) {
+	missionWas := ""
+	if r.state.Mission != nil {
+		missionWas = r.state.Mission.Status
+	}
+	r.state.RefreshMission(r.status)
+	if missionWas == "active" && r.state.Mission != nil && r.state.Mission.Status == "completed" {
+		r.state.History = append(r.state.History, game.Event{ID: game.ID(), Kind: "mission_completed", Text: "星际救援任务“" + r.state.Mission.Title + "”完成！全员协作成功，救援徽章已点亮。"})
+		if len(r.state.History) > 24 {
+			r.state.History = r.state.History[len(r.state.History)-24:]
+		}
+	}
 	r.seq++
 	r.updated = time.Now().UTC()
 	if r.storage != nil {

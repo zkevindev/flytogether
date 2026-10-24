@@ -657,7 +657,7 @@ func nextHostLine(state game.State, seen string) (string, string) {
 		if event.Kind == "rolled" {
 			rolled = true
 		}
-		if event.Kind == "won" || event.Kind == "bonus" || event.Kind == "prop" || (event.Kind == "moved" && dramatic(event.Text)) {
+		if event.Kind == "won" || event.Kind == "bonus" || event.Kind == "prop" || event.Kind == "mission_completed" || (event.Kind == "moved" && dramatic(event.Text)) {
 			dramas = append(dramas, strings.TrimRight(event.Text, "。"))
 		}
 	}

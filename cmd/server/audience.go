@@ -114,11 +114,11 @@ func (s *server) audienceVoiceSocket(w http.ResponseWriter, r *http.Request) {
 	key := cookie(r)
 	v := s.store.AudienceRoom(key, r.URL.Query().Get("room_id"))
 	if v == nil {
-		writeJSON(w, 403, map[string]string{"code": "NOT_AUTHORIZED", "message": "请先加入观赛，再询问自己的灵犀"})
+		writeJSON(w, 403, map[string]string{"code": "NOT_AUTHORIZED", "message": "请先加入观赛，再询问自己的灵矽"})
 		return
 	}
 	if !s.bridge.Config.Enabled() {
-		writeJSON(w, 503, map[string]string{"message": "灵犀尚未配置，仍可安静观看棋局"})
+		writeJSON(w, 503, map[string]string{"message": "灵矽尚未配置，仍可安静观看棋局"})
 		return
 	}
 	preferences, err := (linx.CompanionPreferences{Style: r.URL.Query().Get("style"), Frequency: "quiet"}).Normalized()
