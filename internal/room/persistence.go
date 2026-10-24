@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/zkevindev/flytogether/internal/game"
@@ -19,8 +20,8 @@ import (
 
 const saveSchema = 1
 
-// Version 3 preserves family bindings and atomic match results across restarts.
-const databaseSchema = 3
+// Version 4 adds bounded private diagnostic matches and event history.
+const databaseSchema = 4
 const DefaultRetention = 7 * 24 * time.Hour
 
 type savedMember struct {
@@ -53,7 +54,11 @@ type saveChange struct {
 	DeleteRoom    string
 	ResetCommands bool
 }
-type database struct{ db *sql.DB }
+type database struct {
+	db                 *sql.DB
+	diagnostics        atomic.Pointer[DiagnosticConfig]
+	diagnosticFailures atomic.Uint64
+}
 
 func (r *Room) record() roomRecord {
 	members := map[string]savedMember{}
@@ -190,7 +195,12 @@ func OpenStore(path string, retention time.Duration) (*Store, error) {
 		"CREATE TABLE IF NOT EXISTS voice_usage (day TEXT NOT NULL, kind TEXT NOT NULL, used INTEGER NOT NULL CHECK(used > 0), PRIMARY KEY(day,kind))",
 		"CREATE TABLE IF NOT EXISTS family_profiles (session TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, avatar TEXT NOT NULL, PRIMARY KEY(session,id))",
 		"CREATE TABLE IF NOT EXISTS family_history (session TEXT NOT NULL, game_id TEXT NOT NULL, completed_at TEXT NOT NULL, payload BLOB, PRIMARY KEY(session,game_id))",
-		"PRAGMA user_version=3",
+		`CREATE TABLE IF NOT EXISTS diagnostic_matches (game_id TEXT PRIMARY KEY,room_id TEXT NOT NULL,name TEXT NOT NULL,status TEXT NOT NULL,version INTEGER NOT NULL,seq INTEGER NOT NULL,network INTEGER NOT NULL,recorded_from TEXT NOT NULL,updated_at TEXT NOT NULL,first_version INTEGER NOT NULL,snapshot BLOB NOT NULL)`,
+		`CREATE INDEX IF NOT EXISTS diagnostic_matches_updated ON diagnostic_matches(updated_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS diagnostic_events (id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL UNIQUE,at TEXT NOT NULL,room_id TEXT NOT NULL,game_id TEXT NOT NULL,version INTEGER NOT NULL,kind TEXT NOT NULL,source TEXT NOT NULL,session_id TEXT NOT NULL,input_id TEXT NOT NULL,ref TEXT NOT NULL,text TEXT NOT NULL,action TEXT NOT NULL,code TEXT NOT NULL,duration_ms INTEGER NOT NULL)`,
+		`CREATE INDEX IF NOT EXISTS diagnostic_events_game ON diagnostic_events(game_id,id DESC)`,
+		`CREATE INDEX IF NOT EXISTS diagnostic_events_at ON diagnostic_events(at)`,
+		"PRAGMA user_version=4",
 	} {
 		if _, err = tx.Exec(query); err != nil {
 			tx.Rollback()
@@ -201,7 +211,7 @@ func OpenStore(path string, retention time.Duration) (*Store, error) {
 		return failOpen(err)
 	}
 	s := NewStore()
-	s.storage = &database{db}
+	s.storage = &database{db: db}
 	s.retention = retention
 	if err = s.load(); err != nil {
 		return failOpen(err)
@@ -257,6 +267,9 @@ func (d *database) save(p roomRecord, c *Command, change saveChange) error {
 		}
 	}
 	if err = archiveResult(ctx, tx, p); err != nil {
+		return err
+	}
+	if err = d.saveDiagnostics(ctx, tx, p, c, false); err != nil {
 		return err
 	}
 	return tx.Commit()

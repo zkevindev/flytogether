@@ -26,6 +26,7 @@ import (
 )
 
 type server struct {
+	admin        *adminAuth
 	store        *room.Store
 	bridge       *linx.Bridge
 	speaker      *linx.Speaker
@@ -63,6 +64,27 @@ func main() {
 	s := &server{store: savedStore, bridge: &linx.Bridge{Config: linx.Config{
 		URL:    env("LINGXI_REALTIME_URL", "wss://xrobo-io.qiniuapi.com/v1/realtime"),
 		APIKey: os.Getenv("LINGXI_REALTIME_API_KEY"), Model: os.Getenv("LINGXI_REALTIME_MODEL")}}, publicHost: public.Host, secureCookie: public.Scheme == "https"}
+	admin, err := newAdminAuth(os.Getenv("ADMIN_ACCESS_KEY"))
+	if err != nil {
+		slog.Error("invalid administrator configuration")
+		os.Exit(1)
+	}
+	s.admin = admin
+	diagnosticHours, err := positiveEnv("DIAGNOSTICS_RETENTION_HOURS", 168, 1, 2160)
+	if err != nil {
+		slog.Error("invalid diagnostics retention")
+		os.Exit(1)
+	}
+	transcripts, err := strconv.ParseBool(env("DIAGNOSTICS_TRANSCRIPTS", "true"))
+	if err != nil {
+		slog.Error("invalid diagnostics transcript setting")
+		os.Exit(1)
+	}
+	if err = savedStore.ConfigureDiagnostics(room.DiagnosticConfig{Enabled: admin != nil, Transcripts: transcripts, Retention: time.Duration(diagnosticHours) * time.Hour}); err != nil {
+		slog.Error("cannot initialize diagnostics")
+		os.Exit(1)
+	}
+	s.bridge.Observe = savedStore.Diagnostic
 	s.bridge.MaxConnections = limits["LINGXI_MAX_CONNECTIONS"]
 	s.bridge.SessionTimeout = time.Duration(limits["LINGXI_SESSION_SECONDS"]) * time.Second
 	s.bridge.Reserve = func(ctx context.Context) error {
@@ -72,12 +94,13 @@ func main() {
 		return savedStore.ReserveVoice(ctx, "tts", limits["LINGXI_TTS_DAILY_LIMIT"])
 	}}
 	mux := http.NewServeMux()
+	s.adminRoutes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"status": "ok"}) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"status": "ok", "voice_configured": s.bridge.Config.Enabled(), "storage": "sqlite"})
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "boards": game.Boards()})
+		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "boards": game.Boards(), "diagnostics": savedStore.DiagnosticStatus()})
 	})
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("GET /api/family", s.family)
@@ -92,6 +115,7 @@ func main() {
 	mux.HandleFunc("POST /api/rooms/{id}/leave", s.leave)
 	mux.HandleFunc("POST /api/rooms/{id}/discard", s.discard)
 	mux.HandleFunc("POST /api/rooms/{id}/commands", s.command)
+ mux.HandleFunc("POST /api/rooms/{id}/diagnostics",s.clientDiagnostic)
 	mux.HandleFunc("POST /api/rooms/{id}/voice-settings", s.voiceSettings)
 	mux.HandleFunc("POST /api/rooms/{id}/announcement", s.announcement)
 	mux.HandleFunc("GET /ws/game", s.gameSocket)
@@ -111,7 +135,7 @@ func main() {
 			http.ServeFile(w, r, p)
 			return
 		}
-		if r.URL.Path != "/" && r.URL.Path != "/play" {
+		if r.URL.Path != "/" && r.URL.Path != "/play" && r.URL.Path != "/admin" {
 			http.NotFound(w, r)
 			return
 		}
@@ -122,7 +146,7 @@ func main() {
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Permissions-Policy", "microphone=(self), camera=()")
-		if strings.HasPrefix(r.URL.Path, "/api/") {
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/admin" {
 			w.Header().Set("Cache-Control", "no-store")
 		}
 		if !s.originOK(r) {
@@ -368,6 +392,15 @@ func (s *server) command(w http.ResponseWriter, r *http.Request) {
 	}
 	result, e := v.DoAs(c, cookie(r))
 	if e != nil {
+		view := v.Snapshot()
+		var st game.State
+		_ = json.Unmarshal(view.State, &st)
+		code := "INVALID_COMMAND"
+		var re *room.Error
+		if errors.As(e, &re) {
+			code = re.Code
+		}
+		s.store.Diagnostic(room.DiagnosticEvent{RoomID: v.ID, GameID: st.ID, Version: st.Version, Kind: "error", Source: "click", Code: code})
 		failure(w, e)
 		return
 	}

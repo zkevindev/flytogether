@@ -25,6 +25,7 @@ func (c Config) Enabled() bool {
 }
 
 type Bridge struct {
+	Observe        func(room.DiagnosticEvent)
 	Config         Config
 	MaxConnections int
 	SessionTimeout time.Duration
@@ -34,6 +35,40 @@ type Bridge struct {
 }
 
 func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.GameSession, preferences ...CompanionPreferences) (result error) {
+	sessionID := game.ID()
+	currentInput := ""
+	inputTimes := map[string]time.Time{}
+	responseInputs := map[string]string{}
+	heardAudio := map[string]bool{}
+	initial := r.Snapshot()
+	var gameState game.State
+	_ = json.Unmarshal(initial.State, &gameState)
+	trace := func(e room.DiagnosticEvent) {
+		if b.Observe != nil {
+			e.RoomID = initial.ID
+			e.GameID = gameState.ID
+			e.SessionID = sessionID
+
+			if e.Source == "" {
+				e.Source = "realtime"
+			}
+			view := r.Snapshot()
+			var state game.State
+			if json.Unmarshal(view.State, &state) == nil && state.ID == gameState.ID {
+				e.Version = state.Version
+			}
+			b.Observe(e)
+		}
+	}
+	started := time.Now()
+	trace(room.DiagnosticEvent{Kind: "connection", Action: "connecting"})
+	defer func() {
+		code := "closed"
+		if result != nil {
+			code = "connection_failed"
+		}
+		trace(room.DiagnosticEvent{Kind: "connection", Action: code, DurationMS: time.Since(started).Milliseconds()})
+	}()
 	companion := CompanionPreferences{}
 	if len(preferences) > 0 {
 		companion = preferences[0]
@@ -86,6 +121,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 		return errors.New("灵矽实时连接失败，请检查服务器上的 API Key 和模型配置")
 	}
 	defer up.CloseNow()
+	trace(room.DiagnosticEvent{Kind: "connection", Action: "connected", DurationMS: time.Since(started).Milliseconds()})
 	up.SetReadLimit(1 << 20)
 	browser.SetReadLimit(1 << 20)
 	var upWrite sync.Mutex
@@ -342,6 +378,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			continue
 		case control := <-controls:
+			trace(room.DiagnosticEvent{Kind: "connection", Action: "browser_" + control})
 			if control == "sleep" {
 				if e := sleep(); e != nil {
 					return e
@@ -434,6 +471,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			if body.ItemID != "" {
 				seenInputs[body.ItemID] = true
 			}
+			currentInput = body.ItemID
+			inputTimes[body.ItemID] = time.Now()
+			trace(room.DiagnosticEvent{Kind: "user_text", InputID: body.ItemID, Ref: body.ItemID, Text: body.Transcript})
 			if !gate.accept(body.Transcript, time.Now()) {
 				// Keep unrelated background speech out of later model context.
 				if body.ItemID != "" {
@@ -503,6 +543,14 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				} else {
 					output = b.executeTool(r, call)
 				}
+				code := "read_only"
+				if action.Notice == "" {
+					code = "completed"
+				}
+				if strings.Contains(output, `"error"`) {
+					code = "rejected"
+				}
+				trace(room.DiagnosticEvent{Kind: "tool", InputID: body.ItemID, Ref: body.ItemID, Action: action.Name, Code: code})
 				if action.Name == "coach_move" && !strings.Contains(output, `"error"`) {
 					if action.Choice == "cancel" {
 						action.Notice = "建议已取消，没有移动飞机或掷骰。"
@@ -572,6 +620,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			continue
 		case "response.created":
+			if inFlight {
+				responseInputs[event.ResponseID] = currentInput
+			}
 			if pendingHost && event.ResponseID != "" {
 				hostIDs[event.ResponseID] = true
 				pendingHost = false
@@ -591,6 +642,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				calls[event.ResponseID] = append(calls[event.ResponseID], body.Item)
 			}
 		case "response.done":
+			entry := responseDiagnostic(event)
+			entry.InputID = responseInputs[event.ResponseID]
+			trace(entry)
 			if hostIDs[event.ResponseID] {
 				delete(hostIDs, event.ResponseID)
 				pendingHost = false
@@ -621,6 +675,11 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			if body.Response.Status == "completed" && len(pending) > 0 {
 				for _, call := range pending {
 					output := b.executeTool(r, call)
+					code := "completed"
+					if strings.Contains(output, `"error"`) {
+						code = "rejected"
+					}
+					trace(room.DiagnosticEvent{Kind: "tool", InputID: responseInputs[event.ResponseID], Ref: call.CallID, Action: call.Name, Code: code})
 					item := map[string]any{"type": "conversation.item.create", "item": map[string]any{"type": "function_call_output", "call_id": call.CallID, "output": output}}
 					if e := sendUp(item); e != nil {
 						return errors.New("游戏操作结果没有送回灵矽")
@@ -642,6 +701,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			continue
 		case "error":
+			trace(room.DiagnosticEvent{Kind: "error", Code: "upstream_error"})
 			if hostActive() {
 				pendingHost = false
 				hostIDs = map[string]bool{}
@@ -658,6 +718,15 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			continue
 		}
 		if event.Type == "response.audio.delta" || event.Type == "response.output_audio.delta" {
+			if !heardAudio[event.ResponseID] {
+				heardAudio[event.ResponseID] = true
+				input := responseInputs[event.ResponseID]
+				elapsed := int64(0)
+				if start, ok := inputTimes[input]; ok {
+					elapsed = time.Since(start).Milliseconds()
+				}
+				trace(room.DiagnosticEvent{Kind: "first_audio", Ref: event.ResponseID, InputID: input, DurationMS: elapsed, Code: "upstream_received"})
+			}
 			if r.Snapshot().Voice != "speaking" {
 				r.VoiceState("speaking")
 			}

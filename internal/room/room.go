@@ -1,8 +1,10 @@
 package room
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -559,6 +561,7 @@ func (s *Store) Get(session, id string) *Room {
 	return r
 }
 func (s *Store) Run(ctxDone <-chan struct{}) {
+	lastDiagnosticsPrune := time.Time{}
 	t := time.NewTicker(1200 * time.Millisecond)
 	defer t.Stop()
 	for {
@@ -566,6 +569,14 @@ func (s *Store) Run(ctxDone <-chan struct{}) {
 		case <-ctxDone:
 			return
 		case <-t.C:
+			if time.Since(lastDiagnosticsPrune) > time.Hour {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if err := s.PruneDiagnostics(ctx); err != nil {
+					slog.Warn("diagnostic cleanup unavailable")
+				}
+				cancel()
+				lastDiagnosticsPrune = time.Now()
+			}
 			s.mu.Lock()
 			all := make([]*Room, 0, len(s.rooms))
 			for id, r := range s.rooms {
