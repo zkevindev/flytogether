@@ -1,32 +1,35 @@
 {
-  "captured_on": "2026-10-24",
-  "source_commit": "8772cce2c022bdc5945bb2c5b08ba370e6ff0ee9",
+  "captured_on": "2026-10-25",
+  "source_commit": "2648f3b489505c8d7fc72e1a4934b2dc2d1ef6da",
   "browser": "Chrome 155.0.8059.85",
-  "scope": "Actual local app Chrome screenshots after the Lingxi brand spelling correction; product page previews only, no game API, microphone, or WebGL.",
+  "scope": "Product page screenshots captured from the public app at source commit 2648f3b; preview only, no game API, microphone, or WebGL. Product browser regression passed at desktop, tablet, mobile, and 320px widths.",
   "captures": [
     {
       "file": "product-hero.png",
-      "sha256": "cc806e776e8fd0809ab25c51d5ba9e448409e38f1e633877a0ffcefdb6e65895",
+      "sha256": "c2ce026832a0510c5f118602a760a815eae6220aacc43709564527a45a3179bd",
       "viewport": {
         "width": 1440,
         "height": 1000
-      }
+      },
+      "source_commit": "2648f3b489505c8d7fc72e1a4934b2dc2d1ef6da"
     },
     {
       "file": "product-desktop.png",
-      "sha256": "702249b317b2dcbee70548a587d98603e6bc010a3206ec8b53ec9a30ee416b5b",
+      "sha256": "a9b27f5d1eccc87d16198c2c780905be1b4f4e4e90055266ba0e5e7e1a7d9861",
       "viewport": {
         "width": 1440,
         "height": 1000
-      }
+      },
+      "source_commit": "2648f3b489505c8d7fc72e1a4934b2dc2d1ef6da"
     },
     {
       "file": "product-mobile.png",
-      "sha256": "ecbe8c5b5a8a9c5833eba55c63a89def2e0f93a1ff235f573318b02bd58254d1",
+      "sha256": "065378b0a154f43f36a0a108dc4fb2898088ad192fe2b5f51deeec1e2bef5eb7",
       "viewport": {
         "width": 390,
         "height": 844
-      }
+      },
+      "source_commit": "2648f3b489505c8d7fc72e1a4934b2dc2d1ef6da"
     }
   ]
 }
