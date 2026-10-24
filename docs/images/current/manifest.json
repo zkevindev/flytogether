@@ -1,6 +1,6 @@
 {
-  "captured_at": "2026-10-24T03:16:58.277Z",
-  "app_commit": "f9d4e48",
+  "captured_at": "2026-10-24T04:07:43.991Z",
+  "app_commit": "1887b61",
   "browser": "155.0.8059.85",
   "scope": "Actual app UI: home, create, board, five props, random dice, coaching preview and takeoff; two human seats; voice switched off; no mocked state or microphone",
   "captures": [
@@ -10,7 +10,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "3fb218089c522b0c18bc7d7bfb3e59317f73696af31e96bfca0dbf5eec632303"
+      "sha256": "d43c422341bf6ed1bd802d39626d5aec2e8cff652a7b4418f1d8fcae8cf18693"
     },
     {
       "file": "setup.png",
@@ -18,7 +18,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "9264507a5cb85729e59d0b65c9ef8295cf8d7946e4d75a370cfcfcf89d6f824e"
+      "sha256": "0f5d746347608b751155a37772f894b7afa30bfbfda3e4991c3d180184daac69"
     },
     {
       "file": "play-desktop.png",
@@ -50,7 +50,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "0a266d8a874b7c52125417ffc8971aba4d6173988df34b5488e672d4dcfe39ca"
+      "sha256": "ac9c496fea95fe97972840f75c336a804dbe518b8dd47fd534bf76acbbb825ad"
     },
     {
       "file": "move-preview.png",
@@ -58,7 +58,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "7a597c2dc072bae4d8135cd5b12cacf4b6372eaa437fcc20cc8da44038a38936"
+      "sha256": "e3e61e9b962a748eff5a9ca6ba9095e8c9ab1ab15676cea470382e3d7314d54b"
     },
     {
       "file": "coach-desktop.png",
@@ -66,7 +66,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "aab1d4591a53caed072980c4a5fee640c02fb9c13e6ff9dbee81795a1b4756d5"
+      "sha256": "7f26bf46828da7944867d95fd0f6c3887ba1077583a71a85e8a6315a1554c396"
     },
     {
       "file": "coach-mobile.png",
@@ -74,7 +74,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "a1ea042df3d31558687c4dd87c62c4151cb990d6063fec62fc472f6bc2838314"
+      "sha256": "9ca089c380d25a899f24500d9eb5a845a8a134baea039405ef8ca4e8110a2e9f"
     },
     {
       "file": "play-mobile.png",
@@ -82,7 +82,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "4695fab696fb5ef9cbdb4135275733f84bf0b0f5a0b97f34edc703c8e43f7dde"
+      "sha256": "a33afcaa5681a872585e451ed9aae9d0867af592eeae36b9b34504df3c1ceb6d"
     }
   ],
   "console_errors": 0,

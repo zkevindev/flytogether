@@ -2,6 +2,7 @@ package room
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/zkevindev/flytogether/internal/game"
 	"path/filepath"
 	"testing"
@@ -192,5 +193,39 @@ func TestFamilyValidationAndLimits(t *testing.T) {
 	a := familyRead(t, s, "a").Profiles[0]
 	if _, err := s.FamilyOptions("a", game.Options{Names: []string{"一", "二"}, ProfileIDs: []string{a.ID, a.ID}}); err == nil {
 		t.Fatal("duplicate profile")
+	}
+}
+
+func TestFamilyV2MigrationAndRecentWindow(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "games.db")
+	s := openTestSaves(t, path)
+	r, err := s.Create("legacy", game.Options{Names: []string{"旧玩家一", "旧玩家二"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := current(r)
+	for _, query := range []string{"DROP TABLE family_profiles", "DROP TABLE family_history", "PRAGMA user_version=2"} {
+		if _, err = s.storage.db.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	s = openTestSaves(t, path)
+	restored := s.Get("legacy", r.ID)
+	if restored == nil || restored.Snapshot().Status != "paused" || current(restored).ID != before.ID {
+		t.Fatal("v2 room migration lost state")
+	}
+	familyProfile(t, s, "legacy", "新家人", "cat")
+	// Independent result fixtures verify the display window, not a lifetime leaderboard.
+	for i := 0; i < 51; i++ {
+		result := MatchResult{GameID: fmt.Sprintf("game-%02d", i), Players: []ResultPlayer{{Name: "旧玩家一", Won: true}}}
+		payload, _ := json.Marshal(result)
+		if _, err = s.storage.db.Exec("INSERT INTO family_history(session,game_id,completed_at,payload) VALUES(?,?,?,?)", "legacy", result.GameID, fmt.Sprintf("2026-10-24T10:%02d:00Z", i), payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := familyRead(t, s, "legacy")
+	if f.Total != 51 || len(f.Matches) != 50 || f.Matches[0].GameID != "game-50" || f.Matches[49].GameID != "game-01" {
+		t.Fatal("wrong recent history window")
 	}
 }

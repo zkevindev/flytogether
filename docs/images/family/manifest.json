@@ -1,0 +1,44 @@
+{
+  "captured_at": "2026-10-24T04:10:05.423265+00:00",
+  "app_commit": "1887b61",
+  "browser": "155.0.8059.85",
+  "scope": "Actual Chrome app UI with built-in avatars; production random dice and commands, natural completed matches. Synthetic QA names, no microphone or physical-device claims. Local owned server with actual restart.",
+  "captures": [
+    {
+      "file": "family-board.png",
+      "sha256": "69127955212ed60831414be259e446ad28c4043ba3a0de3ae2a7ef06850d6c05",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "full_page": true
+    },
+    {
+      "file": "family-history-mobile.png",
+      "sha256": "250ba567551327ae57103ebae908367239cdb9115430a6f3cd6563f95a9b71e1",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "full_page": false
+    },
+    {
+      "file": "family-history.png",
+      "sha256": "af5a8c2199dcd2839812303a3207594efd959deab9ca1b63d52fcd97a836bf0a",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "full_page": false
+    },
+    {
+      "file": "family-profiles.png",
+      "sha256": "02480a028fb314d19b836077960f59f7d312e5d0834f6a7c97fffa059449eab7",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "full_page": false
+    }
+  ]
+}
