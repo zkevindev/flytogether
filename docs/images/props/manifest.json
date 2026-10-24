@@ -33,6 +33,16 @@
         "width": 1360,
         "height": 1000
       }
+    },
+    {
+      "file": "launch-direct.png",
+      "sha256": "37fdc25e35db27c902f4345fb414218586607491e8b80b8e1f5ed53753aadc90",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "source_commit": "9197a9340571ed4ab6dae39c7e49cb730488b6da",
+      "scope": "Actual local Chrome UI on the committed source; selected an available hangar plane, no state injection, no microphone"
     }
   ]
 }
