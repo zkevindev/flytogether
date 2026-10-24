@@ -51,9 +51,9 @@ func companionTip(state game.State) string {
 	}
 	if state.Players[state.Current].Pieces[0].Progress < 0 {
 		if state.PropsEnabled && state.Players[state.Current].Props["launch"] > 0 {
-			return "机库里的飞机需要掷到六点，或先使用起飞卡。"
+			return "机库里的飞机需要掷到" + state.LaunchRule() + "，或先使用起飞卡。"
 		}
-		return "机库里的飞机需要掷到六点才能起飞。"
+		return "机库里的飞机需要掷到" + state.LaunchRule() + "才能起飞。"
 	}
 	return "抵达终点需要恰好的点数，超过终点不能走。"
 }

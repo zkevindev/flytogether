@@ -11,7 +11,7 @@ export type BoardSpec = {
   home_length: number; finish: number; jump_length: number; fly_from: number; fly_to: number;
 };
 export type Game = {
-  id: string; ruleset: string; difficulty: 'easy' | 'normal' | 'hard'; board: BoardSpec; mode: string; demo: boolean; version: number; turn: number;
+  id: string; preset?: 'custom' | 'gentle' | 'classic'; rules?: {id:string;name:string;summary:string;launch_dice:number[]}; ruleset: string; difficulty: 'easy' | 'normal' | 'hard'; board: BoardSpec; mode: string; demo: boolean; version: number; turn: number;
   current: number; phase: 'roll' | 'move' | 'finished'; dice: number; winner?: string;
   players: Player[]; legal_moves: Move[]; history: GameEvent[]; last_move?: Move;
   props_enabled: boolean; active_prop?: string; dice_rolls: number[];
@@ -20,7 +20,7 @@ export type CompanionPreferences = { style: 'warm' | 'coach' | 'concise'; freque
 export type VoiceSettings = { wake_enabled: boolean; wake_word: string };
 export type Coach = { id: string; game_id: string; version: number; player_id: string; move: Move; reason: string; risk: string; threats: number };
 export type Room = { instance_id?: string; saved_at?: string; restored?: boolean; save_error?: boolean; id: string; name: string; status: 'waiting' | 'playing' | 'paused' | 'ended'; seq: number; state: Game; voice: string; voice_settings: VoiceSettings; coach?: Coach; coach_expired?: boolean; network?: { invite: string; seats: { player_id: string; occupied: boolean; ready: boolean; online: boolean; robot?: boolean }[] }; me?: { player_id: string; host: boolean } };
-export type Options = { network?: boolean; room_name: string; difficulty: 'easy' | 'normal' | 'hard'; waiting: boolean; names: string[]; board: string; mode: string; ai: boolean; demo: boolean; props: boolean };
+export type Options = { preset?: 'custom' | 'gentle' | 'classic'; network?: boolean; room_name: string; difficulty: 'easy' | 'normal' | 'hard'; waiting: boolean; names: string[]; board: string; mode: string; ai: boolean; demo: boolean; props: boolean };
 export type Config = { persistence_enabled?: boolean; save_retention_hours?: number; voice_configured: boolean; version: string; ruleset: string; boards: BoardSpec[] };
 
 export class APIError extends Error {

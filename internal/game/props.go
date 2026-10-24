@@ -21,6 +21,9 @@ func (s *State) UsePropOn(id, pieceID string) error {
 	if s.ActiveProp != "" {
 		return fmt.Errorf("本次掷骰已经选择了道具，不能叠加使用")
 	}
+	if s.Preset == "gentle" && id == "bomb" {
+		return fmt.Errorf("亲子轻松模式不提供炸弹")
+	}
 	p := &s.Players[s.Current]
 	if p.Props[id] <= 0 {
 		return fmt.Errorf("你的%s已经用完了", name)

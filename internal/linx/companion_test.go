@@ -121,3 +121,15 @@ func TestLiveCompanionChangesDoNotReconnectOrWriteGame(t *testing.T) {
 		t.Fatal("preference changed game")
 	}
 }
+
+func TestCompanionAndVoiceUseGentleFiveRule(t *testing.T) {
+	s := game.New(game.Options{Names: []string{"孩子", "家长"}, Preset: "gentle"})
+	if !strings.Contains(companionTip(*s), "五点或六点") {
+		t.Fatal("coach taught wrong preset")
+	}
+	_ = s.Roll(5)
+	a, ok := resolveVoiceAction(*s, "让小熊号起飞")
+	if !ok || a.PieceID != s.Players[0].Pieces[0].ID || a.Notice != "" {
+		t.Fatal("voice five launch not legal")
+	}
+}

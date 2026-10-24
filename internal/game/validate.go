@@ -4,6 +4,16 @@ import "fmt"
 
 // Validate prevents malformed or obsolete saved records from reaching rules code.
 func (s *State) Validate() error {
+	if !ValidPreset(s.Preset) {
+		return fmt.Errorf("unsupported preset")
+	}
+	if s.Preset == "" {
+		s.Preset = "custom"
+	}
+	if s.Preset == "gentle" && (s.Mode != "quick" || !s.PropsEnabled) || s.Preset == "classic" && (s.Mode != "classic" || s.PropsEnabled) {
+		return fmt.Errorf("inconsistent preset rules")
+	}
+	s.RuleInfo = s.Rules()
 	if s.ID == "" || len(s.Players) < 2 || len(s.Players) > 4 || s.Current < 0 || s.Current >= len(s.Players) || s.Version < 1 || s.Turn < 1 {
 		return fmt.Errorf("invalid game identity")
 	}

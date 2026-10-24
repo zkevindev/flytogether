@@ -18,6 +18,9 @@ import (
 )
 
 const saveSchema = 1
+
+// Version 2 requires preset-aware rules; older executables must fail before loading.
+const databaseSchema = 2
 const DefaultRetention = 7 * 24 * time.Hour
 
 type savedMember struct {
@@ -172,7 +175,7 @@ func OpenStore(path string, retention time.Duration) (*Store, error) {
 	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return failOpen(err)
 	}
-	if version > saveSchema {
+	if version > databaseSchema {
 		return failOpen(errors.New("存档由更新版本创建，已保留，请使用对应版本启动"))
 	}
 	tx, err := db.Begin()
@@ -185,7 +188,7 @@ func OpenStore(path string, retention time.Duration) (*Store, error) {
 		"CREATE TABLE IF NOT EXISTS commands (room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(room_id,id))",
 		"CREATE TABLE IF NOT EXISTS quarantine (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL, payload BLOB NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL)",
 		"CREATE TABLE IF NOT EXISTS voice_usage (day TEXT NOT NULL, kind TEXT NOT NULL, used INTEGER NOT NULL CHECK(used > 0), PRIMARY KEY(day,kind))",
-		"PRAGMA user_version=1",
+		"PRAGMA user_version=2",
 	} {
 		if _, err = tx.Exec(query); err != nil {
 			tx.Rollback()

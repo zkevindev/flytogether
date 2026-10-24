@@ -99,6 +99,8 @@ type Event struct {
 
 type State struct {
 	ID           string    `json:"id"`
+	Preset       string    `json:"preset"`
+	RuleInfo     RuleSpec  `json:"rules"`
 	Ruleset      string    `json:"ruleset"`
 	Difficulty   string    `json:"difficulty"`
 	Board        BoardSpec `json:"board"`
@@ -120,6 +122,7 @@ type State struct {
 }
 
 type Options struct {
+	Preset     string   `json:"preset,omitempty"`
 	RoomName   string   `json:"room_name"`
 	Difficulty string   `json:"difficulty"`
 	Waiting    bool     `json:"waiting"`
@@ -151,6 +154,7 @@ func randomIndex(count int) int {
 }
 
 func New(o Options) *State {
+	o = ResolveOptions(o)
 	if o.Difficulty != "easy" && o.Difficulty != "hard" {
 		o.Difficulty = "normal"
 	}
@@ -165,15 +169,25 @@ func New(o Options) *State {
 	if !ok {
 		board, _ = FindBoard("cross")
 	}
-	s := &State{ID: ID(), Ruleset: "family-v1", Difficulty: o.Difficulty, Board: board, Mode: o.Mode, Demo: o.Demo, Version: 1,
+	s := &State{Preset: o.Preset, ID: ID(), Ruleset: "family-v1", Difficulty: o.Difficulty, Board: board, Mode: o.Mode, Demo: o.Demo, Version: 1,
 		Turn: 1, Phase: "roll", Legal: []Move{}, History: []Event{}, Players: []Player{}, PropsEnabled: o.Props, DiceRolls: []int{}}
 	if o.Props {
 		s.Ruleset = "family-props-v2"
 	}
+	if o.Preset == "gentle" {
+		s.Ruleset = "family-gentle-v1"
+	}
+	if o.Preset == "classic" {
+		s.Ruleset = "family-classic-v1"
+	}
+	s.RuleInfo = s.Rules()
 	for i, name := range o.Names {
 		p := Player{ID: fmt.Sprintf("player-%d", i), Name: name, Color: Colors[i], AI: o.AI && i == len(o.Names)-1, Pieces: []Piece{}, Props: map[string]int{}}
 		if o.Props {
 			p.Props = map[string]int{"launch": 1, "boost": 1, "luck": 1, "bomb": 1, "shield": 1}
+			if o.Preset == "gentle" {
+				p.Props = map[string]int{"launch": 2, "boost": 1, "luck": 1, "bomb": 0, "shield": 2}
+			}
 		}
 		for j := 0; j < count; j++ {
 			p.Pieces = append(p.Pieces, Piece{ID: fmt.Sprintf("p%d-%d", i, j), Label: Labels[j], Number: j + 1, Progress: -1})
@@ -214,7 +228,7 @@ func (s *State) legalMoves() []Move {
 		}
 		m := Move{PieceID: piece.ID, Label: piece.Label, From: piece.Progress, Captured: []string{}}
 		if piece.Progress == -1 {
-			if s.Dice != 6 && s.ActiveProp != "launch" {
+			if !s.CanLaunch(s.Dice) && s.ActiveProp != "launch" {
 				continue
 			}
 			m.To, m.Launch = 0, true

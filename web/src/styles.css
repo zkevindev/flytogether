@@ -478,3 +478,8 @@ main { padding-top: 12px; }
 .audio-settings { display: grid; gap: 18px; margin: 22px 0; }
 .audio-settings label { display: flex; align-items: center; gap: 10px; line-height: 1.5; }
 .audio-settings input { width: 20px; height: 20px; accent-color: var(--green); flex-shrink: 0; }
+
+.match-rules { color: #68796c; font-size: 12px; margin: 0 0 10px; }
+.match-rules summary { cursor: pointer; width: fit-content; padding: 6px; }
+.match-rules p { line-height: 1.7; margin: 4px 6px 10px; max-width: 70ch; }
+.preset-summary { font-size: 12px; line-height: 1.7; color: #68796c; margin: 8px 0 20px; }

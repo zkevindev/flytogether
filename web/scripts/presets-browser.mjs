@@ -1,0 +1,36 @@
+import {chromium} from 'playwright';
+import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+assert.ok(process.env.QA_BASE_URL,'Set QA_BASE_URL');const out=process.env.QA_OUTPUT_DIR||'test-results/presets';await mkdir(out,{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true,args:process.platform==='darwin'?['--use-angle=metal']:[]});
+try {
+ const c=await browser.newContext({baseURL:process.env.QA_BASE_URL,viewport:{width:1360,height:1000}});await c.addInitScript(()=>{localStorage.setItem('fly-tutorial-v1','skipped');localStorage.setItem('fly-auto-voice','off');localStorage.setItem('fly-host-voice','off');window.__mic=0;navigator.mediaDevices.getUserMedia=async()=>{window.__mic++;throw Error('No microphone in presets test')};});
+ const p=await c.newPage(),errors=[];p.setDefaultTimeout(20000);p.on('pageerror',e=>errors.push(e.message));const state=async()=>(await(await c.request.get('/api/session')).json()).room;
+ const command=async(action,extra={})=>{const r=await state();const response=await c.request.post(`/api/rooms/${r.id}/commands`,{data:{command_id:crypto.randomUUID(),game_id:r.state.id,expected_version:r.state.version,action,...extra}});assert.equal(response.status(),200,await response.text());return response.json();};
+ await p.goto('/',{waitUntil:'networkidle'});await p.getByRole('button',{name:'创建游戏',exact:true}).click();let modal=p.getByRole('dialog',{name:'创建家庭房间',exact:true});await modal.getByLabel('玩法预设',{exact:true}).selectOption('gentle');await modal.getByRole('checkbox',{name:/添加机器人陪玩/}).uncheck();await modal.getByRole('button',{name:'2 位',exact:true}).click();
+ assert.equal(await modal.getByRole('checkbox',{name:/趣味道具模式/}).isDisabled(),true);assert.equal(await modal.getByRole('button',{name:/完整飞行/}).isDisabled(),true);await modal.getByLabel('玩法预设',{exact:true}).scrollIntoViewIfNeeded();await p.screenshot({path:out+'/preset-setup.png'});
+ await modal.getByRole('button',{name:'创建并开始游戏',exact:true}).click();await p.waitForURL('**/play');let r=await state();assert.equal(r.state.preset,'gentle');assert.equal(r.state.mode,'quick');assert.deepEqual(r.state.rules.launch_dice,[5,6]);assert.equal(r.state.players[0].props.launch,2);assert.equal(r.state.players[0].props.shield,2);assert.equal(r.state.players[0].props.bomb,0);
+ await p.locator('.match-rules summary').click();await p.getByText(r.state.rules.summary,{exact:false}).waitFor();await p.screenshot({path:out+'/gentle-board.png'});
+ await p.getByRole('button',{name:'新手指南',exact:true}).click();await p.getByText('掷到 5 或 6 都能起飞，只有 6 能再掷一次。',{exact:false}).waitFor();await p.getByRole('button',{name:'跳过新手引导',exact:true}).click();
+ await p.getByRole('button',{name:/道具口袋/}).click();assert.equal(await p.getByRole('button',{name:'使用炸弹',exact:true}).isDisabled(),true);await p.getByText('亲子轻松不提供炸弹',{exact:true}).waitFor();await p.screenshot({path:out+'/gentle-props.png'});await p.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
+ // Seek an actual random five through ordinary turns; no fixed dice or state injection.
+ let five=false;
+ for(let i=0;i<100;i++){
+  r=await state();if(r.state.phase==='move'){await command('move',{piece_id:r.state.legal_moves[0].piece_id});await p.waitForTimeout(1000);continue;}
+  const before=r; r=await command('roll');
+  await p.getByRole('dialog',{name:'3D 掷骰结果'}).waitFor();await p.waitForTimeout(900);const shown=p.getByRole('dialog',{name:'3D 掷骰结果'});if(await shown.isVisible())await shown.getByRole('button',{name:'继续飞行'}).click();
+  if(r.state.dice===5&&r.state.phase==='move'&&r.state.legal_moves.some(m=>m.launch)){
+   const m=r.state.legal_moves.find(m=>m.launch),actor=r.state.current;
+   await p.getByRole('button',{name:m.label,exact:true}).click();await p.getByRole('button',{name:'确认飞行',exact:true}).click();const after=await state();assert.equal(after.state.players[actor].pieces.find(x=>x.id===m.piece_id).progress,0);assert.equal(after.state.current,(actor+1)%2);five=true;break;
+  }
+ }
+ assert.equal(five,true,'no natural five launch observed in bounded real turns');
+ r=await state();const illegal=await c.request.post(`/api/rooms/${r.id}/commands`,{data:{command_id:crypto.randomUUID(),game_id:r.state.id,expected_version:r.state.version,action:'roll',preset:'classic'}});assert.equal(illegal.status(),400);assert.equal((await state()).state.preset,'gentle');
+ await p.getByRole('button',{name:'返回首页',exact:true}).click();await p.getByRole('button',{name:/继续当前游戏/}).click();await p.waitForURL('**/play');assert.equal((await state()).state.preset,'gentle');
+ await command('end');r=await command('replay');assert.equal(r.state.preset,'gentle');assert.equal(r.state.players[0].props.launch,2);
+ // Classic preset overrides conflicting input and is visible on a second device.
+ const guest=await browser.newContext({baseURL:process.env.QA_BASE_URL});let net=await c.request.post('/api/rooms/new',{data:{names:['房主','朋友'],network:true,preset:'classic',props:true,mode:'quick',board:'cross'}});assert.equal(net.status(),201);net=await net.json();const join=await guest.request.post(`/api/rooms/${net.id}/join`,{data:{invite:net.network.invite,name:'朋友'}});assert.equal(join.status(),200);const gs=(await(await guest.request.get('/api/session')).json()).room;assert.equal(gs.state.preset,'classic');assert.equal(gs.state.mode,'classic');assert.equal(gs.state.props_enabled,false);assert.equal(gs.state.players[0].pieces.length,4);
+ const denied=await guest.request.post(`/api/rooms/${net.id}/matches`,{data:{names:['房主','朋友'],preset:'gentle',board:'cross',mode:'quick'}});assert.equal(denied.status(),403);
+ await p.reload({waitUntil:'networkidle'});await p.locator('.match-rules summary').click();await p.setViewportSize({width:390,height:844});await p.screenshot({path:out+'/classic-mobile.png',fullPage:true});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.equal(await p.evaluate(()=>window.__mic),0);assert.deepEqual(errors,[]);
+ const report={passed:true,natural_five_launch:true,five_did_not_grant_bonus:true,confirmed_plane_moved:true,classic_four_planes_and_no_props:true,network_guest_sees_same_rules:true,guest_cannot_change_preset:true,in_match_preset_rejected:true,inventory_replay_reset:true,console_errors:errors,microphone_requests:0};await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));await guest.close();
+}finally{await browser.close();}

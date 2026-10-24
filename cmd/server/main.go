@@ -276,6 +276,10 @@ func options(w http.ResponseWriter, r *http.Request) (game.Options, error) {
 		o.Names[i] = name
 		seen[name] = true
 	}
+	if !game.ValidPreset(o.Preset) {
+		return o, errors.New("规则预设无效")
+	}
+	o = game.ResolveOptions(o)
 	return o, nil
 }
 func cookie(r *http.Request) string {
