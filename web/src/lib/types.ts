@@ -16,7 +16,8 @@ export type Game = {
   props_enabled: boolean; active_prop?: string; dice_rolls: number[];
 };
 export type VoiceSettings = { wake_enabled: boolean; wake_word: string };
-export type Room = { id: string; name: string; status: 'waiting' | 'playing' | 'paused' | 'ended'; seq: number; state: Game; voice: string; voice_settings: VoiceSettings };
+export type Coach = { id: string; game_id: string; version: number; player_id: string; move: Move; reason: string; risk: string; threats: number };
+export type Room = { id: string; name: string; status: 'waiting' | 'playing' | 'paused' | 'ended'; seq: number; state: Game; voice: string; voice_settings: VoiceSettings; coach?: Coach; coach_expired?: boolean };
 export type Options = { room_name: string; difficulty: 'easy' | 'normal' | 'hard'; waiting: boolean; names: string[]; board: string; mode: string; ai: boolean; demo: boolean; props: boolean };
 export type Config = { voice_configured: boolean; version: string; ruleset: string; boards: BoardSpec[] };
 

@@ -377,7 +377,7 @@ main { padding-top: 12px; }
 .play-layout { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 16px; align-items: start; }
 .play-layout .board-panel { padding: 0 12px; border-radius: 18px; box-shadow: none; min-width: 0; }
 .play-layout .board-turnbar { margin: 0; min-height: 56px; background: transparent; padding: 8px 0; }
-.play-turn-actions { display: flex; gap: 8px; align-items: center; }
+.play-turn-actions { display: flex; flex-wrap: wrap; max-width: 100%; gap: 8px; align-items: center; }
 .play-turn-actions .roll-button { margin: 0; width: auto; padding: 8px 14px; min-height: 38px; font-size: 12px; border-radius: 9px; }
 .play-layout .board-stage { max-width: min(100%,calc(100dvh - 250px)); margin: 0 auto; }
 .play-layout .flight-host { border-radius: 14px; }
@@ -458,3 +458,10 @@ main { padding-top: 12px; }
 
 @media (max-width: 640px) { .play-shell .site-header { gap: 8px; }.play-shell .header-actions { gap: 4px; }.header-actions .rules-button>span { display: none; } }
 @media (max-width: 350px) { .play-shell .brand-name { display: none; } }
+
+.coach-shortcut { display: inline-flex; align-items: center; gap: 4px; color: #3d705b; }
+.coach-detail { margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5dab6; }
+.coach-detail p { font-size: 12px; line-height: 1.6; margin: 0 0 4px; }
+.coach-detail small { display: block; font-size: 11px; line-height: 1.6; color: #78724f; }
+.coach-choices { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.coach-choices button { background: white; border: 1px solid #d4cba6; border-radius: 8px; padding: 8px 10px; font-size: 12px; min-height: 36px; color: #47654d; }

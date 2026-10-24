@@ -46,7 +46,7 @@ func TestCoachFollowupsUseCurrentProposalAndKeepQuestionsReadOnly(t *testing.T) 
 			t.Fatalf("confirmation missed: %s %+v", phrase, a)
 		}
 	}
-	for _, phrase := range []string{"就它吗？", "就它？", "能不能就它", "不要走这个"} {
+	for _, phrase := range []string{"就它吗？", "就它？", "能不能就它", "不要走这个", "不走了", "不确认", "那就兔子号呢"} {
 		a, ok := planVoiceAction(r, phrase)
 		if !ok || a.Name == "confirm_coach" || a.Name == "move_piece" || a.Name == "roll_dice" {
 			t.Fatalf("question or refusal changed game: %s %+v", phrase, a)

@@ -34,15 +34,41 @@ try {
  });
  await page.goto(new URL('/play', process.env.QA_BASE_URL).href,{waitUntil:'networkidle'});
  let room=(await(await page.request.get('/api/session')).json()).room;
- const options={room_name:'直接对话联调',names:['小朋友','爸爸'],board:'cross',mode:'quick',ai:false,props:true,waiting:false};
+ const coaching=process.env.QA_SCENARIO==='coach';
+ const options={demo:coaching,room_name:'直接对话联调',names:['小朋友','爸爸'],board:'cross',mode:'quick',ai:false,props:true,waiting:false};
  let res=await page.request.post('/api/rooms/'+room.id+'/matches',{data:options});assert.equal(res.status(),200);room=await res.json();
+ if(coaching){
+  const roll=await page.request.post('/api/rooms/'+room.id+'/commands',{data:{command_id:crypto.randomUUID(),game_id:room.state.id,expected_version:room.state.version,action:'roll'}});assert.equal(roll.status(),200);
+  const dice=page.getByRole('dialog',{name:'3D 掷骰结果'});await dice.waitFor({state:'visible'});await dice.getByRole('button',{name:'继续飞行',exact:true}).click();
+ }
  await page.getByRole('button',{name:'关闭对讲麦克风',exact:true}).waitFor({state:'visible',timeout:30000});
  log({phase:'connected_without_voice_button',version:room.state.version});
  const state=async()=>{room=(await(await page.request.get('/api/session')).json()).room;return room.state;};
 
  const lucky=process.env.QA_SCENARIO==='lucky';
  const until=async predicate=>{const deadline=Date.now()+25000;while(Date.now()<deadline){const s=await state();if(predicate(s))return s;await new Promise(r=>setTimeout(r,200));}throw new Error('Timed out waiting for expected authoritative game state');};
- if(lucky){
+ if(coaching){
+  await until(()=>room.coach&&room.state.version===2);
+  const first=room.coach;
+  await page.locator('.landing-marker:not([hidden])').waitFor({state:'visible'});
+  assert.equal(await page.locator('.move-preview').getAttribute('data-piece-id'),first.move.piece_id);
+  log({phase:'voice_coach_preview_without_move',piece:first.move.label,version:2});
+  await until(()=>room.coach&&room.coach.id!==first.id);const second=room.coach;
+  assert.notEqual(second.move.piece_id,first.move.piece_id);assert.equal(room.state.version,2);
+  log({phase:'voice_alternative_without_move',piece:second.move.label,version:2});
+  await until(()=>room.coach&&room.coach.id!==second.id);const safe=room.coach;assert.equal(room.state.version,2);
+  log({phase:'voice_safe_without_move',piece:safe.move.label,version:2});
+  await until(()=>room.coach&&room.coach.id!==safe.id);const previous=room.coach;assert.equal(room.state.version,2);
+  log({phase:'voice_previous_without_move',piece:previous.move.label,version:2});
+  await page.locator('.move-preview').screenshot({path:join(outputDir,'voice-coach-preview.png')});
+  const moved=await until(s=>s.version===3);
+  assert.equal(moved.players.flatMap(p=>p.pieces).find(p=>p.id===previous.move.piece_id).progress,previous.move.to);
+  assert.equal(room.coach,undefined);
+  log({phase:'voice_confirm_committed_once',piece:previous.move.label,to:previous.move.to,version:3});
+  await page.waitForFunction(()=>window.__qa.events.filter(e=>e.type==='stt').length>=6,null,{timeout:40000});
+  await page.waitForFunction(()=>{const e=window.__qa.events;const last=e.findLastIndex(x=>x.type==='stt');return e.slice(last+1).some(x=>x.type==='response.done'&&x.status==='completed');},null,{timeout:15000});
+  assert.equal((await state()).version,3,'negative speech must not roll again');
+ }else if(lucky){
   const s=await until(s=>s.players[0].props.luck===0&&s.dice_rolls.length===2);
   assert.equal(s.version,3);assert.equal(s.dice,Math.max(...s.dice_rolls));
   await page.waitForFunction(()=>window.__qa.diceDialogs.some(d=>d.values.length===2));
@@ -70,6 +96,7 @@ try {
  }
  const replies=await page.evaluate(()=>window.__qa.events.filter(e=>e.type.endsWith('audio_transcript.done')||e.type==='response.output_text.done').map(e=>({at:e.at,text:e.text})));
  log({phase:'actual_spoken_replies',replies});
+ if(coaching){const turns=await page.evaluate(()=>window.__qa.events.filter(e=>e.type==='stt').map(e=>e.at));const advice=replies.filter(r=>r.at>=turns[0]&&r.at<turns[4]).map(r=>r.text||'').join('');assert.ok(!/没有风险|无风险|不会被.{0,5}撞|很安全|绝对安全|保证安全/.test(advice),'voice must not turn a limited risk estimate into a safety guarantee');}
  if(lucky){
   const dice=(await state()).dice_rolls;
   const turns=await page.evaluate(()=>window.__qa.events.filter(e=>e.type==='stt').map(e=>e.at));
@@ -98,5 +125,5 @@ try {
  await page.waitForFunction(()=>window.__qa.tracks.every(t=>t.readyState==='ended'));
  assert.deepEqual(errors,[]);
  await writeFile(join(outputDir, 'realtime-browser-results.json'),JSON.stringify({scope:'native Chrome fake WAV microphone -> actual worklet -> Go -> real Lingxi; no autoplay override',output,metrics,errors},null,2));
- console.log(lucky?'PASS: actual provider accepts exact lucky-dice utterance, commits two real dice, shows popup, negative no-write and reconnect':'PASS: actual provider, browser auto-connect, real PCM capture path, visible random roll, takeoff, negative/query no-write, native reconnect');
+ console.log(coaching?'PASS: actual provider coach, visible preview, next/safe/previous with no game writes, one confirmed move, negative and reconnect':lucky?'PASS: actual provider accepts exact lucky-dice utterance, commits two real dice, shows popup, negative no-write and reconnect':'PASS: actual provider, browser auto-connect, real PCM capture path, visible random roll, takeoff, negative/query no-write, native reconnect');
 } finally {await browser.close();}

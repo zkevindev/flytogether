@@ -11,13 +11,13 @@ import (
 // Follow-up selection is resolved against the server proposal, never model
 // memory. Pronouns without a current proposal cannot fall through to a roll.
 func planCoachAction(r *room.Room, text string) (voiceAction, bool) {
-	question := strings.ContainsAny(text, "?？") || strings.Contains(text, "吗") || strings.Contains(text, "能否") || strings.Contains(text, "能不能") || strings.Contains(text, "是不是")
+	question := strings.HasSuffix(normalizeWake(text), "呢") || strings.ContainsAny(text, "?？") || strings.Contains(text, "吗") || strings.Contains(text, "能否") || strings.Contains(text, "能不能") || strings.Contains(text, "是不是")
 	text = spoken(text)
 	view := r.Snapshot()
 	read := func(notice string) (voiceAction, bool) {
 		return voiceAction{Name: "get_game_state", Notice: notice}, true
 	}
-	for _, word := range []string{"不要", "别", "不想", "取消", "先不", "再想想"} {
+	for _, word := range []string{"不要", "别", "不想", "取消", "先不", "再想想", "不走", "不确认", "不是", "等等", "稍等"} {
 		if strings.Contains(text, word) {
 			if view.Coach != nil && (strings.Contains(text, "走") || strings.Contains(text, "这个") || strings.Contains(text, "建议") || strings.Contains(text, "推荐") || strings.Contains(text, "取消") || strings.Contains(text, "再想想")) {
 				return voiceAction{Name: "coach_move", Choice: "cancel"}, true
@@ -25,7 +25,7 @@ func planCoachAction(r *room.Room, text string) (voiceAction, bool) {
 			if view.Coach != nil {
 				return read("没有执行操作。" + coachCue(view))
 			}
-			return voiceAction{}, false
+			return read("先不操作，没有走棋或掷骰。")
 		}
 	}
 	// Observed ASR homophone, only meaningful while comparing a live proposal.

@@ -57,6 +57,14 @@ try{
  await page.getByRole('button',{name:'小熊号',exact:true}).click();
  await page.locator('.landing-marker:not([hidden])').waitFor({state:'visible'});
  await capture('move-preview.png');
+ await page.getByRole('button',{name:'帮我选',exact:true}).click();
+ await page.locator('.coach-detail').waitFor({state:'visible'});
+ await page.waitForFunction(()=>!document.querySelector('.move-preview .primary-button')?.disabled);
+ await capture('coach-desktop.png');
+ await page.setViewportSize({width:390,height:844});await settle();await capture('coach-mobile.png');
+ await page.setViewportSize({width:1440,height:1120});await settle();
+ await page.getByRole('button',{name:'小熊号',exact:true}).click();
+ await page.waitForFunction(()=>!document.querySelector('.move-preview .primary-button')?.disabled);
  await page.getByRole('button',{name:'确认飞行',exact:true}).click();
  await page.waitForFunction(()=>!document.querySelector('.roll-button')?.disabled);
  await settle();
@@ -66,6 +74,6 @@ try{
  await capture('play-mobile.png');
  assert.equal(await page.evaluate(()=>window.__docsMicrophone),0);
  assert.deepEqual(errors,[]);
- await writeFile(join(output,'manifest.json'),JSON.stringify({captured_at:new Date().toISOString(),app_commit:process.env.QA_SOURCE_COMMIT,browser:browser.version(),scope:'Actual app UI: home, create, board, five props, random dice and takeoff; two human seats; voice switched off; no mocked state or microphone',captures,console_errors:0,microphone_requests:0},null,2)+'\n');
+ await writeFile(join(output,'manifest.json'),JSON.stringify({captured_at:new Date().toISOString(),app_commit:process.env.QA_SOURCE_COMMIT,browser:browser.version(),scope:'Actual app UI: home, create, board, five props, random dice, coaching preview and takeoff; two human seats; voice switched off; no mocked state or microphone',captures,console_errors:0,microphone_requests:0},null,2)+'\n');
  console.log(JSON.stringify({result:'PASS',screenshots:captures.length,console_errors:errors.length,microphone_requests:0,app_commit:process.env.QA_SOURCE_COMMIT}));
 }finally{await browser.close();}

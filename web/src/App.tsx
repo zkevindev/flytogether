@@ -161,8 +161,13 @@ export default function App() {
   const voiceBusy = room ? ['listening', 'thinking', 'speaking'].includes(room.voice) : false;
   const canAct = !tutorialOpen && lifecycle === 'playing' && !!state && !!current && !current.ai && !busy && !voiceBusy && !presentation.active && !presentation.queue.length && state.phase !== 'finished';
 
-  const preview = canAct && state?.phase === 'move' && previewSelection?.gameID === state.id && previewSelection.version === state.version
-    ? state.legal_moves.find(move => move.piece_id === previewSelection.pieceID) : undefined;
+  const coach = room?.coach && room.coach.game_id === state?.id && room.coach.version === state.version && room.coach.player_id === current?.id ? room.coach : undefined;
+  const canPreview = !tutorialOpen && lifecycle === 'playing' && !current?.ai && state?.phase === 'move' && !presentation.active && !presentation.queue.length;
+  const manualPreview = previewSelection?.gameID === state?.id && previewSelection?.version === state?.version
+    ? state?.legal_moves.find(move => move.piece_id === previewSelection?.pieceID) : undefined;
+  const previewCoach = !manualPreview ? coach : undefined;
+  const preview = canPreview ? manualPreview || previewCoach?.move : undefined;
+  useEffect(() => { if (room?.coach) setPreviewSelection(undefined); }, [room?.coach?.id]);
   useEffect(() => { setPreviewSelection(undefined); }, [state?.id, state?.version, lifecycle, screen]);
   useEffect(() => {
     if (screen === 'play' && lifecycle === 'playing' && state?.phase !== 'finished' && !tutorialSeen && !modal && !presentation.active && !presentation.queue.length) setTutorialOpen(true);
@@ -177,6 +182,7 @@ export default function App() {
   const selectMove = (pieceID: string) => {
     if (!canAct || state?.phase !== 'move' || !state.legal_moves.some(move => move.piece_id === pieceID)) return;
     setPreviewSelection({ gameID: state.id, version: state.version, pieceID });
+    if (room?.coach) void command('coach', 'cancel');
   };
 
   const command = useCallback(async (action: string, pieceID?: string, targetID?: string) => {
@@ -185,7 +191,7 @@ export default function App() {
     void narrator.current.unlock();
     if (action === 'pause' || action === 'end') voice.current?.disconnect();
     locked.current = true; setBusy(true); setPendingAction(action);
-    const body = { command_id: crypto.randomUUID(), game_id: r.state.id, expected_version: r.state.version, action, piece_id: action === 'move' ? pieceID : action === 'prop' ? targetID : undefined, prop_id: action === 'prop' ? pieceID : undefined };
+    const body = { command_id: crypto.randomUUID(), game_id: r.state.id, expected_version: r.state.version, action, piece_id: action === 'move' ? pieceID : action === 'prop' ? targetID : undefined, prop_id: action === 'prop' ? pieceID : undefined, choice: action === 'coach' ? pieceID : undefined, coach_id: action === 'confirm_coach' ? pieceID : undefined };
     const start = Date.now();
     try {
       let next: Room;
@@ -208,13 +214,13 @@ export default function App() {
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !modal && previewSelection) { setPreviewSelection(undefined); return; }
+      if (e.key === 'Escape' && !modal && (previewSelection || coach) && canAct) { setPreviewSelection(undefined); if (coach) void command('coach', 'cancel'); return; }
       if (e.code === 'Space' && !modal && canAct && state?.phase === 'roll' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) {
         e.preventDefault(); void command('roll');
       }
     };
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
-  }, [canAct, modal, previewSelection, state?.phase, command]);
+  }, [canAct, modal, previewSelection, coach, state?.phase, command]);
 
   useEffect(() => {
     if (screen === 'home' && room?.status === 'playing' && room.state.phase !== 'finished' && !locked.current) void command('pause');
@@ -326,6 +332,7 @@ export default function App() {
             <div className="board-turnbar"><span style={{ color: palette[current.color] }}><AirplaneTilt weight="fill" />{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span>
               <strong>{state.demo ? '演示局面' : state.board.name}{state.phase === 'move' ? ` · ${state.dice} 点` : ''}</strong>
               <div className="play-turn-actions">{lifecycle === 'playing' && !winner && state.phase === 'roll' && <button className="primary-button roll-button" disabled={!canAct} onClick={() => void command('roll')}>{current.ai ? '灵矽的回合' : busy ? '骰子转呀转…' : '掷骰子'}</button>}
+                {lifecycle === 'playing' && !current.ai && state.phase === 'move' && <button className="prop-shortcut coach-shortcut" disabled={!canAct} onClick={() => void command('coach', 'best')}><Sparkle weight="fill" />帮我选</button>}
                 {lifecycle === 'playing' && !winner && state.phase === 'move' && state.legal_moves.map(move => <button key={move.piece_id} className="prop-shortcut" disabled={!canAct} title={move.summary} aria-pressed={preview?.piece_id === move.piece_id} onClick={() => selectMove(move.piece_id)}>{move.label}</button>)}
                 {state.props_enabled && !winner && <button className="prop-shortcut" onClick={() => setModal('props')}>道具口袋 · {Object.values(current.props || {}).reduce((a, b) => a + b, 0)}</button>}
                 {(lifecycle === 'ended' || winner) && <button className="prop-shortcut" onClick={() => openSetup(false)}>再来一局</button>}
@@ -340,8 +347,12 @@ export default function App() {
             </div>
           </section>
           <aside className="side-column" aria-label="语音助手">
-            {preview && <MovePreview game={state} move={preview} disabled={!canAct} onCancel={() => setPreviewSelection(undefined)} onConfirm={() => {
+            {preview && <MovePreview game={state} move={preview} coach={previewCoach} onCoach={choice => void command('coach', choice)} disabled={!canAct} onCancel={() => { setPreviewSelection(undefined); if (previewCoach) void command('coach', 'cancel'); }} onConfirm={() => {
               const live = roomRef.current;
+              if (previewCoach) {
+                if (live?.coach?.id === previewCoach.id && live.state.id === previewCoach.game_id && live.state.version === previewCoach.version) void command('confirm_coach', previewCoach.id);
+                return;
+              }
               if (!live || live.state.id !== previewSelection?.gameID || live.state.version !== previewSelection.version || live.status !== 'playing') { setPreviewSelection(undefined); return; }
               void command('move', preview.piece_id);
             }} />}
