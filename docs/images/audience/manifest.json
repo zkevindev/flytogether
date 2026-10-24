@@ -1,12 +1,12 @@
 {
   "captured_on": "2026-10-24",
   "browser": "Chrome 155.0.8059.85",
-  "scope": "Actual deployed Chrome, independent cookie roles and random legal game; phone images are desktop viewport, voice image uses synthetic WAV through real AudioWorklet/Go/Lingxi, not physical microphone or human hearing evidence",
+  "scope": "Current product UI screenshots captured from the actual local application. Main spectator flow and service-restart restoration use real server state; private voice uses real Lingxi Realtime with synthetic WAV. No injected game state or physical phone claim.",
   "captures": [
     {
       "file": "watch-desktop.png",
-      "source_commit": "c9aa0ddb8b19e8e63de902f35eeda04a3fba47f0",
-      "sha256": "89d4a6a382bccb598b4e684d30a91391e5e9e106a3316651e6bbad13b6bbfa1b",
+      "source_commit": "8772cce",
+      "sha256": "0974832e2305d7a70fe48c07d29ffa549e9f2332c94bc50b243855910bb3cd8f",
       "viewport": {
         "width": 1360,
         "height": 1000
@@ -14,8 +14,8 @@
     },
     {
       "file": "watch-mobile.png",
-      "source_commit": "c9aa0ddb8b19e8e63de902f35eeda04a3fba47f0",
-      "sha256": "7be772c1bf9efbe277df5c1ffa74a67c46ac331c746d4d0f0cb9da32129d411e",
+      "source_commit": "8772cce",
+      "sha256": "342fbf68e93fb5bc4209dda81edfea1b253a72ca7ea80857643bfc5408dfaaf5",
       "viewport": {
         "width": 390,
         "height": 844
@@ -23,8 +23,8 @@
     },
     {
       "file": "watch-result.png",
-      "source_commit": "c9aa0ddb8b19e8e63de902f35eeda04a3fba47f0",
-      "sha256": "42539c4de5f3ed71c4cf907abcbb674a2b7be149598d4512f6691688d4f26462",
+      "source_commit": "8772cce",
+      "sha256": "7f7d5f0220665b4b56d9c9c5a0a08376b5ec29044a136994bcca5054da3c8381",
       "viewport": {
         "width": 1360,
         "height": 1000
@@ -32,8 +32,8 @@
     },
     {
       "file": "watch-private-voice.png",
-      "source_commit": "c9aa0ddb8b19e8e63de902f35eeda04a3fba47f0",
-      "sha256": "925bca3c6025fa59a1a23c40025c700a6a6e63acb846618cefe2fca8a2b2be7d",
+      "source_commit": "8772cce",
+      "sha256": "5a5c9ce031a328e707cbb504bf99cb18c73e7ff895998ca01b369033a882385f",
       "viewport": {
         "width": 1360,
         "height": 1000
@@ -41,8 +41,8 @@
     },
     {
       "file": "watch-restored.png",
-      "source_commit": "c9aa0ddb8b19e8e63de902f35eeda04a3fba47f0",
-      "sha256": "c09e599f02c390178fd2f58d9e60714384018b34396b1fb691872fb204572c71",
+      "source_commit": "8772cce",
+      "sha256": "7bc60cba7bb47ea9893340b5e690327b40764f606b05633cf66ae50344cdf92c",
       "viewport": {
         "width": 1280,
         "height": 720

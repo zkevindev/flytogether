@@ -1,12 +1,12 @@
 {
   "captured_on": "2026-10-24",
-  "source_commit": "6dba4f22387062a29768d3090e793f184082b662",
+  "source_commit": "8772cce",
   "browser": "Chrome 155.0.8059.85",
-  "scope": "Actual deployed Chrome product route and responsive phone viewport. Board is an explicitly labelled illustrative preview, no server game, microphone or WebGL created. Not a real match or physical phone claim.",
+  "scope": "Actual local app Chrome screenshots after the Lingxi brand spelling correction; product page previews only, no game API, microphone, or WebGL.",
   "captures": [
     {
       "file": "product-hero.png",
-      "sha256": "b253db3b37a9e42423574d3e6027870d2c8adc2dbaa616662cf48f2d140b5bef",
+      "sha256": "cc806e776e8fd0809ab25c51d5ba9e448409e38f1e633877a0ffcefdb6e65895",
       "viewport": {
         "width": 1440,
         "height": 1000
@@ -14,7 +14,7 @@
     },
     {
       "file": "product-desktop.png",
-      "sha256": "40f1fe75a9f53f3cb2aafab2224d7fcd2d8c686ca501300383e5d242da372a79",
+      "sha256": "702249b317b2dcbee70548a587d98603e6bc010a3206ec8b53ec9a30ee416b5b",
       "viewport": {
         "width": 1440,
         "height": 1000
@@ -22,7 +22,7 @@
     },
     {
       "file": "product-mobile.png",
-      "sha256": "3581541721f3bb9f2b78f8115a0d98308c08e228530d270f9cc297a48c07b899",
+      "sha256": "ecbe8c5b5a8a9c5833eba55c63a89def2e0f93a1ff235f573318b02bd58254d1",
       "viewport": {
         "width": 390,
         "height": 844
