@@ -33,12 +33,6 @@ func actionNarration(r room.GameSession, a voiceAction, before, output string, p
 		}
 		return a.Notice
 	}
-	if a.Name == "use_prop" && a.PropID == "launch" {
-		if p.Style == "concise" {
-			return "起飞卡已生效，任意点数都能起飞，请掷骰子。"
-		}
-		return "起飞卡已生效，接下来掷骰，任意点数都能让机库里的飞机起飞到起飞位。"
-	}
 	lines := []string{}
 	for _, e := range eventsAfter(state.History, before) {
 		switch e.Kind {

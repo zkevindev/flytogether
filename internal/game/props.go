@@ -31,6 +31,30 @@ func (s *State) UsePropOn(id, pieceID string) error {
 	if p.Props[id] <= 0 {
 		return fmt.Errorf("你的%s已经用完了", name)
 	}
+	if id == "launch" {
+		var piece *Piece
+		for i := range p.Pieces {
+			if p.Pieces[i].ID == pieceID {
+				piece = &p.Pieces[i]
+				break
+			}
+		}
+		if piece == nil || piece.Progress != -1 {
+			return fmt.Errorf("起飞卡需要选择自己一架仍在机库的飞机")
+		}
+		piece.Progress = 0
+		p.Props[id]--
+		p.Stats.PropsUsed++
+		p.Stats.Takeoffs++
+		// Keep the shared pre-roll slot occupied without applying the legacy
+		// launch-on-dice modifier to other hangar planes.
+		s.ActiveProp = "launch_used"
+		s.Version++
+		s.add("prop", p.Name+"使用起飞卡，"+piece.Label+"从机库直接起飞到起飞位。", piece.ID)
+		s.History[len(s.History)-1].PropID = id
+		s.History[len(s.History)-1].Effects = []PropEffect{{PieceID: piece.ID, From: -1, To: 0, Kind: "launch"}}
+		return nil
+	}
 	if id == "boost" {
 		airborne := false
 		for _, piece := range p.Pieces {
@@ -212,6 +236,17 @@ func (s *State) SupportProp() string {
 // PropTargets never includes hangars, launch pads or protected home lanes.
 func (s *State) PropTargets(id string) []string {
 	out := []string{}
+	if id == "launch" {
+		if !s.PropsEnabled || s.Phase != "roll" || s.ActiveProp != "" || s.Players[s.Current].Props[id] <= 0 {
+			return out
+		}
+		for _, piece := range s.Players[s.Current].Pieces {
+			if piece.Progress == -1 {
+				out = append(out, piece.ID)
+			}
+		}
+		return out
+	}
 	attack := id == "bomb" || id == "boomerang"
 	own := id == "shield" || id == "rescue" || id == "escort"
 	if !attack && !own {

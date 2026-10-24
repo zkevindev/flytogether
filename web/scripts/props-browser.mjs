@@ -17,6 +17,7 @@ try{
   await page.getByRole('button',{name:/^道具口袋 ·/}).click();
   await page.locator('.prop-card').first().waitFor();assert.equal(await page.locator('.prop-card').count(),8);
   await page.getByRole('button',{name:'使用'+name,exact:true}).click();
+  if(id==='launch')await page.locator('.prop-targets .prop-target').first().click();
   if(target)await page.locator('.prop-targets').getByRole('button',{name:new RegExp('^'+target)}).click();
   if(id==='luck'){await page.getByRole('dialog',{name:'3D 掷骰结果'}).waitFor();await page.getByRole('button',{name:'继续飞行',exact:true}).click();}
   await page.locator(`[data-prop-fx="${id}"]`).waitFor();
@@ -24,12 +25,18 @@ try{
   assert.equal(s.players[0].props[id],0);assert.equal(s.players[0].stats.props_used,1);
   if(id==='luck'){assert.equal(s.players[0].stats.rolls,1);assert.equal(s.dice_rolls.length,2);assert.equal(s.dice,Math.max(...s.dice_rolls));}
   else assert.equal(s.players[0].stats.rolls,0);
+  if(id==='launch'){const moved=s.history.findLast(e=>e.prop_id==='launch'),piece=s.players[0].pieces.find(p=>p.id===moved.piece_id);assert.equal(piece.progress,0);assert.equal(moved.effects?.[0]?.kind,'launch');assert.equal(s.players[0].stats.takeoffs,1);assert.equal(s.phase,'roll');}
   if(expected!==null){const owner=id==='bomb'||id==='boomerang'?1:0;assert.equal(s.players[owner].pieces[0].progress,expected);}
   if(id==='escort')assert.ok(s.players[0].pieces.slice(0,2).every(p=>p.shield));
   if(id==='shield')assert.ok(s.players[0].pieces[0].shield);
   if(id!=='luck'){await page.waitForTimeout(450);await page.screenshot({path:join(out,id+'.png')});}
   if(mobile)assert.equal(await page.locator('.prop-fx .fx-glyph').evaluate(el=>getComputedStyle(el).animationName),'none');
   await page.locator('.prop-fx').waitFor({state:'detached',timeout:7000});
+  if(id==='launch'){
+   const beforeRoll=(await(await c.request.get('/api/session')).json()).room.state;assert.equal(beforeRoll.active_prop,'launch_used');
+   await page.locator('.roll-button').click();await page.getByRole('dialog',{name:'3D 掷骰结果'}).waitFor();await page.getByRole('button',{name:'继续飞行',exact:true}).click();
+   const afterRoll=(await(await c.request.get('/api/session')).json()).room.state;assert.equal(afterRoll.phase,'move');assert.equal(afterRoll.players[0].stats.rolls,1);assert.equal(afterRoll.active_prop,'launch_used');
+  }
   const qa=await page.evaluate(()=>window.__qa);assert.equal(qa.mic,0);assert.equal(qa.losses,0);assert.ok(qa.tones.length>0,'effects have actual oscillator cues');assert.equal(qa.contexts,gpuBefore,'prop effect must not create a WebGL renderer');
   await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('.prop-fx').count(),0,'reload must not replay old effects');
   report.push({id,flat,mobile,actual_dice:id==='luck'?s.dice_rolls:undefined,effects:s.history.filter(e=>e.prop_id===id).at(-1)?.effects,webgl_losses:qa.losses});await c.close();

@@ -58,11 +58,7 @@ func TestDiceSpeechCommitsAndAcknowledgesBeforeNarration(t *testing.T) {
 	oldClient := http.DefaultClient
 	http.DefaultClient = provider.Client()
 	defer func() { http.DefaultClient = oldClient }()
-	r := room.New(game.Options{Names: []string{"孩子", "家长"}, Props: true})
-	state, _, _ := roomGame(r)
-	if _, err := r.Do(room.Command{ID: "card", GameID: state.ID, Version: state.Version, Action: "prop", PropID: "launch"}, false); err != nil {
-		t.Fatal(err)
-	}
+	r := room.New(game.Options{Names: []string{"孩子", "家长"}, Props: true, Demo: true})
 	bridge := &Bridge{Config: Config{URL: strings.Replace(provider.URL, "https:", "wss:", 1) + "/v1/realtime", APIKey: "test-only", Model: "test"}}
 	done := make(chan struct{})
 	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -121,7 +117,7 @@ func TestDiceSpeechCommitsAndAcknowledgesBeforeNarration(t *testing.T) {
 	_ = json.Unmarshal(data, &view)
 	var rolled game.State
 	_ = json.Unmarshal(view.State, &rolled)
-	if rolled.Version != 3 || rolled.Phase != "move" || rolled.Players[0].Stats.Rolls != 1 || len(rolled.DiceRolls) != 1 {
+	if rolled.Version != 2 || rolled.Phase != "move" || rolled.Players[0].Stats.Rolls != 1 || len(rolled.DiceRolls) != 1 {
 		t.Fatal("missing committed roll", rolled)
 	}
 	if !strings.Contains(ack["text"].(string), strconv.Itoa(rolled.Dice)) || !strings.Contains(ack["text"].(string), "请选择") {
@@ -171,7 +167,7 @@ spoken:
 		waitRequest(t, ctx, requests, "response.create")
 		complete("read-response-"+strconv.Itoa(i), true)
 		now, _, _ := roomGame(r)
-		if now.Version != 3 || now.Players[0].Stats.Rolls != 1 || now.Players[0].Pieces[0].Progress != -1 {
+		if now.Version != 2 || now.Players[0].Stats.Rolls != 1 || now.Players[0].Pieces[0].Progress != 12 {
 			t.Fatal("query or unexpected provider tool mutated state")
 		}
 	}

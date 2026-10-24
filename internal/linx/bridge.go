@@ -298,6 +298,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	var inFlight bool
 	var allowModelTools bool
 	var pendingHost bool
+	var awaitingLaunchChoice bool
 	var hostSince time.Time
 	var seenEvent string
 	var cheered Cheer
@@ -531,7 +532,21 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			sessionInstructions := realtimeSessionUpdate(b.Config.Model)
 			session := sessionInstructions["session"].(map[string]any)
 			session["instructions"] = session["instructions"].(string) + companion.Instructions()
-			if action, handled := planVoiceAction(r, gate.commandText(body.Transcript)); handled {
+			voiceText := gate.commandText(body.Transcript)
+			action, handled := planVoiceAction(r, voiceText)
+			if awaitingLaunchChoice {
+				if choice, ok := pendingLaunchChoice(r, voiceText); ok {
+					action, handled = choice, true
+				} else {
+					awaitingLaunchChoice = false
+				}
+			}
+			if action.Pending {
+				awaitingLaunchChoice = true
+			} else if action.Name == "use_prop" && action.PropID == "launch" {
+				awaitingLaunchChoice = false
+			}
+			if handled {
 				allowModelTools = false
 				before := ""
 				if state, _, ok := roomGame(r); ok {
@@ -823,7 +838,7 @@ func realtimeURL(raw, model string) (string, error) {
 func realtimeSessionUpdate(model string) map[string]any {
 	return map[string]any{"type": "session.update", "session": map[string]any{
 		"type": "realtime", "model": model, "output_modalities": []string{"audio"},
-		"instructions": "你是一起飞家庭飞行棋的语音主持人。用简短亲切的中文交流，只用玩家和棋子昵称，不朗读内部ID和技术字段。玩家只是呼唤或问怎么办时，根据工具结果说当前一个最有用的选择，不操作棋局。撞某人、走最前面、回家、我要几点，都由游戏服务判断；你只播报工具结果。棋局状态、道具库存和规则以工具结果为准；写操作前先查询状态，只按明确指令操作。合法起飞或移动必须调用move_piece执行，再播报真实结果；多个候选先追问。起飞条件读取本局rules：亲子轻松五点或六点起飞，经典/自定义六点起飞；只有六点可再掷。起飞卡生效时任意点数都能起飞。加速卡对已离开机库的飞机增加两步，幸运骰由游戏服务掷两次取较大值，不能接受玩家自报点数。炸弹可把指定对手公共航线上的飞机送回机场，护盾可保护自己公共航线上的飞机一次。回旋镖让对手公共航线飞机后退3格（最低第1格，不触发跳跃或撞机），护盾可抵挡；救援卡把自己公共航线飞机撤回起飞位并解除护盾；团队护航保护自己全部未加盾公共航线飞机。除团队护航外，以上四种定向道具都需piece_id，不能选机库、起飞位和终点航道。用户问战术或推荐时，先查状态，根据库存、prop_targets、合法走法给一句具体建议，不擅自操作。道具必须在掷骰前使用，一次掷骰只能用一张。一次话语最多执行一个写动作，使用幸运骰会立即真实掷两次取较大值，其余道具使用后等待玩家另说掷骰子。只有本次新增rolled事件才能播报刚掷出了点数，state.dice可能来自上一回合，不能当成本次投掷。不得声称未执行的动作成功。",
+		"instructions": "你是一起飞家庭飞行棋的语音主持人。用简短亲切的中文交流，只用玩家和棋子昵称，不朗读内部ID和技术字段。玩家只是呼唤或问怎么办时，根据工具结果说当前一个最有用的选择，不操作棋局。撞某人、走最前面、回家、我要几点，都由游戏服务判断；你只播报工具结果。棋局状态、道具库存和规则以工具结果为准；写操作前先查询状态，只按明确指令操作。合法起飞或移动必须调用对应工具执行，再播报真实结果；多个候选先追问。普通起飞条件读取本局rules：亲子轻松五点或六点起飞，经典/自定义六点起飞；只有六点可再掷。起飞卡需要明确选择一架自己仍在机库的飞机，使用后直接移到起飞位，不用掷骰；只说使用起飞卡而未说飞机名字时，先询问选哪架，不能自行猜测。加速卡对已离开机库的飞机增加两步，幸运骰由游戏服务掷两次取较大值，不能接受玩家自报点数。炸弹可把指定对手公共航线上的飞机送回机场，护盾可保护自己公共航线上的飞机一次。回旋镖让对手公共航线飞机后退3格（最低第1格，不触发跳跃或撞机），护盾可抵挡；救援卡把自己公共航线飞机撤回起飞位并解除护盾；团队护航保护自己全部未加盾公共航线飞机。起飞卡需要自己机库飞机ID，炸弹、护盾、回旋镖和救援卡需prop_targets中的合法目标；不能猜测目标。用户问战术或推荐时，先查状态，根据库存、prop_targets、合法走法给一句具体建议，不擅自操作。其他道具必须在掷骰前使用，一次掷骰只能用一张。一次话语最多执行一个写动作，使用幸运骰会立即真实掷两次取较大值，其余道具按真实规则执行。只有本次新增rolled事件才能播报刚掷出了点数，state.dice可能来自上一回合，不能当成本次投掷。不得声称未执行的动作成功。",
 		"audio": map[string]any{
 			"input": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 16000}, "transcription": map[string]any{},
 				"turn_detection": map[string]any{"type": "server_vad", "create_response": false, "interrupt_response": true}},
@@ -840,7 +855,7 @@ func realtimeTools() []map[string]any {
 		{"type": "function", "name": "coach_move", "description": "只提供当前合法走法的建议和棋盘落点预览，不移动飞机。best 推荐，next 另一架，safe 风险较少，previous 刚才那个，cancel 取消。仅在玩家询问或要求比较时调用，等待下一句话明确确认。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"choice": map[string]any{"type": "string", "enum": []string{"best", "next", "safe", "previous", "cancel"}}}, "required": []string{"choice"}, "additionalProperties": false}},
 		{"type": "function", "name": "confirm_coach", "description": "仅当玩家本句话明确说就它、确认飞行等，才执行当前建议。建议ID来自当前room.coach.id，不能确认已变化或被取消的建议；询问或比较不执行。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"coach_id": map[string]any{"type": "string"}}, "required": []string{"coach_id"}, "additionalProperties": false}},
 		{"type": "function", "name": "move_piece", "description": "移动玩家明确指定的一架合法飞机。piece_id 必须来自刚查询的棋局状态。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"piece_id": map[string]any{"type": "string"}}, "required": []string{"piece_id"}, "additionalProperties": false}},
-		{"type": "function", "name": "use_prop", "description": "按玩家明确指令，在掷骰前使用一张库存道具。launch 起飞卡、boost 加速卡、luck 幸运骰、bomb 炸弹、shield 护盾、boomerang 回旋镖（对手后退3格）、rescue 救援卡（自己的飞机撤回起飞位）、escort 团队护航（全部自己的公共航线飞机加盾）。炸弹、护盾、回旋镖和救援卡需在prop_targets中明确选择piece_id；其他道具不填写piece_id。幸运骰使用后立即真实掷两次取较大值，其余道具使用后不自动掷骰。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"prop_id": map[string]any{"type": "string", "enum": []string{"launch", "boost", "luck", "bomb", "shield", "boomerang", "rescue", "escort"}}, "piece_id": map[string]any{"type": "string", "description": "炸弹、护盾、回旋镖或救援卡的目标ID，必须来自prop_targets；其他道具省略"}}, "required": []string{"prop_id"}, "additionalProperties": false}},
+		{"type": "function", "name": "use_prop", "description": "按玩家明确指令使用一张库存道具。launch 起飞卡需要选择自己一架仍在机库的飞机，并立即从机库移动到起飞位，不掷骰；piece_id 必须来自当前状态的prop_targets。boost 加速卡、luck 幸运骰、bomb 炸弹、shield 护盾、boomerang 回旋镖（对手后退3格）、rescue 救援卡（自己的飞机撤回起飞位）、escort 团队护航（全部自己的公共航线飞机加盾）。炸弹、护盾、回旋镖和救援卡需在prop_targets中明确选择piece_id；其他道具不填写piece_id。幸运骰使用后立即真实掷两次取较大值，其余道具按实际规则处理。", "parameters": map[string]any{"type": "object", "properties": map[string]any{"prop_id": map[string]any{"type": "string", "enum": []string{"launch", "boost", "luck", "bomb", "shield", "boomerang", "rescue", "escort"}}, "piece_id": map[string]any{"type": "string", "description": "起飞卡必须选择自己机库飞机；炸弹、护盾、回旋镖或救援卡目标必须来自prop_targets"}}, "required": []string{"prop_id"}, "additionalProperties": false}},
 	}
 }
 

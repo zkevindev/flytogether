@@ -46,12 +46,9 @@ func companionTip(state game.State) string {
 	if state.Phase == "move" {
 		return "先看亮起的飞机和落点，确认后再飞。"
 	}
-	if state.PropsEnabled && state.ActiveProp == "launch" {
-		return "起飞卡已经生效，这次任意点数都能起飞。"
-	}
 	if state.Players[state.Current].Pieces[0].Progress < 0 {
-		if state.PropsEnabled && state.Players[state.Current].Props["launch"] > 0 {
-			return "机库里的飞机需要掷到" + state.LaunchRule() + "，或先使用起飞卡。"
+		if state.PropsEnabled && state.ActiveProp != "launch_used" && state.Players[state.Current].Props["launch"] > 0 {
+			return "机库里的飞机需要掷到" + state.LaunchRule() + "，也可以说出飞机名字，用起飞卡直接送到起飞位。"
 		}
 		return "机库里的飞机需要掷到" + state.LaunchRule() + "才能起飞。"
 	}

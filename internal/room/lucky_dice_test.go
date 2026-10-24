@@ -73,7 +73,7 @@ func TestLuckyDiceCannotConsumeInventoryAfterAnotherProp(t *testing.T) {
 	r := New(game.Options{Names: []string{"孩子", "爸爸"}, Props: true})
 	var state game.State
 	_ = json.Unmarshal(r.Snapshot().State, &state)
-	view, err := r.Do(Command{ID: "first-card", GameID: state.ID, Version: state.Version, Action: "prop", PropID: "launch"}, false)
+	view, err := r.Do(Command{ID: "first-card", GameID: state.ID, Version: state.Version, Action: "prop", PropID: "launch", PieceID: "p0-0"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

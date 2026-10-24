@@ -7,25 +7,45 @@ import (
 
 func propGame() *State { return New(Options{Names: []string{"甲", "乙"}, Props: true}) }
 
-func TestLaunchCardDoesNotCreateSixOrBonus(t *testing.T) {
+func TestLaunchCardImmediatelyMovesSelectedPlaneWithoutDice(t *testing.T) {
 	s := propGame()
-	if err := s.UseProp("launch"); err != nil {
+	if err := s.UsePropOn("launch", "p0-0"); err != nil {
 		t.Fatal(err)
 	}
-	if s.Players[0].Props["launch"] != 0 || s.ActiveProp != "launch" || s.Version != 2 {
+	if s.Players[0].Props["launch"] != 0 || s.ActiveProp != "launch_used" || s.Version != 2 {
 		t.Fatal("card was not consumed once")
 	}
-	if err := s.Roll(2); err != nil {
+	if s.Players[0].Pieces[0].Progress != 0 || s.Players[0].Pieces[1].Progress != -1 || s.Phase != "roll" || s.Players[0].Stats.Takeoffs != 1 || s.Players[0].Stats.Rolls != 0 {
+		t.Fatal("card did not move exactly the selected plane to the launch pad")
+	}
+	if len(s.History) != 2 || s.History[1].Kind != "prop" || len(s.History[1].Effects) != 1 || s.History[1].Effects[0].From != -1 || s.History[1].Effects[0].To != 0 {
+		t.Fatal("card did not record its real plane movement")
+	}
+	if err := s.Roll(6); err != nil {
 		t.Fatal(err)
 	}
-	if s.Dice != 2 || len(s.Legal) != 2 || !s.Legal[0].Launch {
-		t.Fatal("card did not enable a real two-point launch")
+	if s.Dice != 6 || s.Phase != "move" || s.Current != 0 {
+		t.Fatal("takeoff card fabricated a roll or changed the turn")
 	}
-	if err := s.Move(s.Players[0].Pieces[0].ID); err != nil {
+}
+
+func TestLaunchTargetsAreOnlyCurrentPlayersHangarPieces(t *testing.T) {
+	s := propGame()
+	targets := s.PropTargets("launch")
+	if len(targets) != len(s.Players[0].Pieces) || targets[0] != "p0-0" || targets[1] != "p0-1" {
+		t.Fatalf("unexpected launch targets: %v", targets)
+	}
+	if err := s.UsePropOn("launch", "p1-0"); err == nil {
+		t.Fatal("launch card must not move another player's plane")
+	}
+	if s.Players[0].Props["launch"] != 1 || s.Players[1].Pieces[0].Progress != -1 {
+		t.Fatal("rejected target changed state")
+	}
+	if err := s.UsePropOn("launch", "p0-0"); err != nil {
 		t.Fatal(err)
 	}
-	if s.Current != 1 || s.ActiveProp != "" || s.Players[0].Pieces[0].Progress != 0 {
-		t.Fatal("launch card incorrectly moved extra steps or granted a bonus")
+	if len(s.PropTargets("launch")) != 0 {
+		t.Fatal("used launch card still offered targets")
 	}
 }
 
@@ -68,6 +88,7 @@ func TestIllegalPropUseIsAtomic(t *testing.T) {
 		{"classic", func(s *State) { s.PropsEnabled = false }, "launch"},
 		{"unknown", func(*State) {}, "fake"},
 		{"no airborne plane", func(*State) {}, "boost"},
+		{"launch requires target", func(*State) {}, "launch"},
 		{"no hangar", func(s *State) {
 			for i := range s.Players[0].Pieces {
 				s.Players[0].Pieces[i].Progress = 1

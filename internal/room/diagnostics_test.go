@@ -26,7 +26,10 @@ func TestDiagnosticLifecycleAtomicReplayAndRestart(t *testing.T) {
 		t.Fatal(e)
 	}
 	original := current(r).ID
-	savedDo(t, r, "secret-cookie", "prop", func(c *Command) { c.PropID = "launch" })
+	savedDo(t, r, "secret-cookie", "prop", func(c *Command) { c.PropID = "launch"; c.PieceID = "p0-0" })
+	r.mu.Lock()
+	r.state.Players[0].Pieces[1].Progress = 1 // Ensure either real die leaves two legal moves for the rollback check.
+	r.mu.Unlock()
 	roll := savedDo(t, r, "secret-cookie", "roll", nil)
 	timeline, e := s.DiagnosticTimeline(context.Background(), original, DiagnosticQuery{Limit: 100})
 	if e != nil {

@@ -14,6 +14,7 @@ type voiceAction struct {
 	PieceID string
 	PropID  string
 	Notice  string
+	Pending bool
 	Cheer   int
 	Choice  string
 	CoachID string
@@ -50,6 +51,35 @@ func planVoiceAction(r room.GameSession, text string) (voiceAction, bool) {
 			}
 			return voiceAction{Name: "get_game_state", Notice: notice}, true
 		}
+	}
+	return voiceAction{}, false
+}
+
+// A player may answer the launch-card clarification with only a piece name.
+// Keep that clarification scoped to the current Realtime connection so a bare
+// plane name cannot consume a card in any other conversation.
+func pendingLaunchChoice(r room.GameSession, text string) (voiceAction, bool) {
+	var state game.State
+	if json.Unmarshal(r.Snapshot().State, &state) != nil || state.Phase != "roll" || !state.PropsEnabled || state.Current < 0 || state.Current >= len(state.Players) || state.ActiveProp != "" || state.Players[state.Current].Props["launch"] <= 0 {
+		return voiceAction{}, false
+	}
+	text = spoken(text)
+	for _, phrase := range []string{"不要", "取消", "算了", "不用", "先不"} {
+		if strings.Contains(text, phrase) {
+			return voiceAction{}, false
+		}
+	}
+	var matches []string
+	for _, piece := range state.Players[state.Current].Pieces {
+		if piece.Progress == -1 && strings.Contains(text, normalizeWake(piece.Label)) {
+			matches = append(matches, piece.ID)
+		}
+	}
+	if len(matches) == 1 {
+		return voiceAction{Name: "use_prop", PropID: "launch", PieceID: matches[0]}, true
+	}
+	if len(matches) > 1 {
+		return voiceAction{Name: "get_game_state", Notice: "一次只能选一架飞机。请只说一个名字，起飞卡会立即把它送到起飞位。", Pending: true}, true
 	}
 	return voiceAction{}, false
 }
@@ -120,7 +150,7 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		if !explicit {
 			return voiceAction{Name: "get_game_state", Notice: "只是提及道具，没有明确使用指令。本轮不操作，请回答问题或给出建议。"}, true
 		}
-		if id == "bomb" || id == "shield" || id == "boomerang" || id == "rescue" {
+		if id == "launch" || id == "bomb" || id == "shield" || id == "boomerang" || id == "rescue" {
 			if ((id == "bomb" || id == "boomerang") && (strings.Contains(text, "我的") || strings.Contains(text, "自己"))) || ((id == "shield" || id == "rescue") && strings.Contains(text, "对方")) {
 				return voiceAction{Name: "get_game_state", Notice: "目标所属玩家不合法，没有使用道具。攻击道具只能选对手，保护和救援只能选自己。"}, true
 			}
@@ -175,11 +205,19 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 			}
 			notice := "还没有使用" + game.PropNames[id] + "。"
 			if len(choices) == 0 {
-				notice += "现在没有可选的航线飞机，请先掷骰子。"
+				if id == "launch" {
+					notice += "现在没有还在机库的飞机可以起飞。"
+				} else {
+					notice += "现在没有可选的航线飞机，请先掷骰子。"
+				}
 			} else {
-				notice += "请选择一架飞机，明确说出玩家和飞机昵称。可选：" + strings.Join(choices, "、") + "。"
+				if id == "launch" {
+					notice += "请说出自己一架机库飞机的名字；起飞卡会直接把它送到起飞位。可选：" + strings.Join(choices, "、") + "。"
+				} else {
+					notice += "请选择一架飞机，明确说出玩家和飞机昵称。可选：" + strings.Join(choices, "、") + "。"
+				}
 			}
-			return voiceAction{Name: "get_game_state", Notice: notice}, true
+			return voiceAction{Name: "get_game_state", Notice: notice, Pending: id == "launch" && len(choices) > 0}, true
 		}
 		return voiceAction{Name: "use_prop", PropID: id}, true
 	}
@@ -512,9 +550,6 @@ func moveCue(state game.State, name string) string {
 	for _, option := range state.Legal {
 		labels = append(labels, option.Label)
 	}
-	if state.ActiveProp == "launch" {
-		return name + "掷出" + strconv.Itoa(state.Dice) + "点，起飞卡已生效。" + strings.Join(labels, "和") + "都能起飞到起飞位，请说飞机名字。"
-	}
 	return name + "掷出" + strconv.Itoa(state.Dice) + "点，" + strings.Join(labels, "和") + "都能走，请说飞机名字。"
 }
 
@@ -534,9 +569,6 @@ func capturedNames(state game.State, option game.Move) string {
 }
 
 func rollCue(state game.State, name string) string {
-	if state.ActiveProp == "launch" {
-		return name + "，起飞卡已生效，任意点数都能起飞。请掷骰子。"
-	}
 	id, target := state.SuggestedPropTarget()
 	if player, piece, ok := findPiece(state, target); ok && (id == "bomb" || id == "shield") {
 		if id == "bomb" {
@@ -546,7 +578,7 @@ func rollCue(state game.State, name string) string {
 	}
 	switch id {
 	case "launch":
-		return name + "，飞机还在机场。说「用起飞卡」，或者说「好」，我来掷。"
+		return name + "，起飞卡可以直接把一架机库飞机送到起飞位，不用掷骰。说「用起飞卡让小熊号起飞」。"
 	case "boost":
 		return name + "，说「用加速卡」能多走两格，或者说「好」直接掷。"
 	case "luck":
@@ -702,7 +734,7 @@ func tacticalAdvice(state game.State) string {
 	}
 	switch id {
 	case "launch":
-		return "建议使用起飞卡，这样掷到任意点数都能起飞。还没有使用，请说使用起飞卡。"
+		return "建议使用起飞卡，让一架机库飞机直接到起飞位，不用掷骰。还没有使用，请说出飞机名字。"
 	case "boost":
 		return "建议使用加速卡，让已经起飞的飞机多走两格。还没有使用，等你明确选择。"
 	case "luck":

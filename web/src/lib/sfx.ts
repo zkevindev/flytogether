@@ -20,6 +20,7 @@ export function cuesFor(events: GameEvent[]): Cue[] {
     else if (event.kind === 'moved') cues.push(moveCue(event.text));
     else if (event.kind === 'prop') {
       if (event.effects?.some(e=>e.kind==='blocked')) cues.push('shield');
+			else if (event.prop_id === 'launch' && event.effects?.some(e=>e.kind==='launch')) cues.push('launch');
       else if (['boomerang','rescue','escort'].includes(event.prop_id || '')) cues.push(event.prop_id as Cue);
       else if (event.text.includes('护盾') && !event.text.includes('送回')) cues.push('shield');
       else if (event.text.includes('炸弹') || event.text.includes('送回')) cues.push('bump');

@@ -127,7 +127,7 @@ type State struct {
 	History      []Event   `json:"history"`
 	LastMove     *Move     `json:"last_move,omitempty"`
 	PropsEnabled bool      `json:"props_enabled"`
-	ActiveProp   string    `json:"active_prop,omitempty"`
+	ActiveProp   string    `json:"active_prop,omitempty"` // "launch_used" occupies this roll's prop slot after an immediate launch-card move.
 	DiceRolls    []int     `json:"dice_rolls"`
 }
 
@@ -243,7 +243,7 @@ func (s *State) legalMoves() []Move {
 		}
 		m := Move{PieceID: piece.ID, Label: piece.Label, From: piece.Progress, Captured: []string{}}
 		if piece.Progress == -1 {
-			if !s.CanLaunch(s.Dice) && s.ActiveProp != "launch" {
+			if !s.CanLaunch(s.Dice) {
 				continue
 			}
 			m.To, m.Launch = 0, true

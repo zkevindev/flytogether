@@ -33,14 +33,14 @@ func TestStatsSurviveFeedTruncationAndCoach(t *testing.T) {
 }
 func TestStatsCountActionsAndShieldedBomb(t *testing.T) {
 	s := New(Options{Names: []string{"甲", "乙"}, Props: true})
-	if err := s.UseProp("launch"); err != nil {
+	if err := s.UsePropOn("launch", "p0-0"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Roll(2); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Move("p0-0"); err != nil {
-		t.Fatal(err)
+	if s.Players[0].Pieces[0].Progress != 2 {
+		t.Fatal("unique legal move after the takeoff did not resolve automatically")
 	}
 	if got := s.Players[0].Stats; got.Rolls != 1 || got.Takeoffs != 1 || got.PropsUsed != 1 {
 		t.Fatal(got)

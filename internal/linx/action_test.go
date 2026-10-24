@@ -61,10 +61,24 @@ func TestVoiceCommandCannotBypassGameRules(t *testing.T) {
 
 func TestVoicePropSelectionIsSingleAndExplicit(t *testing.T) {
 	s := game.New(game.Options{Names: []string{"甲", "乙"}, Props: true})
-	for text, id := range map[string]string{"使用起飞卡": "launch", "来一张加速卡": "boost", "用幸运骰": "luck"} {
+	for text, id := range map[string]string{"来一张加速卡": "boost", "用幸运骰": "luck"} {
 		a, ok := resolveVoiceAction(*s, text)
 		if !ok || a.Name != "use_prop" || a.PropID != id {
 			t.Fatalf("prop command unresolved: %s %+v", text, a)
+		}
+	}
+	launch, ok := resolveVoiceAction(*s, "使用起飞卡")
+	if !ok || launch.Name != "get_game_state" || !launch.Pending || !strings.Contains(launch.Notice, "直接把它送到起飞位") {
+		t.Fatalf("launch card should ask which plane without consuming it: %+v", launch)
+	}
+	selected, ok := pendingLaunchChoice(room.New(game.Options{Names: []string{"甲", "乙"}, Props: true}), "小熊号")
+	if !ok || selected.Name != "use_prop" || selected.PropID != "launch" || selected.PieceID != "p0-0" {
+		t.Fatalf("follow-up plane name did not resolve pending takeoff: %+v", selected)
+	}
+	for text, piece := range map[string]string{"用起飞卡让小熊号起飞": "p0-0", "使用起飞卡让兔子号到起飞位": "p0-1"} {
+		a, ok := resolveVoiceAction(*s, text)
+		if !ok || a.Name != "use_prop" || a.PropID != "launch" || a.PieceID != piece || a.Notice != "" {
+			t.Fatalf("named launch card command unresolved: %s %+v", text, a)
 		}
 	}
 	for _, text := range []string{"不要使用起飞卡", "起飞卡怎么用", "使用起飞卡和幸运骰"} {
