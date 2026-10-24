@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { Game, Move, Piece } from '../lib/types';
 import { palette } from '../lib/types';
 import { boardPieces, createBoardLayout } from '../lib/board-layout';
+import { PlayerMarker } from './PlayerMarker';
 
 export type BoardProps = {
   game: Game; onPiece: (piece: Piece, player: number) => void; disabled: boolean;
@@ -11,7 +12,7 @@ export function BoardFrame({ children, game, disabled, onPiece, onRoll }: BoardP
   const canRoll = !disabled && game.phase === 'roll';
   return <div className="flight-board" data-game-id={game.id} data-version={game.version}>
     {children}
-    <div className="plane-legend" aria-label="飞机编号对照">{game.players.map(player => <div key={player.id} style={{ color: palette[player.color] }}><strong>{player.name}</strong><span>{player.pieces.map(piece => <span key={piece.id}><b>{piece.number}</b>{piece.label}</span>)}</span></div>)}</div>
+    <div className="plane-legend" aria-label="飞机编号对照">{game.players.map((player, index) => <div key={player.id} style={{ color: palette[player.color] }}><strong><PlayerMarker index={index} />{player.name}</strong><span>{player.pieces.map(piece => <span key={piece.id}><b>{piece.number}</b>{piece.label}</span>)}</span></div>)}</div>
     <div className="board-access" role="group" aria-label="棋盘文字操作">
       <button type="button" disabled={!canRoll} onClick={onRoll}>{canRoll ? '掷骰子' : `本次骰子 ${game.dice || '未掷'} 点`}</button>
       {boardPieces(game, createBoardLayout(game.board)).map(({ player, playerIndex, piece }) => {

@@ -37,8 +37,10 @@
     "test:experience": "node --test scripts/experience.test.mjs",
     "test:key-move": "node --experimental-strip-types --test scripts/key-move.test.mjs",
     "test:key-move:browser": "node scripts/key-move-browser.mjs",
+    "test:player-markers": "node --experimental-strip-types --test scripts/player-markers.test.mjs",
+    "test:player-markers:browser": "node scripts/player-markers-browser.mjs",
     "test:accessibility:browser": "node scripts/accessibility-browser.mjs",
-    "test:unit": "npm run test:board && npm run test:voice && npm run test:presentation && npm run test:scene && npm run test:narration && npm run test:experience && npm run test:key-move",
+    "test:unit": "npm run test:board && npm run test:voice && npm run test:presentation && npm run test:scene && npm run test:narration && npm run test:experience && npm run test:key-move && npm run test:player-markers",
     "test:admin:browser": "node scripts/admin-browser.mjs",
     "test:admin:records": "node scripts/admin-records-browser.mjs",
     "test:admin:client-error": "node scripts/admin-client-error-browser.mjs",
@@ -51,7 +53,8 @@
     "test:audience:voice": "node scripts/audience-voice-browser.mjs",
     "test:audience:restart": "node scripts/audience-restart-browser.mjs",
     "test:pass-device:browser": "node scripts/pass-device-prompt-browser.mjs",
-    "test:product:browser": "node scripts/product-browser.mjs"
+    "test:product:browser": "node scripts/product-browser.mjs",
+    "test:player-markers:browser": "node scripts/player-markers-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

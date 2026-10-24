@@ -2,6 +2,7 @@ import { useId } from 'react';
 import type { Game, Move, Piece } from '../lib/types';
 import { colors, palette } from '../lib/types';
 import { boardPieces, createBoardLayout, hangarPosition, piecePosition } from '../lib/board-layout';
+import { playerMarker } from '../lib/player-markers';
 
 const planePath = 'M-3-18 3-18 5-4 16 4 16 9 5 5 4 13 9 17 9 20 0 17-9 20-9 17-4 13-5 5-16 9-16 4-5-4Z';
 const dicePips: Record<number, number[]> = { 0: [4], 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
@@ -27,12 +28,12 @@ export function FlatBoard({ game, onPiece, disabled, onRoll, rolling = false, pr
     <rect x="12" y="12" width="696" height="696" rx="21" fill={`url(#${uid}dots)`} />
     <polyline points={routePath} fill="none" stroke="#d8e5eb" strokeWidth={unit * 1.05} strokeLinejoin="round" />
     {airports.map((airport, i) => {
-      const player = game.players[i], color = palette[colors[i]], current = game.current === i && game.phase !== 'finished';
+      const player = game.players[i], color = palette[colors[i]], current = game.current === i && game.phase !== 'finished', marker = playerMarker(i);
       const n = player?.pieces.length || (game.mode === 'quick' ? 2 : 4);
       return <g key={'airport' + i} className={'airport ' + (current ? 'current-airport' : '')} opacity={player ? 1 : .38}>
         <rect x={airport.x} y={airport.y} width={airport.size} height={airport.size} rx="18" fill={color} stroke={current ? '#263e52' : 'white'} strokeWidth={current ? 3 : 2} />
         <rect x={airport.x + 9} y={airport.y + 36} width={airport.size - 18} height={airport.size - 45} rx="12" fill="white" fillOpacity=".88" />
-        <text x={airport.x + airport.size / 2} y={airport.y + 24} textAnchor="middle" fill="white" fontSize="15" fontWeight="750">{player ? shortName(player.name) : '等待登机'}</text>
+        <text className="airport-player-label" data-player-marker={marker.id} x={airport.x + airport.size / 2} y={airport.y + 24} textAnchor="middle" fill="white" fontSize="15" fontWeight="750">{marker.symbol} {player ? shortName(player.name) : '等待登机'}</text>
         {Array.from({ length: n }, (_, j) => {
           const slot = hangarPosition(airport, j + 1, n);
           return <g key={j}><circle cx={slot.x} cy={slot.y} r={Math.min(27, airport.size * .16)} fill={color} fillOpacity=".12" stroke={color} strokeOpacity=".25" strokeDasharray="3 3" /><text x={slot.x} y={slot.y + 4} textAnchor="middle" fontSize="12" fill={color} opacity=".8">{j + 1}</text></g>;
@@ -94,6 +95,7 @@ export function FlatBoard({ game, onPiece, disabled, onRoll, rolling = false, pr
         <circle r={r + 4} fill="transparent" />
         <circle className="piece-disc" r={r} fill={finished || stackSize > 1 ? 'currentColor' : 'white'} stroke="currentColor" strokeWidth={legal ? 3 : 2} filter={`url(#${uid}shadow)`} />
         {stackSize > 1 ? <text y={r * .35} textAnchor="middle" fill="white" fontSize={r * 1.2} fontWeight="750">{piece.number}</text> : finished ? <path d="m-7 0 5 5 10-11" fill="none" stroke="white" strokeWidth="3" transform={`scale(${r / 18})`} /> : <path d={planePath} fill="currentColor" transform={`rotate(${playerIndex * 90 + 35}) scale(${r / 24})`} />}
+        <g className="player-shape-badge" data-player-marker={playerMarker(playerIndex).id} aria-hidden="true"><circle cx={-r * .72} cy={-r * .72} r={Math.max(5.5, r * .4)} fill="white" stroke="currentColor" strokeWidth="1.3" /><text x={-r * .72} y={-r * .72 + Math.max(2.5, r * .14)} textAnchor="middle" fill="#1d3039" fontSize={Math.max(8, r * .47)} fontWeight="900">{playerMarker(playerIndex).symbol}</text></g>
         {stackSize === 1 && <><circle cx={r * .72} cy={-r * .72} r={Math.max(6, r * .4)} fill="currentColor" stroke="white" strokeWidth="1" /><text x={r * .72} y={-r * .72 + Math.max(2.5, r * .14)} textAnchor="middle" fill="white" fontSize={Math.max(8, r * .48)} fontWeight="750">{piece.number}</text></>}
       </g>;
     })}
