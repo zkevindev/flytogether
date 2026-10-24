@@ -1,44 +1,215 @@
-import {chromium} from 'playwright';
-import assert from 'node:assert/strict';
-import {mkdir,writeFile,readFile} from 'node:fs/promises';
-import {resolve,join} from 'node:path';
-assert.ok(process.env.QA_BASE_URL&&process.env.QA_ADMIN_KEY_FILE,'Set QA_BASE_URL and a private QA_ADMIN_KEY_FILE');
-const key=(await readFile(process.env.QA_ADMIN_KEY_FILE,'utf8')).trim();
-const output=resolve(process.env.QA_OUTPUT_DIR||'test-results/admin');await mkdir(output,{recursive:true});
-const browser=await chromium.launch({channel:'chrome',headless:true,args:process.platform==='darwin'?['--use-angle=metal']:[]});
-const errors=[],results=[];
-try{
- const context=await browser.newContext({baseURL:process.env.QA_BASE_URL,viewport:{width:1440,height:1050}});const page=await context.newPage();page.setDefaultTimeout(15000);
- page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>{window.__mic=0;navigator.mediaDevices.getUserMedia=async()=>{window.__mic++;throw new Error('No microphone for admin QA')}});
- await page.goto('/admin');await page.getByLabel('管理员密钥').waitFor();assert.equal((await context.request.get('/api/admin/matches')).status(),401);
- await page.screenshot({path:join(output,'admin-login.png'),fullPage:true});
- await page.getByLabel('管理员密钥').fill('incorrect');await page.getByRole('button',{name:'登录管理后台'}).click();await page.getByRole('alert').filter({hasText:'不正确'}).waitFor();
- await page.getByLabel('管理员密钥').fill(key);await page.getByRole('button',{name:'登录管理后台'}).click();await page.getByRole('heading',{name:'对局与语音记录'}).waitFor();assert.equal(await page.locator('input[type=password]').count(),0);
- const cookies=await context.cookies();const adminCookie=cookies.find(x=>x.name==='flytogether_admin');assert.ok(adminCookie?.httpOnly);assert.equal(adminCookie.sameSite,'Strict');if(process.env.QA_BASE_URL.startsWith('https:'))assert.ok(adminCookie.secure);
- const player=await browser.newContext({baseURL:process.env.QA_BASE_URL});const request=player.request;
- const opts={room_name:'后台验收机场',names:['小星','家长'],board:'cross',mode:'quick',difficulty:'normal',waiting:true,props:true,ai:false};
- const post=async(path,body)=>{const r=await request.post(path,{data:body});assert.ok(r.ok(),`HTTP ${r.status()} ${path}`);return r.status()===204?null:await r.json()};
- let room=await post('/api/rooms',opts);const original=room.state.id;const roomID=room.id;
- const command=async(action,extra={})=>{room=await post('/api/rooms/'+room.id+'/commands',{command_id:crypto.randomUUID(),game_id:room.state.id,expected_version:room.state.version,action,...extra});return room};
- await command('start');await command('prop',{prop_id:'launch'});await command('roll');const realDie=room.state.dice;await command('move',{piece_id:room.state.legal_moves[0].piece_id});assert.equal(room.state.players[0].stats.rolls,1);assert.equal(room.state.players[0].stats.takeoffs,1);
- await post('/api/rooms/'+roomID+'/diagnostics',{game_id:room.state.id,code:'audio_unlock'});await command('end');await command('replay');assert.notEqual(room.state.id,original);
- await page.getByLabel('房间名 / 房间编号 / 对局编号').fill(roomID);await page.getByRole('button',{name:'查询',exact:true}).click();await page.locator('.admin-match').filter({hasText:original}).click();await page.locator('.admin-detail h2').filter({hasText:'后台验收机场'}).waitFor();
- assert.ok((await page.locator('.admin-detail').innerText()).includes('浏览器声音未解锁或不可用'));assert.equal(await page.locator('.admin-player-scroll tbody tr').count(),2);
- const rows=await page.locator('.admin-player-scroll tbody tr').first().locator('td').allTextContents();assert.equal(rows[0],'1');assert.equal(rows[1],'1');
- await page.getByLabel('事件类型',{exact:true}).selectOption('game');await page.locator('.admin-timeline li').filter({hasText:'掷出了'}).first().waitFor();assert.match(await page.locator('.admin-timeline').innerText(),new RegExp(String(realDie)));
- await page.getByLabel('事件类型',{exact:true}).selectOption('');await page.locator('.admin-timeline li').filter({hasText:'浏览器声音未解锁'}).waitFor();
- await page.screenshot({path:join(output,'admin-match.png'),fullPage:true});
- await page.setViewportSize({width:390,height:844});await page.locator('.admin-detail').scrollIntoViewIfNeeded();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.screenshot({path:join(output,'admin-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1050});
- const detail=await context.request.get('/api/admin/matches/'+original);assert.equal(detail.status(),200);const text=await detail.text();assert.equal(text.includes('action_token'),false);assert.equal(text.includes('invite'),false);assert.equal(text.includes(key),false);
- assert.equal((await player.request.get('/api/admin/matches')).status(),401);
- assert.equal((await context.request.get('/api/admin/matches',{headers:{Origin:'https://unrelated.invalid'}})).status(),403);
- await page.reload();await page.getByRole('heading',{name:'对局与语音记录'}).waitFor();
- // Formal create calls exercise real match pagination without injecting state or logs.
- const pagePrefix='分页验收'+crypto.randomUUID().slice(0,6)+'-';for(let i=0;i<26;i++)await post('/api/rooms/new',{...opts,room_name:pagePrefix+i});
- await page.getByLabel('房间名 / 房间编号 / 对局编号').fill(pagePrefix);await page.getByRole('button',{name:'查询',exact:true}).click();await page.locator('.admin-match').first().waitFor();await page.waitForFunction(()=>document.querySelectorAll('.admin-match').length===25);await page.getByRole('button',{name:'下一页'}).click();await page.waitForFunction(()=>document.querySelectorAll('.admin-match').length===1);await page.getByRole('button',{name:'上一页'}).click();await page.waitForFunction(()=>document.querySelectorAll('.admin-match').length===25);
- await page.getByRole('button',{name:'退出',exact:true}).click();await page.getByLabel('管理员密钥').waitFor();assert.equal((await context.request.get('/api/admin/matches')).status(),401);
- assert.equal(await page.evaluate(()=>window.__mic),0);assert.deepEqual(errors,[]);
- results.push('actual admin UI login/failure/session reload/logout with HttpOnly strict cookie; ordinary player and cross-origin denied','real random roll, takeoff, browser error, end and replay keep old match with actual statistics','search/state snapshots/event filters/26-match pagination and 390px layout','no microphone, injected state, recorded audio or secret-bearing admin payloads');
- await writeFile(join(output,'results.json'),JSON.stringify({passed:true,results,real_die:realDie,errors,scope:'Actual Chrome and formal Go API, synthetic QA names; no microphone or mocked game state'},null,2));console.log(JSON.stringify({passed:true,results,errors}));
- await context.close();await player.close();
-}finally{await browser.close()}
+import { chromium } from "playwright";
+import assert from "node:assert/strict";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { resolve, join } from "node:path";
+assert.ok(
+  process.env.QA_BASE_URL && process.env.QA_ADMIN_KEY_FILE,
+  "Set QA_BASE_URL and a private QA_ADMIN_KEY_FILE",
+);
+const key = (await readFile(process.env.QA_ADMIN_KEY_FILE, "utf8")).trim();
+const output = resolve(process.env.QA_OUTPUT_DIR || "test-results/admin");
+await mkdir(output, { recursive: true });
+const browser = await chromium.launch({
+  channel: "chrome",
+  headless: true,
+  args: process.platform === "darwin" ? ["--use-angle=metal"] : [],
+});
+const errors = [],
+  results = [];
+try {
+  const context = await browser.newContext({
+    baseURL: process.env.QA_BASE_URL,
+    viewport: { width: 1440, height: 1050 },
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(15000);
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.addInitScript(() => {
+    window.__mic = 0;
+    navigator.mediaDevices.getUserMedia = async () => {
+      window.__mic++;
+      throw new Error("No microphone for admin QA");
+    };
+  });
+  await page.goto("/admin");
+  await page.getByLabel("管理员密钥").waitFor();
+  assert.equal((await context.request.get("/api/admin/matches")).status(), 401);
+  await page.screenshot({
+    path: join(output, "admin-login.png"),
+    fullPage: true,
+  });
+  await page.getByLabel("管理员密钥").fill("incorrect");
+  await page.getByRole("button", { name: "登录管理后台" }).click();
+  await page.getByRole("alert").filter({ hasText: "不正确" }).waitFor();
+  await page.getByLabel("管理员密钥").fill(key);
+  await page.getByRole("button", { name: "登录管理后台" }).click();
+  await page.getByRole("heading", { name: "对局与语音记录" }).waitFor();
+  assert.equal(await page.locator("input[type=password]").count(), 0);
+  const cookies = await context.cookies();
+  const adminCookie = cookies.find((x) => x.name === "flytogether_admin");
+  assert.ok(adminCookie?.httpOnly);
+  assert.equal(adminCookie.sameSite, "Strict");
+  if (process.env.QA_BASE_URL.startsWith("https:"))
+    assert.ok(adminCookie.secure);
+  const player = await browser.newContext({ baseURL: process.env.QA_BASE_URL });
+  const request = player.request;
+  const opts = {
+    room_name: "后台验收机场",
+    names: ["小星", "家长"],
+    board: "cross",
+    mode: "quick",
+    difficulty: "normal",
+    waiting: true,
+    props: true,
+    ai: false,
+  };
+  const post = async (path, body) => {
+    const r = await request.post(path, { data: body });
+    assert.ok(r.ok(), `HTTP ${r.status()} ${path}`);
+    return r.status() === 204 ? null : await r.json();
+  };
+  let room = await post("/api/rooms", opts);
+  const original = room.state.id;
+  const roomID = room.id;
+  const command = async (action, extra = {}) => {
+    room = await post("/api/rooms/" + room.id + "/commands", {
+      command_id: crypto.randomUUID(),
+      game_id: room.state.id,
+      expected_version: room.state.version,
+      action,
+      ...extra,
+    });
+    return room;
+  };
+  await command("start");
+  await command("prop", { prop_id: "launch" });
+  await command("roll");
+  const realDie = room.state.dice;
+  await command("move", { piece_id: room.state.legal_moves[0].piece_id });
+  assert.equal(room.state.players[0].stats.rolls, 1);
+  assert.equal(room.state.players[0].stats.takeoffs, 1);
+  await post("/api/rooms/" + roomID + "/diagnostics", {
+    game_id: room.state.id,
+    code: "audio_unlock",
+  });
+  await command("end");
+  await command("replay");
+  assert.notEqual(room.state.id, original);
+  await page.getByLabel("房间名 / 房间编号 / 对局编号").fill(roomID);
+  await page.getByRole("button", { name: "查询", exact: true }).click();
+  await page.locator(".admin-match").filter({ hasText: original }).click();
+  await page
+    .locator(".admin-detail h2")
+    .filter({ hasText: "后台验收机场" })
+    .waitFor();
+  assert.ok(
+    (await page.locator(".admin-detail").innerText()).includes(
+      "浏览器声音未解锁或不可用",
+    ),
+  );
+  assert.equal(await page.locator(".admin-player-scroll tbody tr").count(), 2);
+  const rows = await page
+    .locator(".admin-player-scroll tbody tr")
+    .first()
+    .locator("td")
+    .allTextContents();
+  assert.equal(rows[0], "1");
+  assert.equal(rows[1], "1");
+  await page.getByLabel("事件类型", { exact: true }).selectOption("game");
+  await page
+    .locator(".admin-timeline li")
+    .filter({ hasText: "掷出了" })
+    .first()
+    .waitFor();
+  assert.match(
+    await page.locator(".admin-timeline").innerText(),
+    new RegExp(String(realDie)),
+  );
+  await page.getByLabel("事件类型", { exact: true }).selectOption("");
+  await page
+    .locator(".admin-timeline li")
+    .filter({ hasText: "浏览器声音未解锁" })
+    .waitFor();
+  await page.screenshot({
+    path: join(output, "admin-match.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator(".admin-detail").scrollIntoViewIfNeeded();
+  assert.ok(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  );
+  await page.screenshot({
+    path: join(output, "admin-mobile.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 1050 });
+  const detail = await context.request.get("/api/admin/matches/" + original);
+  assert.equal(detail.status(), 200);
+  const text = await detail.text();
+  assert.equal(text.includes("action_token"), false);
+  assert.equal(text.includes("invite"), false);
+  assert.equal(text.includes(key), false);
+  assert.equal((await player.request.get("/api/admin/matches")).status(), 401);
+  assert.equal(
+    (
+      await context.request.get("/api/admin/matches", {
+        headers: { Origin: "https://unrelated.invalid" },
+      })
+    ).status(),
+    403,
+  );
+  await page.reload();
+  await page.getByRole("heading", { name: "对局与语音记录" }).waitFor();
+  // Formal create calls exercise real match pagination without injecting state or logs.
+  const pagePrefix = "分页验收" + crypto.randomUUID().slice(0, 6) + "-";
+  for (let i = 0; i < 26; i++)
+    await post("/api/rooms/new", { ...opts, room_name: pagePrefix + i });
+  await page.getByLabel("房间名 / 房间编号 / 对局编号").fill(pagePrefix);
+  await page.getByRole("button", { name: "查询", exact: true }).click();
+  await page.locator(".admin-match").first().waitFor();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".admin-match").length === 25,
+  );
+  await page.getByRole("button", { name: "下一页" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".admin-match").length === 1,
+  );
+  await page.getByRole("button", { name: "上一页" }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll(".admin-match").length === 25,
+  );
+  await page.getByRole("button", { name: "退出", exact: true }).click();
+  await page.getByLabel("管理员密钥").waitFor();
+  assert.equal((await context.request.get("/api/admin/matches")).status(), 401);
+  assert.equal(await page.evaluate(() => window.__mic), 0);
+  assert.deepEqual(errors, []);
+  results.push(
+    "actual admin UI login/failure/session reload/logout with HttpOnly strict cookie; ordinary player and cross-origin denied",
+    "real random roll, takeoff, browser error, end and replay keep old match with actual statistics",
+    "search/state snapshots/event filters/26-match pagination and 390px layout",
+    "no microphone, injected state, recorded audio or secret-bearing admin payloads",
+  );
+  await writeFile(
+    join(output, "results.json"),
+    JSON.stringify(
+      {
+        passed: true,
+        results,
+        real_die: realDie,
+        errors,
+        scope:
+          "Actual Chrome and formal Go API, synthetic QA names; no microphone or mocked game state",
+      },
+      null,
+      2,
+    ),
+  );
+  console.log(JSON.stringify({ passed: true, results, errors }));
+  await context.close();
+  await player.close();
+} finally {
+  await browser.close();
+}
