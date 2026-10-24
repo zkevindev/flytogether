@@ -205,9 +205,6 @@ func options(w http.ResponseWriter, r *http.Request) (game.Options, error) {
 	}
 	if o.Network {
 		o.Waiting = true
-		if o.AI {
-			return o, errors.New("联网首版请使用真人席位，语音助手仍可使用")
-		}
 	}
 	o.RoomName = strings.TrimSpace(o.RoomName)
 	if utf8.RuneCountInString(o.RoomName) > 20 {

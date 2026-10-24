@@ -8,6 +8,7 @@ import (
 )
 
 type Seat struct {
+	Robot    bool   `json:"robot,omitempty"`
 	PlayerID string `json:"player_id"`
 	Occupied bool   `json:"occupied"`
 	Ready    bool   `json:"ready"`
@@ -87,7 +88,10 @@ func (r *Room) readyToStart() error {
 	if r.invite == "" {
 		return nil
 	}
-	for i := range r.state.Players {
+	for i, player := range r.state.Players {
+		if player.AI {
+			continue
+		}
 		found := false
 		for session, m := range r.members {
 			if m.index == i {
@@ -117,7 +121,7 @@ func (r *Room) lobbyView() *Lobby {
 	}
 	l := &Lobby{Invite: r.invite, Seats: make([]Seat, len(r.state.Players))}
 	for i, p := range r.state.Players {
-		l.Seats[i].PlayerID = p.ID
+		l.Seats[i] = Seat{PlayerID: p.ID, Robot: p.AI, Occupied: p.AI, Ready: p.AI, Online: p.AI}
 	}
 	for session, m := range r.members {
 		l.Seats[m.index] = Seat{PlayerID: r.state.Players[m.index].ID, Occupied: true, Ready: m.ready, Online: r.online(session)}
@@ -146,6 +150,14 @@ func (r *Room) Join(session, invite, name string) (View, error) {
 		}
 	}
 	used := map[int]bool{}
+	for i, player := range r.state.Players {
+		if player.AI {
+			used[i] = true
+			if player.Name == name {
+				return View{}, fail("NAME_TAKEN", "这个昵称已被机器人使用，请换一个")
+			}
+		}
+	}
 	for _, m := range r.members {
 		used[m.index] = true
 		if r.state.Players[m.index].Name == name {
