@@ -360,8 +360,8 @@ Go race/vet、前端单测/构建及Chrome实际道具流程通过；11项道具
 
 ## 星河救援合作挑战（#17，待 PR 合并）
 
-独立分支 `codex/issue-17-cooperative-mode`。新增2～4人合作目标：各自送达一架飞机后全队获胜；同屏、邀请房间、机器人、服务端状态校验、家庭战绩、观赛、回顾卡与灵矽播报均识别团队结算。没有改动随机骰子和现有道具数量。
+独立分支 `codex/issue-17-cooperative-mode` · [PR #59](https://github.com/zkevindev/flytogether/pull/59)。新增2～4人合作目标：各自送达一架飞机后全队获胜；同屏、邀请房间、机器人、服务端状态校验、家庭战绩、观赛、回顾卡与灵矽播报均识别团队结算。没有改动随机骰子和现有道具数量。
 
 通过：`go test -race ./...`、`npm run test:unit`、`npm run build`；本地 Chrome 使用真实随机骰子/合法走法完成整局，刷新显示团队胜利与回顾卡，家庭历史记录全员获胜；同配置重玩保留玩法；两台隔离浏览器通过合作房间邀请、入座和房主开局。详细规则及持续反馈/配平门槛见 [PLAYTEST-BALANCE](PLAYTEST-BALANCE.md)。
 
-道具平衡继续按多个家庭、自然结束对局和主观反馈收集样本；本轮没有依据不足的任意调参。PR 创建后在本段和 Issue #17 回链。
+道具平衡继续按多个家庭、自然结束对局和主观反馈收集样本；本轮没有依据不足的任意调参。PR #59 已回链 [Issue #17](https://github.com/zkevindev/flytogether/issues/17)。
