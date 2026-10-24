@@ -306,7 +306,8 @@ main { padding-top: 12px; }
 
 /* Five distinct choices and explicit, accessible targets. */
 .prop-cards { grid-template-columns: repeat(2,minmax(0,1fr)); }
-.prop-card:last-child { grid-column: 1 / -1; }
+.prop-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.prop-copy>.prop-availability { white-space:normal; line-height:1.35; color:#596e7c; }
 .side-column .prop-card { flex-direction: row; align-items: center; }
 .prop-targets { margin-top: 12px; padding: 12px; background: white; border: 1px solid #b9d0dd; border-radius: 10px; }
 .prop-targets>div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
