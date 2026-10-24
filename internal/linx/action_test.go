@@ -256,3 +256,19 @@ func TestLuckyDiceVoiceAndNarrationUseOnlyNewRollEvents(t *testing.T) {
 		t.Fatal("narration mixed old and current dice")
 	}
 }
+
+func TestDiceSpeechAlwaysResolvesOrClarifiesWithoutFabrication(t *testing.T) {
+	r := room.New(game.Options{Names: []string{"孩子", "家长"}, Props: true})
+	for _, phrase := range []string{"好，掷骰子", "好的，帮我投骰子", "好，投色子", "好，掷色子", "请投一下骰子"} {
+		a, ok := planVoiceAction(r, phrase)
+		if !ok || a.Name != "roll_dice" || a.Notice != "" {
+			t.Errorf("explicit roll not resolved: %q %+v", phrase, a)
+		}
+	}
+	for _, phrase := range []string{"好，骰子", "好，是骰子", "好，色子", "这次真的掷骰子了吗？", "刚才掷骰子了吗", "不要掷骰子", "别投色子", "骰子会掷出什么点数"} {
+		a, ok := planVoiceAction(r, phrase)
+		if !ok || a.Name != "get_game_state" || a.Notice == "" {
+			t.Errorf("ambiguous/query/negative rolled or bypassed guard: %q %+v", phrase, a)
+		}
+	}
+}

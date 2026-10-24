@@ -35,11 +35,29 @@ func planVoiceAction(r room.GameSession, text string) (voiceAction, bool) {
 	if json.Unmarshal(r.Snapshot().State, &state) != nil {
 		return voiceAction{}, false
 	}
-	return resolveVoiceAction(state, text)
+	if action, handled := resolveVoiceAction(state, text); handled {
+		return action, true
+	}
+	// Uncertain game speech must not fall through to a model inventing success.
+	for _, word := range []string{"骰", "色子", "掷", "投", "点数", "开始", "继续", "走棋", "操作"} {
+		if strings.Contains(text, word) {
+			notice := "这次没有执行操作。要掷骰，请明确说“掷骰子”。"
+			if state.Phase == "move" {
+				notice = "这次没有重新掷骰，请先选择一架高亮飞机，走完后才能继续掷骰。"
+			}
+			if state.Phase == "finished" {
+				notice = "本局已经结束，没有再次掷骰。"
+			}
+			return voiceAction{Name: "get_game_state", Notice: notice}, true
+		}
+	}
+	return voiceAction{}, false
 }
 
 func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
+	question := strings.ContainsAny(text, "?？") || strings.Contains(text, "吗")
 	text = spoken(text)
+	text = strings.ReplaceAll(text, "色子", "骰子")
 	if len(state.Players) == 0 || state.Current < 0 || state.Current >= len(state.Players) {
 		return voiceAction{}, false
 	}
@@ -58,12 +76,15 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 	if strings.Contains(text, "推荐") || strings.Contains(text, "建议") || strings.Contains(text, "帮我选") {
 		return voiceAction{Name: "get_game_state", Notice: tacticalAdvice(state)}, true
 	}
+	if question && (rollVerb(text) || strings.Contains(text, "骰") || strings.Contains(text, "点数")) || strings.Contains(text, "刚才") || strings.Contains(text, "刚刚") || strings.Contains(text, "掷过") || strings.Contains(text, "投过") {
+		return voiceAction{Name: "get_game_state", Notice: "这句话没有执行操作。" + hostCue(state)}, true
+	}
 	for _, phrase := range []string{"不要", "不想", "别用", "别炸", "别加", "不用", "不使用", "不炸", "不加", "别让", "别走", "别移动", "别起飞", "取消"} {
 		if strings.Contains(text, phrase) {
 			return voiceAction{Name: "get_game_state", Notice: "先不这么做。" + hostCue(state)}, true
 		}
 	}
-	for _, phrase := range []string{"为什么", "怎么", "能不能", "可不可以", "能否", "哪", "规则", "怎么办", "该我", "现在怎么样"} {
+	for _, phrase := range []string{"为什么", "怎么", "什么", "多少", "是否", "是不是", "有没有", "能不能", "可不可以", "能否", "哪", "规则", "怎么办", "该我", "现在怎么样"} {
 		if strings.Contains(text, phrase) {
 			return voiceAction{Name: "get_game_state", Notice: hostCue(state)}, true
 		}

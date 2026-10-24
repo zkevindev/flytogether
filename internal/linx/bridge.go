@@ -260,6 +260,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	defer ticker.Stop()
 	var currentToken string
 	var inFlight bool
+	var allowModelTools bool
 	var pendingHost bool
 	var hostSince time.Time
 	var seenEvent string
@@ -465,10 +466,19 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				return e
 			}
 			response := map[string]any{"type": "response.create"}
+			allowModelTools = true
+			// A previous read-aloud script must never become the next turn's facts.
+			if narrationContext != "" {
+				if e := sendUp(map[string]any{"type": "conversation.item.delete", "item_id": narrationContext}); e != nil {
+					return errors.New("游戏播报上下文没有更新")
+				}
+				narrationContext = ""
+			}
 			sessionInstructions := realtimeSessionUpdate(b.Config.Model)
 			session := sessionInstructions["session"].(map[string]any)
 			session["instructions"] = session["instructions"].(string) + companion.Instructions()
 			if action, handled := planVoiceAction(r, gate.commandText(body.Transcript)); handled {
+				allowModelTools = false
 				before := ""
 				if state, _, ok := roomGame(r); ok {
 					before = lastEventID(state)
@@ -533,16 +543,16 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 					}
 					instructions += narrationFacts(state, before)
 				}
-				// The model reads a server-composed script instead of paraphrasing rules.
 				script := actionNarration(r, action, before, output, companion) + spokenCheer
 				instructions = readFactsInstruction(script, companion)
+				// This acknowledgement is independent of model speech and the game WS.
+				// The browser presents the committed events, never a generated dice value.
+				after := r.Snapshot()
+				if e := sendBrowser(map[string]any{"type": "game_action", "input_id": body.ItemID, "action": action.Name, "text": script, "room": after}); e != nil {
+					return e
+				}
 				// Keep the current facts in conversation context as well as response
 				// instructions; the provider can otherwise repeat an earlier host cue.
-				if narrationContext != "" {
-					if e := sendUp(map[string]any{"type": "conversation.item.delete", "item_id": narrationContext}); e != nil {
-						return errors.New("游戏播报上下文没有更新")
-					}
-				}
 				narrationContext = game.ID()
 				if e := sendUp(map[string]any{"type": "conversation.item.create", "item": map[string]any{
 					"id": narrationContext, "type": "message", "role": "system", "content": []any{map[string]any{"type": "input_text", "text": instructions}},
@@ -570,7 +580,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				grants[event.ResponseID] = currentToken
 			}
 		case "response.output_item.done":
-			if !inFlight || grants[event.ResponseID] != currentToken {
+			if !inFlight || !allowModelTools || grants[event.ResponseID] != currentToken {
 				continue
 			}
 			var body struct {
