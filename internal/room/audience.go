@@ -685,6 +685,9 @@ func (v *SpectatorVoice) BeginSpeech() error {
 	if !v.r.spectateOn || !v.r.isSpectator(v.actor) {
 		return fail("SPECTATE_CLOSED", "观赛助手已关闭，仍可刷新查看棋局")
 	}
+	if v.r.status == "ended" {
+		return fail("GAME_NOT_ACTIVE", "这一局已经结束，可以看结果，不能再提问")
+	}
 	if v.r.spectatorLeases[v.actor] != v.lease || v.r.state.ID != v.gameID {
 		return fail("STALE_ACTION", "已经换了一局或连接已失效，请重新连接观赛助手")
 	}
@@ -710,11 +713,31 @@ func (v *SpectatorVoice) Tool(name string, _ map[string]string) (any, error) {
 	if len(recent) > 8 {
 		recent = recent[len(recent)-8:]
 	}
+	standings := make([]map[string]any, 0, len(v.r.state.Players))
+	for _, player := range v.r.state.Players {
+		arrived, furthest := 0, -1
+		for _, piece := range player.Pieces {
+			if piece.Progress >= v.r.state.Board.Finish {
+				arrived++
+			}
+			if piece.Progress > furthest {
+				furthest = piece.Progress
+			}
+		}
+		standings = append(standings, map[string]any{"name": player.Name, "arrived": arrived, "furthest": furthest})
+	}
+	view := v.r.audienceView(v.actor)
+	if view.Audience != nil {
+		trimmed := *view.Audience
+		trimmed.Messages = nil
+		trimmed.Token = ""
+		view.Audience = &trimmed
+	}
 	current := v.r.state.Players[v.r.state.Current]
 	return map[string]any{
-		"room": v.r.audienceView(v.actor), "current_player": current, "legal_moves": v.r.state.Legal,
-		"recent_events": recent, "game_id": v.r.state.ID, "version": v.r.state.Version,
-		"rules_hint":  v.r.state.Rules().Summary + " 只根据这次查询回答。recent_events 没有的过去事件要说明没有记录，不要编造点数或胜负。不能建议已经替选手执行了操作。",
+		"room": view, "current_player": current, "legal_moves": v.r.state.Legal,
+		"standings": standings, "recent_events": recent, "game_id": v.r.state.ID, "version": v.r.state.Version,
+		"rules_hint":  v.r.state.Rules().Summary + " furthest 越大越接近终点，-1 表示还在机库。只根据这次查询回答。recent_events 没有的过去事件要说明没有记录，不要编造点数或胜负。互动消息不在这次结果里，不能当成棋步。不能声称已经替选手执行了操作。",
 		"instruction": "这是观众的私人只读问答。不要返回或索要操作授权。",
 	}, nil
 }

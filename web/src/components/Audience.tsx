@@ -11,6 +11,12 @@ export const cheers = [
   { emoji: '😄', label: '开心' },
 ];
 
+function spokenAt(at: string) {
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
 export function AudienceHost({ room, onRoom }: { room: Room; onRoom: (room: Room) => void }) {
   const audience = room.audience;
   const [error, setError] = useState('');
@@ -60,7 +66,8 @@ export function AudienceChat({ room, onRoom, players }: { room: Room; onRoom: (r
   return <section className="audience-chat" aria-label="观赛互动">
     <div className="audience-chat-head"><strong>互动</strong><span>{audience.online} 人正在看</span><button type="button" className="text-button" onClick={() => { const next = !hidden; setHidden(next); localStorage.setItem('fly-chat-hidden', next ? 'on' : 'off'); }}>{hidden ? '显示消息' : '隐藏消息'}</button></div>
     {hidden ? <p>消息已隐藏。这不影响棋局，也不关闭你的私人灵犀。</p> : <>
-      <ol>{(audience.messages || []).map(message => <li key={message.id}><span>{message.role === 'spectator' ? '观众' : message.role === 'host' ? '房主' : '选手'} · {message.name}</span><p>{message.kind === 'emoji' ? message.emoji : message.text}{message.target_player_id ? ` · 给${players.find(p => p.id === message.target_player_id)?.name || '选手'}` : ''}</p>{message.from_id !== mine && <button type="button" className="text-button" onClick={() => void block(message.from_id)}>屏蔽</button>}</li>)}</ol>
+      <p>这里只显示发出的互动，不含棋步，也不含对灵犀说的话。</p>
+      <ol>{(audience.messages || []).map((message, index, all) => <li key={message.id} aria-live={index === all.length - 1 ? 'polite' : undefined}><span>{message.role === 'spectator' ? '观众' : message.role === 'host' ? '房主' : '选手'} · {message.name} · <time dateTime={message.at}>{spokenAt(message.at)}</time></span><p>{message.kind === 'emoji' ? message.emoji : message.text}{message.target_player_id ? ` · 给${players.find(p => p.id === message.target_player_id)?.name || '选手'}` : ''}</p>{message.from_id !== mine && <button type="button" className="text-button" onClick={() => void block(message.from_id)}>屏蔽</button>}</li>)}</ol>
       {(audience.messages || []).length === 0 && <p>还没有互动。表情和文字不会变成走棋指令。</p>}
     </>}
     {canSpeak && <form onSubmit={e => { e.preventDefault(); if (text.trim()) void send({ kind: 'text', text }); }}>

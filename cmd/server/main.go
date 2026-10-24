@@ -34,92 +34,155 @@ type server struct {
 	secureCookie bool
 }
 
+// runtimeConfig is the validated, typed view of the environment for one process.
+type runtimeConfig struct {
+	Limits          map[string]int
+	Addr            string
+	PublicHost      string
+	SavePath        string
+	WebDir          string
+	LinxURL         string
+	LinxAPIKey      string
+	LinxModel       string
+	Retention       int
+	DiagnosticHours int
+	HostDelay       int
+	DelegationDelay int
+	SecureCookie    bool
+	Transcripts     bool
+}
+
 func main() {
 	loadEnv(".env")
-	addr := env("LISTEN_ADDR", "127.0.0.1:8080")
-	public, _ := url.Parse(os.Getenv("PUBLIC_URL"))
-	retention, err := positiveEnv("SAVE_RETENTION_HOURS", 168, 1, 8760)
+	cfg, err := loadConfig()
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)
 		os.Exit(1)
 	}
-	limits := map[string]int{}
-	for key, spec := range map[string][3]int{
-		"LINGXI_MAX_CONNECTIONS": {4, 1, 32}, "LINGXI_SESSION_SECONDS": {900, 30, 3600},
-		"LINGXI_REALTIME_DAILY_LIMIT": {2000, 1, 100000}, "LINGXI_TTS_DAILY_LIMIT": {1000, 1, 100000},
-		"SPECTATOR_CAPACITY": {8, 1, 32}, "SPECTATOR_JOINS_PER_MINUTE": {20, 1, 120},
-		"SPECTATOR_MAX_CONNECTIONS": {4, 1, 32}, "SPECTATOR_REALTIME_DAILY_LIMIT": {500, 1, 100000},
-	} {
-		value, e := positiveEnv(key, spec[0], spec[1], spec[2])
-		if e != nil {
-			slog.Error("invalid configuration", "error", e)
-			os.Exit(1)
-		}
-		limits[key] = value
-	}
-	savedStore, err := room.OpenStore(env("SAVE_PATH", "data/games.db"), time.Duration(retention)*time.Hour)
+	savedStore, err := room.OpenStore(cfg.SavePath, time.Duration(cfg.Retention)*time.Hour)
 	if err != nil {
 		slog.Error("cannot open game saves", "error", err)
 		os.Exit(1)
 	}
 	defer savedStore.Close()
-	s := &server{store: savedStore, bridge: &linx.Bridge{Config: linx.Config{
-		URL:    env("LINGXI_REALTIME_URL", "wss://xrobo-io.qiniuapi.com/v1/realtime"),
-		APIKey: os.Getenv("LINGXI_REALTIME_API_KEY"), Model: os.Getenv("LINGXI_REALTIME_MODEL")}}, publicHost: public.Host, secureCookie: public.Scheme == "https"}
+	s, err := newServer(savedStore, cfg)
+	if err != nil {
+		slog.Error("invalid server configuration", "error", err)
+		os.Exit(1)
+	}
+	mux := http.NewServeMux()
+	s.registerRoutes(mux, cfg)
+	handler := s.securityHandler(mux)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	workersDone := make(chan struct{})
+	go func() { defer close(workersDone); s.store.Run(ctx.Done()) }()
+	shutdownDone := make(chan struct{})
+	httpServer := &http.Server{Addr: cfg.Addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 16384, BaseContext: func(net.Listener) context.Context { return ctx }}
+	go func() {
+		defer close(shutdownDone)
+		<-ctx.Done()
+		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(c)
+	}()
+	slog.Info("FlyTogether ready", "listen", cfg.Addr, "voice_configured", s.bridge.Config.Enabled())
+	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		slog.Error("server failed", "error", err)
+		os.Exit(1)
+	}
+	<-shutdownDone
+	<-workersDone
+}
+
+// newServer wires storage, limits, diagnostics and the Linx bridge from a
+// validated configuration. It never reaches the network by itself.
+func newServer(store *room.Store, cfg runtimeConfig) (*server, error) {
+	s := &server{store: store, bridge: &linx.Bridge{Config: linx.Config{URL: cfg.LinxURL, APIKey: cfg.LinxAPIKey, Model: cfg.LinxModel}}, publicHost: cfg.PublicHost, secureCookie: cfg.SecureCookie}
 	admin, err := newAdminAuth(os.Getenv("ADMIN_ACCESS_KEY"))
 	if err != nil {
-		slog.Error("invalid administrator configuration")
-		os.Exit(1)
+		return nil, err
 	}
 	s.admin = admin
-	diagnosticHours, err := positiveEnv("DIAGNOSTICS_RETENTION_HOURS", 168, 1, 2160)
-	if err != nil {
-		slog.Error("invalid diagnostics retention")
-		os.Exit(1)
+	if err = store.ConfigureDiagnostics(room.DiagnosticConfig{Enabled: admin != nil, Transcripts: cfg.Transcripts, Retention: time.Duration(cfg.DiagnosticHours) * time.Hour}); err != nil {
+		return nil, err
 	}
-	transcripts, err := strconv.ParseBool(env("DIAGNOSTICS_TRANSCRIPTS", "true"))
-	if err != nil {
-		slog.Error("invalid diagnostics transcript setting")
-		os.Exit(1)
-	}
-	if err = savedStore.ConfigureDiagnostics(room.DiagnosticConfig{Enabled: admin != nil, Transcripts: transcripts, Retention: time.Duration(diagnosticHours) * time.Hour}); err != nil {
-		slog.Error("cannot initialize diagnostics")
-		os.Exit(1)
-	}
-	hostDelay, err := positiveEnv("ROOM_HOST_RECLAIM_SECONDS", 60, 5, 600)
-	if err != nil {
-		slog.Error("invalid host reclaim delay")
-		os.Exit(1)
-	}
-	savedStore.SetHostReclaimDelay(time.Duration(hostDelay) * time.Second)
-	delegationDelay, err := positiveEnv("ROOM_DELEGATION_SECONDS", 60, 5, 600)
-	if err != nil {
-		slog.Error("invalid delegation delay")
-		os.Exit(1)
-	}
-	savedStore.SetDelegationDelay(time.Duration(delegationDelay) * time.Second)
-	savedStore.SetAudienceLimits(limits["SPECTATOR_CAPACITY"], limits["SPECTATOR_JOINS_PER_MINUTE"])
-	s.bridge.Observe = savedStore.Diagnostic
-	s.bridge.MaxConnections = limits["LINGXI_MAX_CONNECTIONS"]
-	s.bridge.SpectatorMax = limits["SPECTATOR_MAX_CONNECTIONS"]
-	s.bridge.SessionTimeout = time.Duration(limits["LINGXI_SESSION_SECONDS"]) * time.Second
+	store.SetHostReclaimDelay(time.Duration(cfg.HostDelay) * time.Second)
+	store.SetDelegationDelay(time.Duration(cfg.DelegationDelay) * time.Second)
+	store.SetAudienceLimits(cfg.Limits["SPECTATOR_CAPACITY"], cfg.Limits["SPECTATOR_JOINS_PER_MINUTE"])
+	s.bridge.Observe = store.Diagnostic
+	s.bridge.MaxConnections = cfg.Limits["LINGXI_MAX_CONNECTIONS"]
+	s.bridge.SpectatorMax = cfg.Limits["SPECTATOR_MAX_CONNECTIONS"]
+	s.bridge.SessionTimeout = time.Duration(cfg.Limits["LINGXI_SESSION_SECONDS"]) * time.Second
+	s.bridge.SpectatorTimeout = time.Duration(cfg.Limits["SPECTATOR_SESSION_SECONDS"]) * time.Second
 	s.bridge.ReserveSpectator = func(ctx context.Context) error {
-		return savedStore.ReserveVoice(ctx, "spectator", limits["SPECTATOR_REALTIME_DAILY_LIMIT"])
+		return store.ReserveVoice(ctx, "spectator", cfg.Limits["SPECTATOR_REALTIME_DAILY_LIMIT"])
 	}
 	s.bridge.Reserve = func(ctx context.Context) error {
-		return savedStore.ReserveVoice(ctx, "realtime", limits["LINGXI_REALTIME_DAILY_LIMIT"])
+		return store.ReserveVoice(ctx, "realtime", cfg.Limits["LINGXI_REALTIME_DAILY_LIMIT"])
 	}
 	s.speaker = &linx.Speaker{Config: s.bridge.Config, Reserve: func(ctx context.Context) error {
-		return savedStore.ReserveVoice(ctx, "tts", limits["LINGXI_TTS_DAILY_LIMIT"])
+		return store.ReserveVoice(ctx, "tts", cfg.Limits["LINGXI_TTS_DAILY_LIMIT"])
 	}}
-	mux := http.NewServeMux()
+	return s, nil
+}
+
+// loadConfig validates every environment value that affects behaviour. A bad
+// value fails startup instead of silently falling back to a different limit.
+func loadConfig() (runtimeConfig, error) {
+	cfg := runtimeConfig{
+		Addr:       env("LISTEN_ADDR", "127.0.0.1:8080"),
+		SavePath:   env("SAVE_PATH", "data/games.db"),
+		WebDir:     env("WEB_DIR", "web/dist"),
+		LinxURL:    env("LINGXI_REALTIME_URL", "wss://xrobo-io.qiniuapi.com/v1/realtime"),
+		LinxAPIKey: os.Getenv("LINGXI_REALTIME_API_KEY"),
+		LinxModel:  os.Getenv("LINGXI_REALTIME_MODEL"),
+	}
+	public, _ := url.Parse(os.Getenv("PUBLIC_URL"))
+	cfg.PublicHost, cfg.SecureCookie = public.Host, public.Scheme == "https"
+	var err error
+	if cfg.Retention, err = positiveEnv("SAVE_RETENTION_HOURS", 168, 1, 8760); err != nil {
+		return cfg, err
+	}
+	cfg.Limits = map[string]int{}
+	for key, spec := range map[string][3]int{
+		"LINGXI_MAX_CONNECTIONS": {4, 1, 32}, "LINGXI_SESSION_SECONDS": {900, 30, 3600},
+		"LINGXI_REALTIME_DAILY_LIMIT": {2000, 1, 100000}, "LINGXI_TTS_DAILY_LIMIT": {1000, 1, 100000},
+		"SPECTATOR_CAPACITY": {8, 1, 32}, "SPECTATOR_JOINS_PER_MINUTE": {20, 1, 120},
+		"SPECTATOR_MAX_CONNECTIONS": {4, 1, 32}, "SPECTATOR_SESSION_SECONDS": {900, 30, 3600},
+		"SPECTATOR_REALTIME_DAILY_LIMIT": {500, 1, 100000},
+	} {
+		value, e := positiveEnv(key, spec[0], spec[1], spec[2])
+		if e != nil {
+			return cfg, e
+		}
+		cfg.Limits[key] = value
+	}
+	if cfg.DiagnosticHours, err = positiveEnv("DIAGNOSTICS_RETENTION_HOURS", 168, 1, 2160); err != nil {
+		return cfg, err
+	}
+	if cfg.Transcripts, err = strconv.ParseBool(env("DIAGNOSTICS_TRANSCRIPTS", "true")); err != nil {
+		return cfg, err
+	}
+	if cfg.HostDelay, err = positiveEnv("ROOM_HOST_RECLAIM_SECONDS", 60, 5, 600); err != nil {
+		return cfg, err
+	}
+	if cfg.DelegationDelay, err = positiveEnv("ROOM_DELEGATION_SECONDS", 60, 5, 600); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
+// registerRoutes maps the public HTTP surface. Health, configuration and static
+// assets stay reachable without credentials; every game action is session-bound.
+func (s *server) registerRoutes(mux *http.ServeMux, cfg runtimeConfig) {
 	s.adminRoutes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"status": "ok"}) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"status": "ok", "voice_configured": s.bridge.Config.Enabled(), "storage": "sqlite"})
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "host_reclaim_seconds": hostDelay, "delegation_seconds": delegationDelay, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "spectator_capacity": limits["SPECTATOR_CAPACITY"], "boards": game.Boards(), "diagnostics": savedStore.DiagnosticStatus()})
+		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": cfg.Retention, "host_reclaim_seconds": cfg.HostDelay, "delegation_seconds": cfg.DelegationDelay, "persistence_enabled": true, "voice_session_seconds": cfg.Limits["LINGXI_SESSION_SECONDS"], "spectator_session_seconds": cfg.Limits["SPECTATOR_SESSION_SECONDS"], "spectator_capacity": cfg.Limits["SPECTATOR_CAPACITY"], "boards": game.Boards(), "diagnostics": s.store.DiagnosticStatus()})
 	})
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("GET /api/family", s.family)
@@ -146,8 +209,13 @@ func main() {
 	mux.HandleFunc("GET /ws/game", s.gameSocket)
 	mux.HandleFunc("GET /ws/voice", s.voiceSocket)
 	mux.HandleFunc("GET /ws/audience-voice", s.audienceVoiceSocket)
-	webDir := env("WEB_DIR", "web/dist")
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", staticHandler(cfg.WebDir))
+}
+
+// staticHandler serves the built front end and falls back to index.html for the
+// single-page routes. API and socket paths are never rewritten to HTML.
+func staticHandler(webDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" && r.Method != "HEAD" {
 			http.NotFound(w, r)
 			return
@@ -166,8 +234,13 @@ func main() {
 			return
 		}
 		http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
-	})
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	}
+}
+
+// securityHandler adds the browser hardening headers and the same-origin guard
+// for every request, including admin pages and API calls.
+func (s *server) securityHandler(mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("X-Frame-Options", "DENY")
@@ -181,26 +254,6 @@ func main() {
 		}
 		mux.ServeHTTP(w, r)
 	})
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	workersDone := make(chan struct{})
-	go func() { defer close(workersDone); s.store.Run(ctx.Done()) }()
-	shutdownDone := make(chan struct{})
-	httpServer := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 16384, BaseContext: func(net.Listener) context.Context { return ctx }}
-	go func() {
-		defer close(shutdownDone)
-		<-ctx.Done()
-		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = httpServer.Shutdown(c)
-	}()
-	slog.Info("FlyTogether ready", "listen", addr, "voice_configured", s.bridge.Config.Enabled())
-	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		slog.Error("server failed", "error", err)
-		os.Exit(1)
-	}
-	<-shutdownDone
-	<-workersDone
 }
 
 func env(k, fallback string) string {

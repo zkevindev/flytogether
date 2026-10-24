@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { AirplaneTilt, ArrowClockwise, House, Microphone, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
 import { BoardLoader } from './BoardLoader';
 import { DiceRollModal } from './DiceRollModal';
 import { AudienceChat } from './Audience';
 import { useExperience } from '../lib/experience';
 import { api, APIError, palette, socketURL } from '../lib/types';
-import type { Config, Room } from '../lib/types';
+import type { Config, GameEvent, Room } from '../lib/types';
 import { VoiceClient } from '../lib/voice';
 import { initialPresentation, presentationReducer } from '../lib/presentation';
+
+const PropEffects = lazy(() => import('./PropEffects').then(module => ({ default: module.PropEffects })));
 
 export function WatchApp({ code, onExit }: { code: string; onExit: () => void }) {
   const { preferences, change, reducedMotion } = useExperience();
@@ -23,6 +25,7 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
   const [speech, setSpeech] = useState('');
   const [muted, setMuted] = useState(() => localStorage.getItem('fly-master-muted') === 'on');
   const [presentation, present] = useReducer(presentationReducer, initialPresentation);
+  const [impact, setImpact] = useState<GameEvent>();
   const roomRef = useRef<Room | undefined>(undefined);
   const voice = useRef<VoiceClient | undefined>(undefined);
   const gameRef = useRef('');
@@ -81,6 +84,24 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
   }, [room?.state.id]);
 
   useEffect(() => { if (room) present({ type: 'sync', game: room.state, status: room.status }); }, [room]);
+  useEffect(() => {
+    const beat = presentation.active;
+    if (beat?.kind !== 'board') return;
+    const timer = setTimeout(() => present({ type: 'advance', id: beat.id }), reducedMotion ? 80 : beat.duration);
+    return () => clearTimeout(timer);
+  }, [presentation.active, reducedMotion]);
+  useEffect(() => {
+    const effect = presentation.effect;
+    if (!effect) return;
+    const hit = [...effect.events].reverse().find(event => event.kind === 'prop' || (event.kind === 'moved' && event.text.includes('回机场')));
+    setImpact(hit);
+  }, [presentation.effect]);
+  useEffect(() => {
+    if (!impact) return;
+    const timer = setTimeout(() => setImpact(undefined), reducedMotion ? 400 : 2600);
+    return () => clearTimeout(timer);
+  }, [impact, reducedMotion]);
+  useEffect(() => { if (room?.status === 'ended') voice.current?.disconnect(); }, [room?.status]);
 
   const join = async () => {
     setBusy(true); setError(''); setSeatKept(false);
@@ -116,16 +137,18 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
     </header>
     <main id="watch-main" tabIndex={-1} className="play-main"><div className="play-layout">
       <section className="board-panel" aria-label="观赛棋盘"><div className="board-turnbar"><span style={{ color: palette[current.color] }}>{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span><strong>{state.board.name}{state.phase === 'move' ? ` · ${state.dice} 点` : ''} · {room.audience.online} 人正在看</strong></div>
-        {room.status !== 'playing' && <div className="game-status-overlay"><strong>{room.status === 'waiting' ? '等待开局' : room.status === 'paused' ? '比赛暂停' : '这一局已结束'}</strong><p>{room.status === 'waiting' ? '选手入座后由房主开始，你可以先观看准备情况。' : room.status === 'paused' ? '棋盘保留在原地，继续后会从这里同步。' : '可以查看结果。观众不能再开一局。'}</p><button className="outline-button" onClick={() => void leave()}><House />返回首页</button></div>}
+        {(room.status === 'waiting' || room.status === 'paused') && <div className="game-status-overlay"><strong>{room.status === 'waiting' ? '等待开局' : '比赛暂停'}</strong><p>{room.status === 'waiting' ? '选手入座后由房主开始，你可以先观看准备情况。' : '棋盘保留在原地，继续后会从这里同步。'}</p><button className="outline-button" onClick={() => void leave()}><House />返回首页</button></div>}
+        {(winner || room.status === 'ended') && <p className="watch-result" role="status">{winner ? `${winner.name}获胜。` : '房主结束了这一局。'}可以查看棋盘和最近棋步，观众不能再开一局。</p>}
         {!connected && !closed && <p role="status" className="connection-hint">正在重新连接观赛，比赛本身不受影响。</p>}
-        {closed && <p role="alert" className="connection-hint">{closed}</p>}
-        <div className="board-stage"><BoardLoader light={preferences.board === 'flat'} reducedMotion={reducedMotion} game={state} disabled onPiece={() => {}} onRoll={() => {}} /></div>
+        {closed && <p role="alert" className="connection-hint">{closed} <button className="text-button" onClick={() => void leave()}><House />返回首页</button></p>}
+        <div className="board-stage">{impact && <Suspense fallback={null}><PropEffects key={impact.id} event={impact} game={state} light={preferences.board === 'flat'} reducedMotion={reducedMotion} /></Suspense>}<BoardLoader light={preferences.board === 'flat'} reducedMotion={reducedMotion} game={state} disabled onPiece={() => {}} onRoll={() => {}} /></div>
         <ol className="watch-steps" aria-label="最近棋步">{steps.map(step => <li key={step.id}>{step.text}</li>)}</ol>
+        <details className="keyboard-help"><summary>键盘操作</summary><p>Tab 在提问、表情和短消息之间移动，Enter 发送。空格和数字不会掷骰或选飞机。Esc 可关闭骰子提示。</p></details>
         <div className="crew-list">{state.players.map((player, index) => <div key={player.id} className={'crew-seat ' + (state.current === index && state.phase !== 'finished' ? 'current' : '')}><strong>{player.name}{player.ai ? ' · 机器人' : ''}{room.network?.seats[index]?.host ? ' · 房主' : ''}</strong><span>{player.pieces.filter(piece => piece.progress === state.board.finish).length} 架抵达</span></div>)}</div>
       </section>
       <aside className="side-column">
         <section className="voice-panel" aria-label="我的灵犀"><h2>问我的灵犀</h2><p>只回答你本人，不广播给选手，也不能替他们操作。</p><div className="voice-bubble" aria-live="polite">{speech || '可以问现在轮到谁、谁更接近终点，或刚才为什么被送回。'}</div>
-          {voiceState === 'disconnected' ? <button className="voice-button" disabled={muted || !config?.voice_configured || !!closed} onClick={() => void ask()}><Microphone />{muted ? '静音中' : config?.voice_configured ? '开始提问' : '灵犀未配置，可继续观看'}</button> : <button className="voice-button" onClick={() => voice.current?.disconnect()}>停止提问</button>}
+          {voiceState === 'disconnected' ? <button className="voice-button" disabled={muted || !config?.voice_configured || !!closed || room.status === 'ended'} onClick={() => void ask()}><Microphone />{room.status === 'ended' ? '本局已结束' : muted ? '静音中' : config?.voice_configured ? '开始提问' : '灵犀未配置，可继续观看'}</button> : <button className="voice-button" onClick={() => voice.current?.disconnect()}>停止提问</button>}
           {voiceState === 'speaking' && <button className="text-button" onClick={() => voice.current?.stopPlayback()}>停止播放</button>}
           {error && <p role="alert">{error}</p>}
           <button className="text-button" onClick={() => void leave()}>退出观赛 <ArrowClockwise /></button>

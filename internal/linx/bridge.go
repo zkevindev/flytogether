@@ -29,6 +29,7 @@ type Bridge struct {
 	Config           Config
 	MaxConnections   int
 	SpectatorMax     int
+	SpectatorTimeout time.Duration
 	SessionTimeout   time.Duration
 	Reserve          func(context.Context) error
 	ReserveSpectator func(context.Context) error
@@ -94,6 +95,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 		limit = 4
 	}
 	duration := b.SessionTimeout
+	if spectator && b.SpectatorTimeout > 0 {
+		duration = b.SpectatorTimeout
+	}
 	if duration <= 0 {
 		duration = 15 * time.Minute
 	}
@@ -129,7 +133,11 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	defer cancel()
 	defer func() {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			result = errors.New("本次语音已到时限，请点击重新连接；仍可点击棋盘继续游戏")
+			if spectator {
+				result = errors.New("观赛助手已到时限，可以重新开始提问；棋局仍可继续观看")
+			} else {
+				result = errors.New("本次语音已到时限，请点击重新连接；仍可点击棋盘继续游戏")
+			}
 		}
 	}()
 	if spectator {
