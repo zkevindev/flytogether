@@ -57,6 +57,7 @@ export default function App() {
   const [keyboardMode, setKeyboardMode] = useState(false);
   const [invite, setInvite] = useState(() => new URLSearchParams(location.hash.slice(1)).get('join') || '');
   const [watch, setWatch] = useState(() => new URLSearchParams(location.hash.slice(1)).get('watch') || '');
+  const [screenCode, setScreenCode] = useState(() => new URLSearchParams(location.hash.slice(1)).get('screen') || '');
   const [joinName, setJoinName] = useState('');
   const [joinProfile, setJoinProfile] = useState('');
   const [family,setFamily] = useState<Family>({profiles:[],matches:[],total:0});
@@ -69,7 +70,7 @@ export default function App() {
     window.scrollTo(0, 0);
   }, []);
   useEffect(() => {
-    const update = () => setScreen(location.pathname === '/play' ? 'play' : location.pathname === '/product' ? 'product' : 'home');
+    const update = () => { const params = new URLSearchParams(location.hash.slice(1)); setScreen(location.pathname === '/play' ? 'play' : location.pathname === '/product' ? 'product' : 'home'); setWatch(params.get('watch') || ''); setScreenCode(params.get('screen') || ''); };
     addEventListener('popstate', update);
     return () => removeEventListener('popstate', update);
   }, []);
@@ -129,7 +130,7 @@ export default function App() {
       const [configuration, session] = await Promise.all([api<Config>('/api/config'), api<{ room: Room | null }>('/api/session')]);
       setConfig(configuration);
       try { setFamily(await api<Family>('/api/family')); } catch { /* Family availability does not block the current game. */ }
-      if (watch) return;
+      if (watch || screenCode) return;
       if (invite) { if (session.room) accept(session.room); return; }
       let next = session.room || await api<Room>('/api/rooms', defaults);
       // Migrate existing rooms too, so an old preference cannot restore wake gating.
@@ -140,7 +141,7 @@ export default function App() {
       accept(next);
     } catch (error) { setFatal(error instanceof Error ? error.message : '暂时无法连接游戏'); }
     finally { setLoading(false); loadingRef.current = false; }
-  }, [accept, invite, watch]);
+  }, [accept, invite, screenCode, watch]);
   useEffect(() => { if (screen !== 'product') void load(); return () => { voice.current?.disconnect(); }; }, [load, screen === 'product']);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(''), 4500); return () => clearTimeout(id); }, [toast]);
   useEffect(() => {
@@ -423,7 +424,8 @@ export default function App() {
     try { await api('/api/rooms/' + room.id + '/leave', {}); voice.current?.disconnect(); navigate('home'); void load(); }
     catch(e) { setToast(e instanceof Error ? e.message : '离开失败'); }
   };
-  if (screen === 'product' && !watch) return <Suspense fallback={<div className="loading-page"><AirplaneTilt size={36} /><p>正在铺开家庭棋盘…</p></div>}><ProductPage onHome={() => navigate('home')} onStart={() => { navigate('home'); openSetup(true); }} /></Suspense>;
+  if (screen === 'product' && !watch && !screenCode) return <Suspense fallback={<div className="loading-page"><AirplaneTilt size={36} /><p>正在铺开家庭棋盘…</p></div>}><ProductPage onHome={() => navigate('home')} onStart={() => { navigate('home'); openSetup(true); }} /></Suspense>;
+  if (screenCode) return <WatchApp code={screenCode} displayOnly onExit={() => { history.pushState({}, '', '/'); setScreenCode(''); }} />;
   if (watch) return <WatchApp code={watch} onExit={() => { history.pushState({}, '', '/'); setWatch(''); }} />;
   if (invite && !loading) return <div className="loading-page join-page"><AirplaneTilt size={48} weight="fill" /><h1>朋友邀你一起飞</h1><p>输入昵称，领取自己的飞行员席位。原浏览器重新打开邀请会回到原席位。</p><form onSubmit={e => { e.preventDefault(); void joinRoom(); }}><ProfilePicker profiles={family.profiles} value={joinProfile} label="选择我的家庭档案" onChange={p=>{setJoinProfile(p?.id||'');if(p)setJoinName(p.name);}} /><label className="field-label" htmlFor="join-name">你的昵称</label><input id="join-name" className="room-name-input" maxLength={10} required value={joinName} onChange={e => {setJoinName(e.target.value);setJoinProfile('');}} /><button className="primary-button" disabled={busy}>加入房间 <ArrowRight /></button></form>{joinError && <p role="alert">{joinError}</p>}<button className="text-button" onClick={() => { setInvite(''); navigate('home'); }}>返回首页</button></div>;
   if (loading) return <div className="loading-page"><AirplaneTilt className="loading-plane" weight="fill" /><h1>正在准备家庭机场</h1><p>把棋盘铺好，快乐马上起飞。</p></div>;

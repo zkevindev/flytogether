@@ -50,6 +50,7 @@
     "test:delegation:browser": "node scripts/delegation-browser.mjs",
     "test:delegation:restart": "node scripts/delegation-restart-browser.mjs",
     "test:audience:browser": "node scripts/audience-browser.mjs",
+    "test:living-screen:browser": "node scripts/living-screen-browser.mjs",
     "test:audience:voice": "node scripts/audience-voice-browser.mjs",
     "test:audience:restart": "node scripts/audience-restart-browser.mjs",
     "test:pass-device:browser": "node scripts/pass-device-prompt-browser.mjs",

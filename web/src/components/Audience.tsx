@@ -23,6 +23,7 @@ export function AudienceHost({ room, onRoom }: { room: Room; onRoom: (room: Room
   const [busy, setBusy] = useState(false);
   if (!room.network || !room.me?.host || !audience) return null;
   const link = audience.token ? location.origin + '/#watch=' + room.id + '.' + audience.token : '';
+  const screenLink = audience.token ? location.origin + '/#screen=' + room.id + '.' + audience.token : '';
   const update = async (body: { enabled?: boolean; rotate?: boolean; chat_enabled?: boolean }) => {
     setBusy(true); setError('');
     try { onRoom(await api<Room>('/api/rooms/' + room.id + '/audience', body)); }
@@ -35,10 +36,12 @@ export function AudienceHost({ room, onRoom }: { room: Room; onRoom: (room: Room
     <div className="lobby-actions">
       <button type="button" className="outline-button" disabled={busy} onClick={() => void update({ enabled: !audience.enabled })}>{audience.enabled ? '关闭观赛' : '允许观赛'}</button>
       {audience.enabled && link && <button type="button" className="outline-button" onClick={() => void navigator.clipboard.writeText(link).catch(() => setError('复制失败，请手动选择链接'))}>复制观赛链接</button>}
+      {audience.enabled && screenLink && <button type="button" className="outline-button" onClick={() => void navigator.clipboard.writeText(screenLink).catch(() => setError('复制失败，请手动选择链接'))}>复制电视大屏链接</button>}
       {audience.enabled && <button type="button" className="text-button" disabled={busy} onClick={() => void update({ rotate: true })}>更新链接</button>}
       {audience.enabled && <button type="button" className="text-button" disabled={busy} onClick={() => void update({ chat_enabled: !audience.chat_enabled })}>{audience.chat_enabled ? '禁止观众发言' : '允许观众发言'}</button>}
     </div>
     {audience.enabled && link && <input aria-label="观赛链接" className="room-name-input" readOnly value={link} onFocus={e => e.target.select()} />}
+    {audience.enabled && screenLink && <input aria-label="电视大屏链接" className="room-name-input" readOnly value={screenLink} onFocus={e => e.target.select()} />}
     {error && <p role="alert">{error}</p>}
   </section>;
 }
