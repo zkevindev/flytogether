@@ -48,6 +48,7 @@
     "test:audience:browser": "node scripts/audience-browser.mjs",
     "test:audience:voice": "node scripts/audience-voice-browser.mjs",
     "test:audience:restart": "node scripts/audience-restart-browser.mjs",
+    "test:pass-device:browser": "node scripts/pass-device-prompt-browser.mjs",
     "test:product:browser": "node scripts/product-browser.mjs"
   },
   "dependencies": {
