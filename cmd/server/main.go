@@ -345,7 +345,7 @@ func options(w http.ResponseWriter, r *http.Request) (game.Options, error) {
 	if e := decode(w, r, &o); e != nil {
 		return o, e
 	}
-	if o.Mode != "" && o.Mode != "quick" && o.Mode != "classic" {
+	if o.Mode != "" && o.Mode != "quick" && o.Mode != "classic" && o.Mode != "coop" {
 		return o, errors.New("游戏模式无效")
 	}
 	if _, ok := game.FindBoard(o.Board); !ok {

@@ -170,7 +170,7 @@ func New(o Options) *State {
 	if o.Difficulty != "easy" && o.Difficulty != "hard" {
 		o.Difficulty = "normal"
 	}
-	if o.Mode != "classic" {
+	if o.Mode != "classic" && o.Mode != "coop" {
 		o.Mode = "quick"
 	}
 	count := 2
@@ -185,6 +185,9 @@ func New(o Options) *State {
 		Turn: 1, Phase: "roll", Legal: []Move{}, History: []Event{}, Players: []Player{}, PropsEnabled: o.Props, DiceRolls: []int{}}
 	if o.Props {
 		s.Ruleset = "family-props-v3"
+	}
+	if o.Mode == "coop" {
+		s.Ruleset = "family-coop-v1"
 	}
 	if o.Preset == "gentle" {
 		s.Ruleset = "family-gentle-v2"
@@ -421,10 +424,35 @@ func (s *State) apply(m Move) {
 		}
 	}
 	target := len(p.Pieces)
-	if s.Mode == "quick" {
+	if s.Mode == "quick" || s.Mode == "coop" {
 		target = 1
 	}
 	if finished >= target {
+		if s.Mode == "coop" {
+			allReady := true
+			for _, player := range s.Players {
+				arrived := 0
+				for _, piece := range player.Pieces {
+					if piece.Progress == s.Board.Finish {
+						arrived++
+					}
+				}
+				if arrived == 0 {
+					allReady = false
+					break
+				}
+			}
+			if !allReady {
+				s.next()
+				return
+			}
+			s.ActiveProp = ""
+			s.Winner = "team"
+			s.Phase = "finished"
+			s.Legal = []Move{}
+			s.add("won", "全员抵达星河航站，星河救援成功！", m.PieceID)
+			return
+		}
 		s.ActiveProp = ""
 		s.Winner = p.ID
 		s.Phase = "finished"

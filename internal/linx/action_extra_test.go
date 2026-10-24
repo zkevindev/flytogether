@@ -304,6 +304,10 @@ func TestMoveCueRollCueAndHostCue(t *testing.T) {
 	if cue := hostCue(broken); !strings.Contains(cue, "有人赢了") {
 		t.Fatalf("unknown winner cue: %q", cue)
 	}
+	broken.Winner = "team"
+	if cue := hostCue(broken); !strings.Contains(cue, "星河救援成功") {
+		t.Fatalf("cooperative winner cue: %q", cue)
+	}
 	broken.Phase = "roll"
 	broken.Players[0].AI = true
 	if cue := hostCue(broken); !strings.Contains(cue, "等它飞完") {

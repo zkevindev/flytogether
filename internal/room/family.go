@@ -241,7 +241,7 @@ func archiveResult(ctx context.Context, tx *sql.Tx, p roomRecord) error {
 		}
 		result := MatchResult{GameID: g.ID, CompletedAt: p.SavedAt, RoomName: p.Name, Board: g.Board.Name, Mode: g.Mode, Preset: g.Preset, Difficulty: g.Difficulty, Network: p.Invite != "", Props: g.PropsEnabled, Players: []ResultPlayer{}}
 		for i, player := range g.Players {
-			entry := ResultPlayer{Name: player.Name, Avatar: player.Avatar, AI: player.AI, Won: player.ID == g.Winner, Stats: player.Stats}
+			entry := ResultPlayer{Name: player.Name, Avatar: player.Avatar, AI: player.AI, Won: player.ID == g.Winner || g.Winner == "team", Stats: player.Stats}
 			for _, index := range indices {
 				if index == i && i < len(p.Options.ProfileIDs) {
 					entry.ProfileID = p.Options.ProfileIDs[i]

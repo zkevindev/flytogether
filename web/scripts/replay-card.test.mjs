@@ -48,6 +48,16 @@ test('completed mode is named accurately and markup characters are escaped', () 
   assert.match(replayCardSVG(value), /&lt;家人&amp;孩子&gt;/);
 });
 
+test('cooperative win credits the whole team and explains the rescue objective', () => {
+  const value = game({ mode: 'coop', winner: 'team' });
+  const data = replayCardData(value);
+  assert.equal(data.winner, '全队');
+  assert.equal(data.mode, '星河救援 · 合作挑战');
+  assert.match(data.text, /全队共同完成了星河救援/);
+  assert.match(replayCardSVG(value), /共同完成救援/);
+  assert.match(replayCardSVG(value), /救援队员/);
+});
+
 test('no winner and demo matches do not produce share cards', () => {
   assert.equal(replayCardData(game({ winner: undefined })), undefined);
   assert.equal(replayCardSVG(game({ demo: true })), '');
