@@ -12,6 +12,7 @@ try {
  const log=value=>{output.push(value);console.log(JSON.stringify(value));};
  page.on('pageerror',e=>errors.push(e.message));
  await page.exposeBinding('qaEvent',(_,value)=>{if(['hello','stt','error','speech_stopped','response.done'].includes(value.type))log(value);});
+ if(process.env.QA_COMPANION_STYLE||process.env.QA_COMPANION_FREQUENCY) await page.addInitScript(p=>localStorage.setItem('fly-companion',JSON.stringify(p)),{style:process.env.QA_COMPANION_STYLE||'warm',frequency:process.env.QA_COMPANION_FREQUENCY||'normal'});
  await page.addInitScript(()=>{
  localStorage.setItem('fly-tutorial-v1','skipped');
   window.__qa={events:[],tracks:[],sources:[],diceDialogs:[]};
@@ -94,8 +95,18 @@ try {
   const shown=await page.evaluate(()=>window.__qa.diceDialogs);
   assert.ok(shown.some(d=>d.values.length===1),'voice roll must actually display a dice popup');
  }
+ if(process.env.QA_COMPANION_FREQUENCY==='quiet') {const unsolicited=await page.evaluate(()=>window.__qa.events.filter(e=>e.type==='host_cue'));assert.equal(unsolicited.length,0,'quiet mode emitted unsolicited host cues');log({phase:'quiet_mode_still_answers_and_operates',unsolicited_host_cues:0,style:process.env.QA_COMPANION_STYLE});}
  const replies=await page.evaluate(()=>window.__qa.events.filter(e=>e.type.endsWith('audio_transcript.done')||e.type==='response.output_text.done').map(e=>({at:e.at,text:e.text})));
  log({phase:'actual_spoken_replies',replies});
+ if(process.env.QA_REQUIRE_FACTUAL==='1'&&!coaching&&!lucky){
+  const turns=await page.evaluate(()=>window.__qa.events.filter(e=>e.type==='stt').map(e=>e.at));
+  const reply=i=>replies.filter(r=>r.at>=turns[i]&&(i+1===turns.length||r.at<turns[i+1])).map(r=>r.text||'').join('');
+  assert.ok(reply(0).includes('小朋友'),'current player query invented or omitted the actual nickname');
+  assert.ok(reply(1).includes('任意点数'),'launch card narration must state any die can launch');
+  assert.ok(!/需.{0,5}[6六]点|掷出[6六]点.*起飞/.test(reply(1)),'launch card narration incorrectly requires six');
+  assert.ok(reply(3).includes('起飞位')&&reply(3).includes('爸爸'),'move narration must use actual destination and next player');
+  assert.ok(reply(4).includes('爸爸'),'post-move query must name actual current player');
+ }
  if(coaching){const turns=await page.evaluate(()=>window.__qa.events.filter(e=>e.type==='stt').map(e=>e.at));const advice=replies.filter(r=>r.at>=turns[0]&&r.at<turns[4]).map(r=>r.text||'').join('');assert.ok(!/没有风险|无风险|不会被.{0,5}撞|很安全|绝对安全|保证安全/.test(advice.replace(/(?:不能|无法|不)保证安全/g,'')),'voice must not turn a limited risk estimate into a safety guarantee');}
  if(lucky){
   const dice=(await state()).dice_rolls;

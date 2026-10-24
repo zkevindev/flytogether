@@ -43,6 +43,15 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 	if len(state.Players) == 0 || state.Current < 0 || state.Current >= len(state.Players) {
 		return voiceAction{}, false
 	}
+	if strings.Contains(text, "轮到") || strings.Contains(text, "谁先") || strings.Contains(text, "该谁") {
+		if state.Phase == "finished" {
+			return voiceAction{Name: "get_game_state", Notice: hostCue(state)}, true
+		}
+		return voiceAction{Name: "get_game_state", Notice: "现在轮到" + state.Players[state.Current].Name + "。" + hostCue(state)}, true
+	}
+	if strings.Contains(text, "规则") {
+		return voiceAction{Name: "get_game_state", Notice: state.Rules().Summary}, true
+	}
 	if text == "" || text == "你好" || text == "在吗" || text == "嗨" || text == "喂" {
 		return voiceAction{Name: "get_game_state", Notice: hostCue(state)}, true
 	}
@@ -482,7 +491,10 @@ func moveCue(state game.State, name string) string {
 	for _, option := range state.Legal {
 		labels = append(labels, option.Label)
 	}
-	return name + "掷出" + strconv.Itoa(state.Dice) + "点，" + strings.Join(labels, "和") + "都能走。说「最前面」，或者说飞机名字。"
+	if state.ActiveProp == "launch" {
+		return name + "掷出" + strconv.Itoa(state.Dice) + "点，起飞卡已生效。" + strings.Join(labels, "和") + "都能起飞到起飞位，请说飞机名字。"
+	}
+	return name + "掷出" + strconv.Itoa(state.Dice) + "点，" + strings.Join(labels, "和") + "都能走，请说飞机名字。"
 }
 
 func capturedNames(state game.State, option game.Move) string {
@@ -501,6 +513,9 @@ func capturedNames(state game.State, option game.Move) string {
 }
 
 func rollCue(state game.State, name string) string {
+	if state.ActiveProp == "launch" {
+		return name + "，起飞卡已生效，任意点数都能起飞。请掷骰子。"
+	}
 	id, target := state.SuggestedPropTarget()
 	if player, piece, ok := findPiece(state, target); ok && (id == "bomb" || id == "shield") {
 		if id == "bomb" {
@@ -516,7 +531,7 @@ func rollCue(state game.State, name string) string {
 	case "luck":
 		return name + "，说「用幸运骰」会掷两次取大的，或者说「好」直接掷。"
 	default:
-		return name + "，骰子给你。先喊一个点数，比如「我要六点」，或者说「好」，我来掷。"
+		return name + "，请掷骰子。"
 	}
 }
 

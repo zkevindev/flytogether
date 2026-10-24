@@ -291,7 +291,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 		r.VoiceState("speaking")
 		return sendUp(map[string]any{"type": "response.create", "response": map[string]any{
 			"tool_choice":  "none",
-			"instructions": "你是家庭飞行棋主持人。只把下面这句话说出来，不要增加事实，不要调用工具：" + script + "。" + companion.Instructions(),
+			"instructions": readFactsInstruction(script, companion),
 		}})
 	}
 	idle := func() {
@@ -509,6 +509,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 						return errors.New("游戏操作结果没有送回灵矽")
 					}
 				}
+				spokenCheer := ""
 				instructions := "只根据本轮工具结果用一两句日常中文回答，语气像主持人，优先说实际效果或一条具体建议；除非玩家问库存，不要逐项报剩余道具。结果含error或notice时没有执行操作，按真实棋局回答问题、解释原因或追问选择，不能宣称已操作成功。需要掷骰时请玩家说‘掷骰子’，点数由游戏服务随机生成，不能询问、接受或编造玩家自报点数。本轮不要再调用工具。玩家称呼只取工具中的昵称，唤醒词是助手的名字，不是玩家姓名。不要朗读内部ID和技术字段，不要提授权或操作次数用完；幸运骰使用时已实际掷两次，不能要求玩家为了让幸运骰生效再掷一次；其他道具使用后玩家在下一句话掷骰。"
 				if action.Name == "coach_move" {
 					instructions += "本轮是教练建议，还没有走棋。只能说相对稳妥或有被撞的可能，必须说明后续走棋或道具会改变局面。禁止称没有风险、不会被撞、很安全或保证安全。简短说明推荐的飞机和真实效果，再邀请说就它确认，不要逐项念操作菜单。"
@@ -522,7 +523,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 						instructions += "先说这次真实发生了什么，再说：" + hostCue(state) + "。"
 					}
 					if note := cheered.take(state); note != "" {
-						instructions += "把这句也说进去：" + note
+						spokenCheer = note
 					}
 					switch state.Phase {
 					case "move":
@@ -532,7 +533,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 					}
 					instructions += narrationFacts(state, before)
 				}
-				instructions += companion.Instructions()
+				// The model reads a server-composed script instead of paraphrasing rules.
+				script := actionNarration(r, action, before, output) + spokenCheer
+				instructions = readFactsInstruction(script, companion)
 				// Keep the current facts in conversation context as well as response
 				// instructions; the provider can otherwise repeat an earlier host cue.
 				if narrationContext != "" {
