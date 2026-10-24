@@ -1,0 +1,15 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {mkdir,rm} from 'node:fs/promises';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+const out=new URL('../test-results/access-unit/',import.meta.url);await mkdir(out,{recursive:true});
+execFileSync(new URL('../node_modules/.bin/tsc',import.meta.url).pathname,['--ignoreConfig','--target','ES2022','--module','ESNext','--moduleResolution','bundler','--jsx','react-jsx','--skipLibCheck','--outDir',out.pathname,'src/components/Celebration.tsx','src/components/DiceCanvas.tsx','src/lib/experience.ts'],{cwd:new URL('..',import.meta.url)});
+const {parseExperience}=await import(new URL('lib/experience.js',out));
+const {Celebration}=await import(new URL('components/Celebration.js',out));
+const {DiceCanvas}=await import(new URL('components/DiceCanvas.js',out));
+await rm(out,{recursive:true});
+test('stored experience preferences recover from damaged or unsupported values',()=>{for(const raw of [null,'{bad','null','42','"x"','{"board":"remote-url","motion":"full"}'])assert.deepEqual(parseExperience(raw),{board:'auto',motion:'system'});assert.deepEqual(parseExperience('{"board":"flat","motion":"reduced","unknown":true}'),{board:'flat',motion:'reduced'});});
+test('reduced dice expose the actual two results without a tumbling animation',()=>{const html=renderToStaticMarkup(createElement(DiceCanvas,{values:[2,6],reducedMotion:true}));assert.match(html,/data-value="2"/);assert.match(html,/data-value="6"/);assert.equal((html.match(/dice-cube settled/g)||[]).length,2);assert.equal(html.includes('tumbling'),false);});
+test('reduced celebration preserves the arrival message with no particle elements',()=>{const html=renderToStaticMarkup(createElement(Celebration,{text:'小熊号抵达终点',won:true,reducedMotion:true,onDismiss:()=>{}}));assert.match(html,/小熊号抵达终点/);assert.match(html,/继续游戏/);assert.equal(html.includes('confetti-rain'),false);const normal=renderToStaticMarkup(createElement(Celebration,{text:'抵达',won:true}));assert.match(normal,/confetti-rain/);});

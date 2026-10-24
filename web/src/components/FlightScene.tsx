@@ -15,6 +15,7 @@ type Handlers = {
   game: Game;
   disabled: boolean;
   rolling: boolean;
+  reducedMotion?: boolean;
   preview?: Move;
   onPiece: (piece: Piece, player: number) => void;
   onRoll: () => void;
@@ -32,7 +33,6 @@ export function FlightScene(props: Handlers) {
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -264,6 +264,7 @@ export function FlightScene(props: Handlers) {
       const dt = Math.min(timer.getDelta(), 0.05);
       const now = performance.now();
       const current = propsRef.current;
+      const reduced = !!current.reducedMotion;
       const key = JSON.stringify([current.game.id, current.game.board.id, current.game.players.map(p => [p.name, p.color])]);
       if (key !== layoutKey) {
         layoutKey = key;
@@ -279,10 +280,11 @@ export function FlightScene(props: Handlers) {
         const heading = token.group.userData.heading as number;
         token.group.userData.legal = legal.has(id);
         token.halo.visible = legal.has(id);
-        if (legal.has(id)) token.halo.scale.setScalar(1 + Math.sin(now / 280) * 0.08);
+        if (legal.has(id)) token.halo.scale.setScalar(reduced ? 1 : 1 + Math.sin(now / 280) * 0.08);
         token.lift = Math.max(0, token.lift - dt * (reduced ? 8 : 1.15));
         const hop = Math.sin(token.lift * Math.PI) * 0.48;
         if (reduced) {
+          token.lift = 0;
           token.group.position.copy(target);
           token.group.rotation.y = heading;
         } else {

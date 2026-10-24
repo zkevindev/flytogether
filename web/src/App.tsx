@@ -1,5 +1,7 @@
+import { useExperience } from './lib/experience';
+import { focusGame, useDialog } from './lib/dialog';
 import { FamilyPanel, ProfilePicker, avatarIcon } from './components/FamilyPanel';
-import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { AirplaneTilt, ArrowClockwise, ArrowRight, ArrowUpRight, Check, GearSix, House, Info, Microphone, Pause, Play, Plus, Stop, Question, Robot, SpeakerHigh, SpeakerSlash, Sparkle, Waveform, X } from '@phosphor-icons/react';
 import { Tutorial, tutorialPreference } from './components/Tutorial';
 import { MovePreview } from './components/MovePreview';
@@ -16,6 +18,8 @@ import { cuesFor, Sfx } from './lib/sfx';
 import { VoiceClient } from './lib/voice';
 import { initialPresentation, presentationReducer } from './lib/presentation';
 
+const ExperienceSettings = lazy(() => import('./components/ExperienceSettings').then(module => ({default:module.ExperienceSettings})));
+
 const defaults: Options = { room_name: '周末家庭机场', difficulty: 'normal', waiting: true, names: ['小朋友', '爸爸', '灵矽机器人'], board: 'cross', mode: 'quick', ai: true, demo: false, props: true };
 const rules = (game: Game) => [
   ['起飞与加掷', `${game.preset === 'gentle' ? '掷到 5 或 6' : '掷到 6'}可以把一架飞机从机场移到起飞位；只有掷到 6 才再获得一次掷骰机会。`],
@@ -30,14 +34,17 @@ function Avatar({ player, size = '' }: { player: Player; size?: string }) {
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { ref.current?.showModal(); }, []);
+  const ref = useDialog();
   return <dialog ref={ref} className="modal" aria-label={title} onCancel={onClose} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
     <div className="modal-head"><h2>{title}</h2><button className="icon-button" aria-label="关闭" onClick={onClose}><X /></button></div>{children}
   </dialog>;
 }
 
 export default function App() {
+  const { preferences: experience, change: changeExperience, reducedMotion, systemReduced } = useExperience();
+  const focusPreview = useRef(false);
+  const hadPreview = useRef(false);
+  const keyboardInput = useRef(false);
   const [invite, setInvite] = useState(() => new URLSearchParams(location.hash.slice(1)).get('join') || '');
   const [joinName, setJoinName] = useState('');
   const [joinProfile, setJoinProfile] = useState('');
@@ -75,7 +82,7 @@ export default function App() {
   const [presentation, present] = useReducer(presentationReducer, initialPresentation);
   const [boardZoom, setBoardZoom] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [modal, setModal] = useState<'setup' | 'rules' | 'end' | 'props' | 'invite' | 'discard' | 'audio' | 'companion' | 'family' | null>(null);
+  const [modal, setModal] = useState<'setup' | 'rules' | 'end' | 'props' | 'invite' | 'discard' | 'audio' | 'companion' | 'family' | 'experience' | null>(null);
   const [setupNew, setSetupNew] = useState(false);
   const [options, setOptions] = useState<Options>(defaults);
   const [voiceState, setVoiceState] = useState('disconnected');
@@ -163,9 +170,9 @@ export default function App() {
   useEffect(() => {
     const beat = presentation.active;
     if (beat?.kind !== 'board') return;
-    const timer = setTimeout(() => present({ type: 'advance', id: beat.id }), matchMedia('(prefers-reduced-motion: reduce)').matches ? 100 : beat.duration);
+    const timer = setTimeout(() => present({ type: 'advance', id: beat.id }), reducedMotion ? 80 : beat.duration);
     return () => clearTimeout(timer);
-  }, [presentation.active]);
+  }, [presentation.active, reducedMotion]);
 
   useEffect(() => {
     if (!impact) return;
@@ -174,9 +181,9 @@ export default function App() {
   }, [impact]);
   useEffect(() => {
     if (!celebration) return;
-    const timer = setTimeout(() => setCelebration(undefined), celebration.won ? 6000 : 4200);
+    const timer = setTimeout(() => setCelebration(undefined), reducedMotion && celebration.won ? 1200 : celebration.won ? 6000 : 4200);
     return () => clearTimeout(timer);
-  }, [celebration]);
+  }, [celebration, reducedMotion]);
   useEffect(() => { setCelebration(undefined); setImpact(undefined); }, [state?.id]);
   const lifecycle = room?.status || 'playing';
   const voiceAllowed = !masterMuted && myTurn && connected && screen === 'play' && lifecycle === 'playing' && state?.phase !== 'finished' && tutorialSeen && !tutorialOpen;
@@ -212,6 +219,7 @@ export default function App() {
   };
   const selectMove = (pieceID: string) => {
     if (!canAct || state?.phase !== 'move' || !state.legal_moves.some(move => move.piece_id === pieceID)) return;
+    focusPreview.current = keyboardInput.current;
     setPreviewSelection({ gameID: state.id, version: state.version, pieceID });
     if (room?.coach) void command('coach', 'cancel');
   };
@@ -244,14 +252,34 @@ export default function App() {
   }, [accept, navigate]);
 
   useEffect(() => {
+    if (preview && focusPreview.current) { document.querySelector<HTMLElement>('.move-preview')?.focus({ preventScroll: true }); focusPreview.current = false; }
+    if (hadPreview.current && !preview && document.activeElement === document.body) focusGame();
+    hadPreview.current = !!preview;
+  }, [preview?.piece_id]);
+  useEffect(() => {
+    const keyboard = (e: KeyboardEvent) => { keyboardInput.current = true; if(e.repeat && (e.key==='Enter'||e.code==='Space') && e.target instanceof Element && !e.target.closest('input,textarea,select,[contenteditable]')) e.preventDefault(); };
+    const pointer = () => { keyboardInput.current = false; };
+    addEventListener('keydown', keyboard, true); addEventListener('pointerdown', pointer, true);
+    return () => { removeEventListener('keydown', keyboard, true); removeEventListener('pointerdown', pointer, true); };
+  }, []);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => { if (!document.querySelector('dialog[open]')) document.querySelector<HTMLElement>('main')?.focus({ preventScroll: true }); });
+    return () => cancelAnimationFrame(frame);
+  }, [screen, loading]);
+  useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !modal && (previewSelection || coach) && canAct) { setPreviewSelection(undefined); if (coach) void command('coach', 'cancel'); return; }
-      if (e.code === 'Space' && !modal && canAct && state?.phase === 'roll' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) {
-        e.preventDefault(); void command('roll');
-      }
+      if (e.repeat || e.altKey || e.ctrlKey || e.metaKey || screen !== 'play' || document.querySelector('dialog[open]')) return;
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest('input,textarea,select,[contenteditable]')) return;
+      if (e.key === 'Escape' && !modal && (previewSelection || coach) && canAct) { e.preventDefault(); setPreviewSelection(undefined); if (coach) void command('coach', 'cancel'); focusGame(); return; }
+      if (target?.closest('button,a,summary,[role="button"]') || modal || !canAct) return;
+      if (e.code === 'Space' && state?.phase === 'roll') { e.preventDefault(); void command('roll'); }
+      if (/^[1-4]$/.test(e.key) && state?.phase === 'move') { const piece=current?.pieces.find(p=>p.number===Number(e.key)); if (piece) { e.preventDefault(); selectMove(piece.id); } }
+      if (e.key.toLowerCase() === 'p' && state?.props_enabled) { e.preventDefault(); setModal('props'); }
+      if (e.key === 'Enter' && preview) { e.preventDefault(); if (previewCoach) void command('confirm_coach', previewCoach.id); else void command('move', preview.piece_id); }
     };
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
-  }, [canAct, modal, previewSelection, coach, state?.phase, command]);
+  }, [canAct, modal, previewSelection, coach, preview, previewCoach, state, current, screen, command]);
 
   useEffect(() => {
     if (!room?.network && screen === 'home' && room?.status === 'playing' && room.state.phase !== 'finished' && !locked.current) void command('pause');
@@ -384,9 +412,11 @@ export default function App() {
   const effectiveVoice = voiceBusy ? room.voice : voiceState;
   return (
     <div className={'app-shell ' + (screen === 'play' ? 'play-shell' : 'home-shell')}>
+      <a className="skip-link" href="#game-main" onClick={()=>document.querySelector<HTMLElement>('main')?.focus()}>跳到主要内容</a>
       <header className="site-header">
         <button className="brand brand-button" onClick={async () => { voice.current?.disconnect(); if (!network && lifecycle === 'playing' && state.phase !== 'finished') await command('pause'); navigate('home'); }} aria-label="返回首页"><span className="brand-mark"><AirplaneTilt size={26} weight="fill" /></span><span className="brand-name">一起飞<span>FlyTogether</span></span></button>
         <div className="header-actions">
+          <button className="icon-button" aria-label="显示与操作设置" onClick={()=>setModal('experience')}><GearSix /></button>
           {screen === 'play' && <>
             {network && <button className="text-button" onClick={() => void shareRoom()}>邀请朋友</button>}
             {host && lifecycle === 'playing' && !winner && <button className="text-button" disabled={busy} onClick={() => void command('pause')}><Pause />暂停</button>}
@@ -398,7 +428,7 @@ export default function App() {
           <button className="text-button rules-button" aria-label="玩法" onClick={() => setModal('rules')}><Question size={18} /><span>玩法</span></button>
         </div>
       </header>
-      {screen === 'home' ? <main className="home-main">
+      {screen === 'home' ? <main id="game-main" tabIndex={-1} className="home-main">
         <section className="home-welcome">
           <p className="eyebrow"><span /> A LITTLE FAMILY ADVENTURE</p>
           <h1>叫上家人，<br />一起飞一局<span>。</span></h1>
@@ -411,23 +441,24 @@ export default function App() {
           <div className="home-features"><span>2—4 位飞行员</span><span>三种棋盘</span><span>语音游戏搭子</span></div>
         </section>
         <div className="home-flight-art" aria-hidden="true"><div className="home-orbit orbit-one" /><div className="home-orbit orbit-two" /><span className="home-cloud cloud-one" /><span className="home-cloud cloud-two" /><AirplaneTilt weight="fill" /><span className="home-flight-label">下一站，快乐到家。</span></div>
-      </main> : <main className="play-main">
+      </main> : <main id="game-main" tabIndex={-1} className="play-main">
         <div className="play-layout">
           <section className="board-panel" aria-label="对局棋盘与玩家">
             <div className="board-turnbar"><span style={{ color: palette[current.color] }}><AirplaneTilt weight="fill" />{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span>
               <strong>{state.demo ? '演示局面' : state.board.name}{state.phase === 'move' ? ` · ${state.dice} 点` : ''}</strong>
-              <div className="play-turn-actions">{lifecycle === 'playing' && !winner && state.phase === 'roll' && <button className="primary-button roll-button" disabled={!canAct} onClick={() => void command('roll')}>{current.ai ? '机器人回合' : busy ? '骰子转呀转…' : '掷骰子'}</button>}
+              <div className="play-turn-actions">{lifecycle === 'playing' && !winner && state.phase === 'roll' && <button data-turn-control className="primary-button roll-button" disabled={!canAct} onClick={() => void command('roll')}>{current.ai ? '机器人回合' : busy ? (pendingAction === 'roll' ? (reducedMotion ? '正在掷骰…' : '骰子转呀转…') : '正在同步…') : '掷骰子'}</button>}
                 {lifecycle === 'playing' && !current.ai && state.phase === 'move' && <button className="prop-shortcut coach-shortcut" disabled={!canAct} onClick={() => void command('coach', 'best')}><Sparkle weight="fill" />帮我选</button>}
-                {lifecycle === 'playing' && !winner && state.phase === 'move' && state.legal_moves.map(move => <button key={move.piece_id} className="prop-shortcut" disabled={!canAct} title={move.summary} aria-pressed={preview?.piece_id === move.piece_id} onClick={() => selectMove(move.piece_id)}>{move.label}</button>)}
+                {lifecycle === 'playing' && !winner && state.phase === 'move' && state.legal_moves.map(move => <button key={move.piece_id} className="prop-shortcut" disabled={!canAct} data-turn-control title={move.summary} aria-pressed={preview?.piece_id === move.piece_id} onClick={() => selectMove(move.piece_id)}>{move.label}</button>)}
                 {state.props_enabled && !winner && <button className="prop-shortcut" onClick={() => setModal('props')}>道具口袋 · {Object.values(current.props || {}).reduce((a, b) => a + b, 0)}</button>}
                 {winner && <button className="prop-shortcut" onClick={() => setResultDismissed('')}>查看结算</button>}
               </div>
             </div>
             {lifecycle === 'playing' && !winner && !presentation.active && !presentation.queue.length && <p className="turn-help" role="status">{current.ai ? `${current.name}正在自动行动，稍等它走完。` : !myTurn ? `等待${current.name}操作，你可以看棋盘和听播报。` : state.phase === 'move' ? '点一架亮着的飞机，先看落点；确认后再飞行。' : current.pieces.every(piece => piece.progress < 0) && state.active_prop !== 'launch' ? `轮到${current.name}先掷骰子。机库飞机要掷到${state.preset === 'gentle' ? '五点或六点' : '六点'}才能起飞${state.props_enabled && current.props.launch > 0 ? '，也可以先用起飞卡' : ''}。` : `轮到${current.name}先掷骰子，再选择飞机。`}</p>}
-            <details className="match-rules"><summary>本局规则 · {state.rules?.name || '自定义家庭规则'}</summary><p>{state.rules?.summary || '六点起飞；快速模式先到一架，完整模式全部抵达。'} 规则在本局固定。</p></details><div className={'board-viewport ' + (boardZoom ? 'is-zoomed' : '')}><div className="board-stage">{celebration && <Celebration key={celebration.id} text={celebration.text} won={celebration.won} />}{impact && <div className={"board-impact " + (impact.shield ? "shield-impact" : "bomb-impact")} role="status"><Sparkle weight="fill" /><strong>{impact.shield ? "护盾启动" : impact.crash ? "被撞回机场" : "炸弹出击"}</strong><span>{impact.text}</span></div>}{lifecycle !== 'playing' && <div className="game-status-overlay"><strong>{lifecycle === 'waiting' ? '飞行员准备好了吗？' : lifecycle === 'paused' ? '先休息一下' : '这一趟飞行已结束'}</strong><p>{lifecycle === 'waiting' ? (network ? '邀请朋友入座，所有人在线并准备后由房主开局。' : '确认玩家和难度后，点击开始游戏。') : lifecycle === 'paused' ? (room.restored ? '上次对局已恢复，骰子、道具和席位已保留，由房主确认继续。' : '棋盘、道具和骰子已保留，随时继续。') : '保留本局记录，重新准备下一次出发。'}</p>{host && <button className="primary-button" disabled={busy || !connected || (network && lifecycle === 'waiting' && !allReady)} onClick={() => lifecycle === 'ended' ? void command('replay') : void command(lifecycle === 'waiting' ? 'start' : 'resume')}><Play weight="fill" />{lifecycle === 'waiting' ? '开始游戏' : lifecycle === 'paused' ? '继续游戏' : '重新准备'}</button>}{network && !host && <p>等待房主{lifecycle === 'paused' ? '继续游戏' : '开始游戏'}，席位状态见下方准备区。</p>}</div>}<BoardLoader game={presentation.game || state} onPiece={onPiece} disabled={!canAct} onRoll={() => void command('roll')} rolling={busy && pendingAction === 'roll'} preview={preview} /></div></div>
+            <details className="match-rules"><summary>本局规则 · {state.rules?.name || '自定义家庭规则'}</summary><p>{state.rules?.summary || '六点起飞；快速模式先到一架，完整模式全部抵达。'} 规则在本局固定。</p></details><div className={'board-viewport ' + (boardZoom ? 'is-zoomed' : '')}><div className="board-stage">{celebration && <Celebration key={celebration.id} text={celebration.text} won={celebration.won} reducedMotion={reducedMotion} onDismiss={()=>setCelebration(undefined)} />}{impact && <div className={"board-impact " + (impact.shield ? "shield-impact" : "bomb-impact")} role="status"><Sparkle weight="fill" /><strong>{impact.shield ? "护盾启动" : impact.crash ? "被撞回机场" : "炸弹出击"}</strong><span>{impact.text}</span></div>}{lifecycle !== 'playing' && <div className="game-status-overlay"><strong>{lifecycle === 'waiting' ? '飞行员准备好了吗？' : lifecycle === 'paused' ? '先休息一下' : '这一趟飞行已结束'}</strong><p>{lifecycle === 'waiting' ? (network ? '邀请朋友入座，所有人在线并准备后由房主开局。' : '确认玩家和难度后，点击开始游戏。') : lifecycle === 'paused' ? (room.restored ? '上次对局已恢复，骰子、道具和席位已保留，由房主确认继续。' : '棋盘、道具和骰子已保留，随时继续。') : '保留本局记录，重新准备下一次出发。'}</p>{host && <button className="primary-button" disabled={busy || !connected || (network && lifecycle === 'waiting' && !allReady)} onClick={() => lifecycle === 'ended' ? void command('replay') : void command(lifecycle === 'waiting' ? 'start' : 'resume')}><Play weight="fill" />{lifecycle === 'waiting' ? '开始游戏' : lifecycle === 'paused' ? '继续游戏' : '重新准备'}</button>}{network && !host && <p>等待房主{lifecycle === 'paused' ? '继续游戏' : '开始游戏'}，席位状态见下方准备区。</p>}</div>}<BoardLoader light={experience.board === 'flat'} reducedMotion={reducedMotion} onLight={()=>changeExperience({...experience,board:'flat'})} game={presentation.game || state} onPiece={onPiece} disabled={!canAct} onRoll={() => void command('roll')} rolling={busy && pendingAction === 'roll'} preview={preview} /></div></div>
             {network && <section className="lobby-panel" aria-label="联网准备区"><div><strong>{room.name} · 邀请房间</strong><span>你是{state.players.find(p => p.id === room.me?.player_id)?.name}{host ? '（房主）' : ''}</span></div><ul>{room.network!.seats.map((seat,i) => <li key={seat.player_id}><span style={{color: palette[state.players[i].color]}}>{seat.occupied ? state.players[i].name : '等待朋友入座'}{seat.robot && <span className="ai-tag">机器人</span>}{seat.player_id === room.me?.player_id ? ' · 我' : ''}</span><span>{seat.robot ? '自动准备 · 自动行动' : seat.occupied ? !seat.online ? '暂时离线 · 保留席位' : seat.ready ? '已准备' : '待准备' : '空席位'}</span></li>)}</ul><div className="lobby-actions"><button className="outline-button" onClick={() => void shareRoom()}>复制邀请链接</button>{lifecycle === 'waiting' && !host && <><button className="primary-button" disabled={busy || !connected} onClick={() => void ready(!room.network!.seats.find(s => s.player_id === room.me?.player_id)?.ready)}>{room.network!.seats.find(s => s.player_id === room.me?.player_id)?.ready ? '取消准备' : '我准备好了'}</button><button className="text-button" onClick={() => void leave()}>退出房间</button></>}</div>{lifecycle === 'waiting' && host && !allReady && <p>等待所有席位入座、在线并准备好。</p>}</section>}
             {room.save_error && <p role="alert" className="save-error">暂时无法保存，未确认的动作没有生效。请稍后重试后再继续游戏。</p>}
             {!connected && <p role="status" className="connection-hint">正在同步棋局，连接恢复后才可操作。</p>}
+            <details className="keyboard-help"><summary>键盘操作</summary><p>Tab 切换控件，Enter 激活。焦点在棋盘主区域时：空格掷骰，1～4 选飞机，Enter 确认，Esc 取消，P 打开道具。</p></details>
             <div className="crew-list" style={{ '--seats': state.players.length } as React.CSSProperties}>
               {state.players.map((player, i) => <div key={player.id} className={'crew-seat ' + (state.current === i && state.phase !== 'finished' ? 'current' : '')} style={{ '--player-color': palette[player.color] } as React.CSSProperties}>
                 <Avatar player={player} /><div className="crew-detail"><strong>{player.name}{player.ai && <span className="ai-tag">机器人</span>}</strong><span>{player.pieces.filter(p => p.progress === state.board.finish).length}/{state.mode === 'quick' ? '1' : player.pieces.length} 架抵达</span></div>{state.current === i && state.phase !== 'finished' && <span className="seat-turn">本回合</span>}
@@ -462,8 +493,9 @@ export default function App() {
         </div>
       </main>}
       {tutorialOpen && !modal && !presentation.active && <Tutorial gentle={state.preset === 'gentle'} voiceConfigured={!!config?.voice_configured} propsEnabled={state.props_enabled} quick={state.mode === 'quick'} onClose={closeTutorial} />}
-      {presentation.active?.kind === 'dice' && <DiceRollModal key={presentation.active.id} roll={presentation.active.roll} onClose={() => { if (presentation.active) present({ type: 'advance', id: presentation.active.id }); }} />}
+      {presentation.active?.kind === 'dice' && <DiceRollModal key={presentation.active.id} reducedMotion={reducedMotion} roll={presentation.active.roll} onClose={() => { if (presentation.active) present({ type: 'advance', id: presentation.active.id }); }} />}
       {toast && <div className="toast" role="status"><Info size={19} /><span>{toast}</span><button aria-label="关闭提示" onClick={() => setToast('')}><X size={16} /></button></div>}
+      {modal === 'experience' && <Modal title="显示与操作设置" onClose={()=>setModal(null)}><Suspense fallback={<p role="status">正在准备显示设置…</p>}><ExperienceSettings preferences={experience} onChange={changeExperience} systemReduced={systemReduced} onDone={()=>setModal(null)} /></Suspense></Modal>}
       {modal === 'family' && <Modal title="家庭飞行员与战绩" onClose={()=>setModal(null)}><FamilyPanel onChange={setFamily}/></Modal>}
       {modal === 'props' && <Modal title={`${current.name}的道具口袋`} onClose={() => setModal(null)}><PropTray key={state.id + ':' + state.version} game={state} status={lifecycle} disabled={!canAct} onUse={(id, target) => { setModal(null); void command('prop', id, target); }} /></Modal>}
       {modal === 'rules' && <Modal title="一起飞，怎么玩？" onClose={() => setModal(null)}><p className="modal-description">{state.rules?.summary || '快速模式先到一架，完整模式全部抵达。'}</p><div className="rules-list">{rules(state).map(([title, text], i) => <div key={title}><span>{String(i + 1).padStart(2, '0')}</span><section><h3>{title}</h3><p>{text}</p></section></div>)}</div><p className="rule-note">机库、起飞位和自己的终点航道不参与撞机。相同位置可以叠放；不使用三连六惩罚或终点反弹。</p><button className="primary-button" onClick={() => setModal(null)}>懂啦，一起出发 <Check /></button></Modal>}

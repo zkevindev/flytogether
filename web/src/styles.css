@@ -523,3 +523,38 @@ main { padding-top: 12px; }
 .family-panel .result-table table {min-width:0;table-layout:fixed;}
 .family-panel .result-table th:first-child {width:30%;}
 .family-panel .result-table th,.family-panel .result-table td {font-size:12px;padding:10px 3px;overflow-wrap:anywhere;}
+
+/* Keyboard focus and touch alternatives stay usable in every renderer. */
+:where(button,a,input,select,textarea,summary,[role="button"]):focus-visible {outline:3px solid #27694f;outline-offset:3px;}
+.skip-link {position:fixed;left:12px;top:-100px;z-index:100;padding:12px 18px;background:#fffefa;color:#234e3c;border:2px solid #27694f;border-radius:10px;}
+.skip-link:focus {top:12px;}
+.board-access:focus-within {position:fixed;left:12px;bottom:12px;z-index:25;width:min(440px,calc(100vw - 24px));height:auto;max-height:35dvh;overflow:auto;clip:auto;margin:0;padding:12px;border:2px solid #27694f;border-radius:12px;white-space:normal;background:#fffefa;box-shadow:0 8px 24px #1d3b3240;display:grid;gap:8px;}
+.board-access button:focus {position:static;left:auto;bottom:auto;width:auto;height:auto;clip:auto;margin:0;padding:10px 14px;box-shadow:none;}
+.board-access button {min-height:44px;white-space:normal;}
+.keyboard-guide {line-height:1.85;font-size:14px;color:#354f41;margin:20px 0;}
+.keyboard-guide p {margin:12px 0;}
+kbd {font:inherit;font-size:12px;background:#eef1e8;border:1px solid #cbd5c9;border-radius:5px;padding:2px 5px;white-space:nowrap;}
+.keyboard-help {color:#526b5c;font-size:12px;line-height:1.8;margin:8px 0 16px;}
+.keyboard-help summary {cursor:pointer;min-height:44px;display:flex;align-items:center;}
+.light-board .board-svg {display:block;width:100%;height:auto;aspect-ratio:1;}
+.dice-cube.settled {animation:none;transform:var(--landing);}
+.celebration-still {pointer-events:none;}
+.celebration-message .text-button {pointer-events:auto;min-height:44px;color:inherit;}
+html[data-motion="reduce"] *,html[data-motion="reduce"] *::before,html[data-motion="reduce"] *::after {animation:none!important;transition:none!important;scroll-behavior:auto!important;}
+html[data-motion="reduce"] .dice-cube {transform:var(--landing);}
+html[data-motion="reduce"] .confetti-rain {display:none;}
+:where(.header-actions button,.prop-shortcut,.preview-actions button,.coach-choices button,.lobby-actions button,.modal button,.tutorial-actions button,.prop-target,.avatar-choices button) {min-height:44px;min-width:44px;touch-action:manipulation;}
+.modal :where(input:not([type="checkbox"]),select),.join-page :where(input,select) {min-height:44px;}
+.header-actions {flex-wrap:wrap;}
+@media(max-width:700px){.site-header{min-height:72px;height:auto;padding-top:10px;padding-bottom:10px;gap:8px;}.header-actions{gap:4px;justify-content:flex-end;}.header-actions .icon-button{min-width:44px;min-height:44px;}.play-turn-actions{gap:8px;}.play-turn-actions .prop-shortcut{min-height:44px;}.keyboard-guide{font-size:14px;}}
+.experience-options {padding:0;margin:20px 0;border:0;display:grid;gap:8px;}
+.experience-options legend {font-weight:700;font-size:14px;margin-bottom:10px;}
+.experience-options label {display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #d6dfd1;border-radius:12px;min-height:64px;cursor:pointer;background:#fafbf6;}
+.experience-options label:has(input:checked) {border-color:#328760;background:#eaf3e8;}
+.experience-options input[type="radio"] {min-height:0;width:20px;height:20px;accent-color:#328760;flex-shrink:0;}
+.experience-options strong,.experience-options small {display:block;}
+.experience-options small {font-size:12px;color:#586f60;line-height:1.7;margin-top:4px;}
+.app-shell :is(button,a,input,select,textarea,summary,[role="button"]):focus-visible {outline:3px solid #27694f;outline-offset:3px;}
+.app-shell main:focus-visible {outline:2px solid #27694f;outline-offset:4px;}
+.site-header .brand-button {min-height:44px;min-width:44px;}
+@media(max-width:700px){.play-shell .site-header {height:auto;min-height:72px;padding:10px 12px;}.play-shell .header-actions{gap:4px;justify-content:flex-end;}.header-actions button{flex-shrink:0;}}

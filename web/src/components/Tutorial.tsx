@@ -1,12 +1,12 @@
+import { useDialog } from '../lib/dialog';
 import { useEffect, useRef, useState } from 'react';
 import { AirplaneTilt, ArrowLeft, ArrowRight, Check, DiceSix, Flag, Sparkle, X } from '@phosphor-icons/react';
 
 export const tutorialPreference = 'fly-tutorial-v1';
 export function Tutorial({ propsEnabled, quick, voiceConfigured, onClose, gentle = false }: { gentle?: boolean; propsEnabled: boolean; quick: boolean; voiceConfigured: boolean; onClose: (completed: boolean) => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useDialog();
   const [step, setStep] = useState(0);
   const title = useRef<HTMLHeadingElement>(null);
-  useEffect(() => { dialog.current?.showModal(); }, []);
   useEffect(() => { title.current?.focus(); }, [step]);
   const steps = [
     { title: '第一步，轮流掷骰子', text: `轮到自己时，点击“掷骰子”或棋盘中央的骰子。${gentle ? '掷到 5 或 6 都能起飞，只有 6 能再掷一次。' : '掷到 6 才能让机库里的飞机起飞，还能再掷一次。'}`, tip: propsEnabled ? '想早点出发？掷骰前可以在道具口袋使用起飞卡，任意点数也能起飞。' : `机库飞机暂时不能起飞时别着急，轮流掷骰，等待${gentle ? '五点或六点' : '六点'}就好。`, Icon: DiceSix },

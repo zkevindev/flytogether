@@ -69,7 +69,7 @@ export function FlatBoard({ game, onPiece, disabled, onRoll, rolling = false, pr
     {[0, 1, 2, 3].map(player => <path key={'goal' + player} d="M360 360 332 332 332 388Z" fill={palette[colors[player]]} transform={`rotate(${player * 90} 360 360)`} />)}
     <g className={'board-dice ' + (canRoll ? 'can-roll ' : '') + (rolling ? 'is-rolling' : '')} transform="translate(360 360)"
       role="button" tabIndex={canRoll ? 0 : -1} aria-label={canRoll ? '点击棋盘中央掷骰子' : `本次骰子 ${game.dice || '未掷'} 点`} aria-disabled={!canRoll}
-      onClick={() => { if (canRoll) onRoll(); }} onKeyDown={e => { if (canRoll && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onRoll(); } }}>
+      onClick={() => { if (canRoll) onRoll(); }} onKeyDown={e => { if (canRoll && !e.repeat && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onRoll(); } }}>
       <rect x="-32" y="-32" width="64" height="64" rx="18" fill="transparent" />
       <rect className="board-die-face" x="-26" y="-26" width="52" height="52" rx="13" fill="white" stroke={canRoll ? '#2e5e4c' : '#cbd8df'} strokeWidth="2" filter={`url(#${uid}shadow)`} />
       {dicePips[game.dice || 0].map(p => <circle key={p} cx={(p % 3 - 1) * 12} cy={(Math.floor(p / 3) - 1) * 12} r="4" fill="#324e62" />)}
@@ -87,7 +87,7 @@ export function FlatBoard({ game, onPiece, disabled, onRoll, rolling = false, pr
       return <g key={piece.id} className={'board-piece ' + (legal ? 'is-legal' : '')} data-piece-id={piece.id} data-progress={piece.progress}
         style={{ transform: `translate(${point.x}px, ${point.y}px)`, color: palette[player.color] }}
         role="button" tabIndex={legal ? 0 : -1} aria-label={`${player.name}的${piece.label}，${status}${piece.shield ? "，护盾保护中" : ""}${legal ? '，可以移动' : ''}`} aria-disabled={!legal}
-        onClick={() => { if (!disabled) onPiece(piece, playerIndex); }} onKeyDown={e => { if (legal && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPiece(piece, playerIndex); } }}>
+        onClick={() => { if (!disabled) onPiece(piece, playerIndex); }} onKeyDown={e => { if (legal && !e.repeat && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPiece(piece, playerIndex); } }}>
         <title>{player.name} · {piece.label} · {status}</title>
         {piece.shield && <circle r={r + 5} fill="#6cd5f2" fillOpacity=".2" stroke="#1689b2" strokeWidth="2.5" strokeDasharray="5 3" />}
         {legal && <circle className="piece-halo" r={r + 7} fill="currentColor" opacity=".24" />}
