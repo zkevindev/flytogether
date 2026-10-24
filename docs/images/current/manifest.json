@@ -1,6 +1,6 @@
 {
-  "captured_at": "2026-10-24T07:57:38.257Z",
-  "app_commit": "9b6cb8d",
+  "captured_at": "2026-10-24T08:33:52.108Z",
+  "app_commit": "2f1bb79",
   "browser": "155.0.8059.85",
   "scope": "Actual app UI: home, create, board, five props, random dice, coaching preview and takeoff; two human seats; voice switched off; no mocked state or microphone",
   "captures": [
@@ -26,7 +26,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "eec976ad32c13459148c301a2c1fed8aa9175f034a06b387ce9f4f7cb8b6c1f1"
+      "sha256": "c4e6ee1aaa90da930a41c29efb753748f17c82833e70d28b7418bdc7e873907f"
     },
     {
       "file": "onboarding.png",
@@ -50,7 +50,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "efa756641c81103633466fb0095d8224bf088eac2e9dbc4e2670baabfe483b5a"
+      "sha256": "cff9317ee3b75478379a3bc4ebe77c29ab34b4217a22fcef3091cb72cfbfffa8"
     },
     {
       "file": "move-preview.png",
@@ -58,7 +58,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "8d8329b224a780e27b705ad3ffd395d14a3ca0daa8d04b03bc10e715f26ff9b8"
+      "sha256": "f3aef766ad93c5f93963236552705de32b186e85465382fc5e040f5407363079"
     },
     {
       "file": "coach-desktop.png",
@@ -66,7 +66,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "86d49b574d7febf89d0d047e1e3f906b54442b081915ef0872d10f77b31fde3b"
+      "sha256": "8894f7d1e90d74bf7ad763b6bb3f964ea4870302f0586760286673e9225f1d9e"
     },
     {
       "file": "coach-mobile.png",
@@ -74,7 +74,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "f8f19fd2d65b62824d4a4fbab68ccfcafb2849581e91e0584430aac605a5934e"
+      "sha256": "72f0328e0f57bedaf3b391d8734078a94138cc0b7d6eb0022cacb8ea33ecf3a8"
     },
     {
       "file": "play-mobile.png",
@@ -82,7 +82,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "aed091ccdcb30d13848c9e353b137a4b848a933ea8f5244c34e32f705a99570e"
+      "sha256": "06bdc06cbfcd9a9530e6a6e410ee2ac5481d6d6e2c2a27101c202ff946c08110"
     }
   ],
   "console_errors": 0,

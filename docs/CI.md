@@ -14,3 +14,9 @@ README徽章读取main最新上报状态，具体分支/提交、文件和未覆
 本地复跑：上述Go命令，随后 `python3 scripts/coverage_summary.py test-results/coverage.out`；前端在 `web` 下执行 `npm ci && npm run test:unit && npm run build`。覆盖率是测试触达生产语句的比例，并不保证规则、交互或异常路径都正确。
 
 Action与OIDC用法依据 [Codecov官方Action](https://github.com/codecov/codecov-action#using-oidc)。
+
+首次实际运行：[7e0f591 CI](https://github.com/zkevindev/flytogether/actions/runs/40077207606)。初次Codecov尚未启用仓库而返回Repository not found，用户启用后重跑成功，前端与Go两任务通过，公开仓库已active、覆盖率徽章可读。后续提交继续自动验证，不把首次失败隐藏成测试成功。
+
+## 两个覆盖率口径
+
+应用2f1bb79的同一份CI报告：Go工具与Summary按语句计为71.5%；Codecov处理后27个Go文件、3933行，2529行完全覆盖、327行部分覆盖、1077行未覆盖，页面为64.3%，徽章四舍五入显示64%。这是按行/部分覆盖与按语句计算的差异，不用手改徽章数字或排除未覆盖生产代码来抬高结果。后续以对应提交的报告为准。Codecov的解释见 [覆盖率百分比](https://docs.codecov.com/docs/coverage-percentages)。

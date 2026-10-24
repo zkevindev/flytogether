@@ -1,0 +1,60 @@
+{
+  "captured_at": "2026-10-24T08:36:33.276008+00:00",
+  "app_commit": "2f1bb79",
+  "browser": "155.0.8059.85",
+  "scope": "Actual deployed Chrome UI with private admin auth and isolated synthetic QA games; no credentials, server address, audio or other player records. Voice screenshot reads actual real Lingxi dialogues generated using synthetic WAV. Phone is a desktop responsive viewport.",
+  "captures": [
+    {
+      "file": "admin-login.png",
+      "sha256": "cf057ec36357756f2bdf191b4bc7045a56e178145e03d0024a74c3bbf7d7385f",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "image_size": {
+        "width": 1440,
+        "height": 1050
+      },
+      "full_page": true
+    },
+    {
+      "file": "admin-match.png",
+      "sha256": "8d26937f36cb3447fc11df26dc3e0acd47926bc500c46387db7c1a11fcb3d1c4",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "image_size": {
+        "width": 1440,
+        "height": 2857
+      },
+      "full_page": true
+    },
+    {
+      "file": "admin-mobile.png",
+      "sha256": "b67ea84aba3e6ff195d51a4b12f23a061164ce4f1926d1137dca23c8bce2a1e7",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "image_size": {
+        "width": 390,
+        "height": 3744
+      },
+      "full_page": true
+    },
+    {
+      "file": "admin-voice.png",
+      "sha256": "601dcaa751561c0c36dfa1fc57e89addb56f90ab942f35d331a95185d54a421d",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "image_size": {
+        "width": 1440,
+        "height": 6744
+      },
+      "full_page": true
+    }
+  ]
+}
