@@ -22,3 +22,10 @@ test('shield absorption never sounds like a crash, while bomb returns do', () =>
  assert.deepEqual(cuesFor([{kind:'prop',text:'爸爸使用炸弹，小熊号被送回机场'}]),['bump']);
  assert.deepEqual(cuesFor([{kind:'moved',text:'兔子号抵达终点'}]),['home']);
 });
+
+test('new props use authoritative effect type for absorption and separate sounds',()=>{
+ assert.deepEqual(cuesFor([{kind:'prop',text:'护盾解除',prop_id:'rescue',effects:[{kind:'rescue'}]}]),['rescue']);
+ assert.deepEqual(cuesFor([{kind:'prop',text:'后退',prop_id:'boomerang',effects:[{kind:'boomerang'}]}]),['boomerang']);
+ assert.deepEqual(cuesFor([{kind:'prop',text:'攻击',prop_id:'boomerang',effects:[{kind:'blocked'}]}]),['shield']);
+ assert.deepEqual(cuesFor([{kind:'prop',text:'获得护盾',prop_id:'escort',effects:[{kind:'escort'}]}]),['escort']);
+});

@@ -1,6 +1,6 @@
-export type Cue = 'roll' | 'luck' | 'hop' | 'launch' | 'glide' | 'bump' | 'shield' | 'six' | 'home' | 'win' | 'card' | 'welcome';
+export type Cue = 'roll' | 'luck' | 'hop' | 'launch' | 'glide' | 'bump' | 'shield' | 'six' | 'home' | 'win' | 'card' | 'welcome' | 'boomerang' | 'rescue' | 'escort';
 
-type GameEvent = { kind: string; text: string };
+type GameEvent = { kind: string; text: string; prop_id?:string; effects?:{kind:string}[] };
 
 function moveCue(text: string): Cue {
   if (text.includes('终点') || text.includes('抵达')) return 'home';
@@ -19,7 +19,9 @@ export function cuesFor(events: GameEvent[]): Cue[] {
     else if (event.kind === 'bonus') cues.push('six');
     else if (event.kind === 'moved') cues.push(moveCue(event.text));
     else if (event.kind === 'prop') {
-      if (event.text.includes('护盾') && !event.text.includes('送回')) cues.push('shield');
+      if (event.effects?.some(e=>e.kind==='blocked')) cues.push('shield');
+      else if (['boomerang','rescue','escort'].includes(event.prop_id || '')) cues.push(event.prop_id as Cue);
+      else if (event.text.includes('护盾') && !event.text.includes('送回')) cues.push('shield');
       else if (event.text.includes('炸弹') || event.text.includes('送回')) cues.push('bump');
       else cues.push('card');
     }
@@ -108,6 +110,16 @@ export class Sfx {
         this.tone(time + 0.6, 55, 0.18, 'sine', 0.075);
         this.noiseBurst(time + 0.6, 0.18, 180, 0.055);
         return time + 0.9;
+      case 'boomerang':
+        this.glideTone(time, 300, 1100, .24, .04);
+        this.glideTone(time+.25, 1100, 350, .3, .04);
+        return time+.6;
+      case 'rescue':
+        [660,880,660,1046].forEach((f,i)=>this.tone(time+i*.12,f,.16,'sine',.035));
+        return time+.65;
+      case 'escort':
+        [523,659,784].forEach((f,i)=>this.tone(time+i*.09,f,.35,'sine',.03));
+        return time+.6;
       case 'shield':
         this.tone(time, 784, 0.28, 'sine', 0.03);
         this.tone(time, 1175, 0.34, 'sine', 0.02);

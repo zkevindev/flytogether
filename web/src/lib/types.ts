@@ -5,7 +5,8 @@ export type Move = {
   piece_id: string; label: string; from: number; to: number; captured: string[]; blocked?: string[];
   jump: boolean; fly: boolean; launch: boolean; finish: boolean; summary: string;
 };
-export type GameEvent = { id: string; kind: string; text: string; player_id?: string; piece_id?: string; dice_rolls?: number[] };
+export type PropEffect = {piece_id:string;from:number;to:number;kind:string};
+export type GameEvent = { prop_id?:string; effects?:PropEffect[]; id: string; kind: string; text: string; player_id?: string; piece_id?: string; dice_rolls?: number[] };
 export type BoardSpec = {
   id: string; name: string; layout: 'cross' | 'circle'; ring_length: number;
   home_length: number; finish: number; jump_length: number; fly_from: number; fly_to: number;

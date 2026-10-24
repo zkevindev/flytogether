@@ -58,3 +58,11 @@ test('winning movement and its fanfare wait for the popup too',()=>{
  assert.equal(position(p),56);assert.deepEqual(cuesFor(p.effect.events),['roll']);
  p=next(p);assert.equal(position(p),58);assert.deepEqual(cuesFor(p.effect.events),['win']);
 });
+
+test('area prop holds one board beat, ignores duplicate snapshots and discards on pause',()=>{
+ let p=sync(initialPresentation,game(1,12,[]));
+ const e=event('escort','prop','团队护航',{prop_id:'escort',effects:[{piece_id:'p0-0',from:12,to:12,kind:'escort'}]});
+ p=sync(p,game(2,12,[e]));assert.equal(p.active.kind,'board');assert.equal(p.active.duration,900);assert.equal(p.effect.events[0].prop_id,'escort');
+ const duplicate=sync(p,game(2,12,[e]));assert.equal(duplicate,p);
+ p=sync(p,game(2,12,[e]),'paused');assert.equal(p.effect,undefined);assert.equal(p.active,undefined);
+});

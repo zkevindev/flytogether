@@ -96,6 +96,7 @@ await noGPU.addInitScript(()=>{
  HTMLCanvasElement.prototype.getContext=function(type,...args){return ['webgl','webgl2'].includes(type)?null:original.call(this,type,...args);};
 });
 noGPU.on('pageerror',e=>errors.push(e.message));
+const noGPUCreated=await noGPU.request.post('/api/rooms',{data:opts});assert.equal(noGPUCreated.status(),201);
 await noGPU.goto(new URL('/play', process.env.QA_BASE_URL).href,{waitUntil:'networkidle'});
 await noGPU.getByText('当前浏览器暂时无法显示 3D',{exact:false}).waitFor({state:'visible'});
 const noGPUSession=await (await noGPU.request.get('/api/session')).json();

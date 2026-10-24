@@ -31,7 +31,7 @@ export function presentationReducer(state: Presentation, action: PresentationAct
     kind: 'dice', id: event.id, roll: { id: event.id, text: event.text, values: event.dice_rolls! }, events: [event],
   }));
   const events = fresh.filter(event => event.kind !== 'rolled');
-  const movement = events.some(event => event.kind === 'moved' || (event.kind === 'prop' && event.piece_id));
+  const movement = events.some(event => event.kind === 'moved' || (event.kind === 'prop' && (event.piece_id || event.effects?.length)));
   const frame: BoardBeat = { kind: 'board', id: `${game.id}:${game.version}`, game, events, duration: movement ? 900 : 0 };
   const next: Presentation = { ...state, seen, queue: [...state.queue, ...rolls, frame] };
   return next.active ? next : activate(next);

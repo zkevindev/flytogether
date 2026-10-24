@@ -51,6 +51,7 @@ try{
  await capture('onboarding.png',page.getByRole('dialog',{name:'新手飞行指南'}));
  await page.getByRole('button',{name:'跳过新手引导',exact:true}).click();
  await page.getByRole('button',{name:/道具口袋/}).click();
+ await page.locator('.prop-card').first().waitFor();assert.equal(await page.locator('.prop-card').count(),8);
  await capture('props.png',page.getByRole('dialog'));
  await page.getByRole('button',{name:'使用起飞卡',exact:true}).click();
  await page.waitForFunction(()=>!document.querySelector('.roll-button')?.disabled);
@@ -81,6 +82,6 @@ try{
  await capture('play-mobile.png');
  assert.equal(await page.evaluate(()=>window.__docsMicrophone),0);
  assert.deepEqual(errors,[]);
- await writeFile(join(output,'manifest.json'),JSON.stringify({captured_at:new Date().toISOString(),app_commit:process.env.QA_SOURCE_COMMIT,browser:browser.version(),scope:'Actual app UI: home, create, board, five props, random dice, coaching preview and takeoff; two human seats; voice switched off; no mocked state or microphone',captures,console_errors:0,microphone_requests:0},null,2)+'\n');
+ await writeFile(join(output,'manifest.json'),JSON.stringify({captured_at:new Date().toISOString(),app_commit:process.env.QA_SOURCE_COMMIT,browser:browser.version(),scope:'Actual app UI: home, create, board, eight props, random dice, coaching preview and takeoff; two human seats; voice switched off; no mocked state or microphone',captures,console_errors:0,microphone_requests:0},null,2)+'\n');
  console.log(JSON.stringify({result:'PASS',screenshots:captures.length,console_errors:errors.length,microphone_requests:0,app_commit:process.env.QA_SOURCE_COMMIT}));
 }finally{await browser.close();}
