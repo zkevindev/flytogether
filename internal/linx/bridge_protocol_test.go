@@ -30,10 +30,11 @@ type protocolHarness struct {
 	holdAck           atomic.Bool
 }
 
-func newProtocolHarness(t *testing.T, r *room.Room, wake bool, frequency string) *protocolHarness {
+func newProtocolHarness(t *testing.T, r *room.Room, wake bool, frequency string, mcpPublicURL ...string) *protocolHarness {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	h := &protocolHarness{ctx: ctx, requests: make(chan map[string]any, 128), finished: make(chan error, 1)}
+	withMCP := len(mcpPublicURL) > 0 && mcpPublicURL[0] != ""
 	if _, err := r.SetVoiceSettings(room.VoiceSettings{WakeEnabled: wake, WakeWord: "小灵同学"}); err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +68,11 @@ func newProtocolHarness(t *testing.T, r *room.Room, wake bool, frequency string)
 				if writeEvent(ctx, c, map[string]any{"type": "session.updated", "session": event["session"]}) != nil {
 					return
 				}
+				if withMCP {
+					if writeEvent(ctx, c, map[string]any{"type": "mcp_list_tools.completed"}) != nil {
+						return
+					}
+				}
 			}
 			select {
 			case h.requests <- event:
@@ -78,6 +84,9 @@ func newProtocolHarness(t *testing.T, r *room.Room, wake bool, frequency string)
 	old := http.DefaultClient
 	http.DefaultClient = provider.Client()
 	h.bridge = &Bridge{Config: Config{URL: strings.Replace(provider.URL, "https:", "wss:", 1) + "/v1/realtime", APIKey: "test", Model: "test"}, Observe: func(e room.DiagnosticEvent) { h.mu.Lock(); defer h.mu.Unlock(); h.traces = append(h.traces, e) }}
+	if withMCP {
+		h.bridge.MCP = NewReadonlyMCP(mcpPublicURL[0])
+	}
 	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		workers.Add(1)
 		defer workers.Done()
@@ -232,5 +241,95 @@ func TestBridgeProtocolRejectsInvalidBrowserFrames(t *testing.T) {
 				t.Fatal("invalid frame leaked slot or voice state")
 			}
 		})
+	}
+}
+
+func TestBridgeCompletesGameFunctionWhenNativeMCPCallFails(t *testing.T) {
+	r := room.New(game.Options{Names: []string{"孩子", "家长"}, Demo: true})
+	h := newProtocolHarness(t, r, false, "quiet", "https://flytogether.example")
+	h.send(t, map[string]any{"type": "conversation.item.input_audio_transcription.completed", "item_id": "mixed-tools", "transcript": "给我讲讲现在的星际救援任务"})
+	readUntil(t, h.ctx, h.browser, "stt")
+	update := spectatorRequest(t, h.ctx, h.requests, "session.update")
+	encoded, _ := json.Marshal(update["session"])
+	if !strings.Contains(string(encoded), `"type":"mcp"`) {
+		t.Fatalf("Realtime session did not import the native MCP tool: %s", encoded)
+	}
+	waitRequest(t, h.ctx, h.requests, "response.create")
+	h.send(t, map[string]any{"type": "response.created", "response": map[string]any{"id": "mixed-response"}})
+	readUntil(t, h.ctx, h.browser, "response.created")
+	h.send(t, map[string]any{"type": "response.output_item.done", "response_id": "mixed-response", "item": map[string]any{
+		"type": "function_call", "name": "roll_dice", "call_id": "roll-from-mixed-response", "arguments": `{}`,
+	}})
+	h.send(t, map[string]any{"type": "response.mcp_call.in_progress", "response_id": "mixed-response", "item_id": "mission-query"})
+	h.send(t, map[string]any{"type": "response.done", "response": map[string]any{"id": "mixed-response", "status": "completed"}})
+
+	var output map[string]any
+	for output == nil {
+		select {
+		case request := <-h.requests:
+			if request["type"] != "conversation.item.create" {
+				continue
+			}
+			item, _ := request["item"].(map[string]any)
+			if item["type"] == "function_call_output" && item["call_id"] == "roll-from-mixed-response" {
+				output = item
+			}
+		case <-h.ctx.Done():
+			t.Fatal("the game function result was lost when the Realtime response also invoked MCP")
+		}
+	}
+	var rolled game.State
+	if err := json.Unmarshal(r.Snapshot().State, &rolled); err != nil {
+		t.Fatal(err)
+	}
+	if rolled.Version != 2 || rolled.Phase != "move" || rolled.Players[0].Stats.Rolls != 1 {
+		t.Fatalf("mixed-response game function was not executed exactly once: %+v", rolled)
+	}
+	select {
+	case request := <-h.requests:
+		if request["type"] == "response.create" {
+			t.Fatal("the model continued before the pending MCP call completed")
+		}
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	h.send(t, map[string]any{"type": "response.mcp_call.failed", "response_id": "mixed-response", "item_id": "mission-query"})
+	continuation := spectatorRequest(t, h.ctx, h.requests, "response.create")
+	response := continuation["response"].(map[string]any)
+	if response["tool_choice"] != "none" || !strings.Contains(response["instructions"].(string), "不要猜测棋局状态") {
+		t.Fatalf("MCP failure continuation may fabricate a result: %#v", response)
+	}
+	h.send(t, map[string]any{"type": "response.created", "response": map[string]any{"id": "mixed-failure-answer"}})
+	readUntil(t, h.ctx, h.browser, "response.created")
+	h.send(t, map[string]any{"type": "response.done", "response": map[string]any{"id": "mixed-failure-answer", "status": "completed"}})
+	readUntil(t, h.ctx, h.browser, "response.done")
+}
+
+func TestBridgeContinuesAfterNativeMCPCallCompletes(t *testing.T) {
+	r := room.New(game.Options{Mode: "coop", Names: []string{"孩子", "家长"}, MissionID: "launch-formation"})
+	h := newProtocolHarness(t, r, false, "quiet", "https://flytogether.example")
+	h.send(t, map[string]any{"type": "conversation.item.input_audio_transcription.completed", "item_id": "mission-question", "transcript": "讲个宇宙笑话"})
+	readUntil(t, h.ctx, h.browser, "stt")
+	spectatorRequest(t, h.ctx, h.requests, "session.update")
+	waitRequest(t, h.ctx, h.requests, "response.create")
+	h.send(t, map[string]any{"type": "response.created", "response": map[string]any{"id": "mission-answer"}})
+	readUntil(t, h.ctx, h.browser, "response.created")
+	h.send(t, map[string]any{"type": "response.mcp_call.in_progress", "response_id": "mission-answer", "item_id": "mission-progress"})
+	h.send(t, map[string]any{"type": "response.done", "response": map[string]any{"id": "mission-answer", "status": "completed"}})
+	select {
+	case request := <-h.requests:
+		if request["type"] == "response.create" {
+			t.Fatal("the model continued before the MCP tool returned its result")
+		}
+	case <-time.After(100 * time.Millisecond):
+	}
+	h.send(t, map[string]any{"type": "response.output_item.done", "response_id": "mission-answer", "item": map[string]any{"id": "mission-progress", "type": "mcp_call", "name": "get_mission_progress", "output": `{"status":"active","progress":0}`}})
+	waitRequest(t, h.ctx, h.requests, "response.create")
+	h.send(t, map[string]any{"type": "response.created", "response": map[string]any{"id": "mission-answer-final"}})
+	readUntil(t, h.ctx, h.browser, "response.created")
+	h.send(t, map[string]any{"type": "response.done", "response": map[string]any{"id": "mission-answer-final", "status": "completed"}})
+	readUntil(t, h.ctx, h.browser, "response.done")
+	if state := protocolState(t, r); state.Version != 1 || state.Mission == nil || state.Mission.Progress != 0 {
+		t.Fatalf("native MCP question mutated mission/game state: %+v", state)
 	}
 }

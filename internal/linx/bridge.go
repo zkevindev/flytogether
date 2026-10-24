@@ -303,6 +303,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	// negotiated session configuration.
 	awaitSession, awaitTools := true, mcpTool != nil
 	setupCtx, setupCancel := context.WithTimeout(ctx, 12*time.Second)
+	defer setupCancel()
 	for awaitSession || awaitTools {
 		kind, data, e := up.Read(setupCtx)
 		if e != nil {
@@ -419,6 +420,21 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	deferredMCPDone := map[string]bool{}
 	failedMCP := map[string]bool{}
 	seenInputs := map[string]bool{}
+	continueMCPResponse := func(responseID string) error {
+		if !deferredMCPDone[responseID] || len(pendingMCP[responseID]) > 0 {
+			return nil
+		}
+		delete(deferredMCPDone, responseID)
+		delete(grants, responseID)
+		request := map[string]any{"type": "response.create"}
+		if failedMCP[responseID] {
+			request["response"] = map[string]any{"tool_choice": "none", "instructions": "棋局只读查询工具暂时不可用。请简短说明目前无法读取实时棋局信息，不要猜测棋局状态或任务进度。"}
+		}
+		if err := sendUp(request); err != nil {
+			return errors.New("灵矽无法继续生成MCP查询回复")
+		}
+		return nil
+	}
 	hostActive := func() bool { return pendingHost || len(hostIDs) > 0 }
 	cancelHost := func() {
 		if !hostActive() {
@@ -884,28 +900,41 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				delete(pendingMCP[event.ResponseID], event.ItemID)
 			}
 			trace(room.DiagnosticEvent{Kind: "mcp", InputID: responseInputs[event.ResponseID], Ref: event.ItemID, Action: "readonly_call", Code: code})
-			if deferredMCPDone[event.ResponseID] && len(pendingMCP[event.ResponseID]) == 0 {
-				delete(deferredMCPDone, event.ResponseID)
-				delete(grants, event.ResponseID)
-				request := map[string]any{"type": "response.create"}
-				if failedMCP[event.ResponseID] {
-					request["response"] = map[string]any{"tool_choice": "none", "instructions": "棋局只读查询工具暂时不可用。请简短说明目前无法读取实时棋局信息，不要猜测棋局状态或任务进度。"}
-				}
-				if e := sendUp(request); e != nil {
-					return errors.New("灵矽无法继续生成MCP查询回复")
-				}
+			if e := continueMCPResponse(event.ResponseID); e != nil {
+				return e
 			}
 			continue
-		case "response.output_item.done":
+		case "response.output_item.done", "conversation.item.done":
 			if !inFlight || !allowModelTools || grants[event.ResponseID] != currentToken {
 				continue
 			}
 			var body struct {
 				Item functionCall `json:"item"`
 			}
-			if json.Unmarshal(event.Raw, &body) == nil && body.Item.Type == "function_call" {
+			if json.Unmarshal(event.Raw, &body) != nil {
+				continue
+			}
+			switch body.Item.Type {
+			case "function_call":
+				if event.Type != "response.output_item.done" {
+					continue
+				}
 				body.Item.Grant = grants[event.ResponseID]
 				calls[event.ResponseID] = append(calls[event.ResponseID], body.Item)
+			case "mcp_call":
+				seenMCP[event.ResponseID] = true
+				if pendingMCP[event.ResponseID] == nil {
+					pendingMCP[event.ResponseID] = map[string]bool{}
+				}
+				itemID := event.ItemID
+				if itemID == "" {
+					itemID = body.Item.ID
+				}
+				delete(pendingMCP[event.ResponseID], itemID)
+				trace(room.DiagnosticEvent{Kind: "mcp", InputID: responseInputs[event.ResponseID], Ref: itemID, Action: "readonly_call", Code: "completed"})
+				if e := continueMCPResponse(event.ResponseID); e != nil {
+					return e
+				}
 			}
 		case "response.done":
 			entry := responseDiagnostic(event)
@@ -938,6 +967,23 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			_ = json.Unmarshal(event.Raw, &body)
 			if body.Response.Status == "completed" && seenMCP[event.ResponseID] {
+				// A Realtime response can include both native MCP calls and regular
+				// game function calls. MCP runs remotely, while game calls are
+				// executed by this bridge; return every function result before
+				// asking the model to continue, and wait for MCP if it is still in
+				// flight.
+				for _, call := range pending {
+					output := b.executeTool(r, call)
+					code := "completed"
+					if strings.Contains(output, `"error"`) {
+						code = "rejected"
+					}
+					trace(room.DiagnosticEvent{Kind: "tool", InputID: responseInputs[event.ResponseID], Ref: call.CallID, Action: call.Name, Code: code})
+					item := map[string]any{"type": "conversation.item.create", "item": map[string]any{"type": "function_call_output", "call_id": call.CallID, "output": output}}
+					if e := sendUp(item); e != nil {
+						return errors.New("游戏操作结果没有送回灵矽")
+					}
+				}
 				if len(pendingMCP[event.ResponseID]) > 0 {
 					deferredMCPDone[event.ResponseID] = true
 					continue
@@ -1059,6 +1105,7 @@ func (e *realtimeEvent) UnmarshalJSON(data []byte) error {
 }
 
 type functionCall struct {
+	ID        string `json:"id"`
 	Type      string `json:"type"`
 	Name      string `json:"name"`
 	CallID    string `json:"call_id"`
