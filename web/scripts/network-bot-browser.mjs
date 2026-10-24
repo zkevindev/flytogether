@@ -23,7 +23,7 @@ const wait = async (predicate, message, timeout = 20000) => {
   throw new Error(message);
 };
 const context = async (mobile = false) => {
-  const c = await browser.newContext({ baseURL: base, viewport: mobile ? { width: 390, height: 844 } : { width: 1360, height: 1000 } }); contexts.push(c);
+  const c = await browser.newContext({ baseURL: base, viewport: mobile ? { width: 390, height: 844 } : { width: 1360, height: 1000 } }); contexts.push(c);c.setDefaultTimeout(15000);c.setDefaultNavigationTimeout(20000);
   await c.addInitScript(() => {
     localStorage.setItem('fly-tutorial-v1', 'skipped'); localStorage.setItem('fly-auto-voice', 'off'); localStorage.setItem('fly-host-voice', 'off');
     window.__botMic = 0; navigator.mediaDevices.getUserMedia = async () => { window.__botMic++; throw new Error('Click-only QA must not capture microphone'); };

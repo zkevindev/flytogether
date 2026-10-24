@@ -1,0 +1,61 @@
+{
+  "captures": [
+    {
+      "file": "delegate-confirm.png",
+      "app_commit": "cb9cb4b",
+      "scope": "deployed Chrome, actual random network game; no state/dice injection; microphone off",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "sha256": "0caf8f1725506b51a9da547403e7d0842aebf804fb65b2c68fa0fd09c9d88005"
+    },
+    {
+      "file": "delegated-desktop.png",
+      "app_commit": "cb9cb4b",
+      "scope": "deployed Chrome, actual random network game; no state/dice injection; microphone off",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "sha256": "d5a536bf4a32bbf8750583ba3ad8d8fdffee0a466d7cf0d6a2c4a4d22a627bb7"
+    },
+    {
+      "file": "reclaim-mobile.png",
+      "app_commit": "cb9cb4b",
+      "scope": "deployed Chrome, actual random network game; no state/dice injection; microphone off",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "ef401a75e99731f5b8a0561b11cdc34b058a3bd9f35666b8b91e50566840a3eb"
+    },
+    {
+      "file": "offline-grace.png",
+      "app_commit": "cb9cb4b",
+      "scope": "deployed Chrome, actual random network game; no state/dice injection; microphone off",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "sha256": "036e9a1e47eafc923bef2083dedd250fa8778ba68f7727627c80fab3ad246593"
+    },
+    {
+      "file": "offline-delegated.png",
+      "app_commit": "cb9cb4b",
+      "scope": "deployed Chrome, actual random network game; no state/dice injection; microphone off",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "sha256": "fd4a0b0f4aa7534828e64953153ce939b6fa61154f9561c77d294d86f7610231"
+    },
+    {
+      "file": "restored-delegation.png",
+      "app_commit": "cb9cb4b",
+      "scope": "local actual QA process restart using saved SQLite and original Chrome cookies; no state/dice injection; microphone off",
+      "sha256": "643ee686e655d7358226eb06174e7743b10661d3e4498b6a56bac592b5a09034"
+    }
+  ],
+  "mobile_scope": "Desktop Chrome viewport, not physical phone acceptance"
+}

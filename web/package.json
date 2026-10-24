@@ -43,7 +43,8 @@
     "test:ownership:browser": "node scripts/ownership-browser.mjs",
     "test:props:browser": "node scripts/props-browser.mjs",
     "test:props:voice": "node scripts/props-voice-browser.mjs",
-    "test:delegation:browser": "node scripts/delegation-browser.mjs"
+    "test:delegation:browser": "node scripts/delegation-browser.mjs",
+    "test:delegation:restart": "node scripts/delegation-restart-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",
