@@ -1,5 +1,5 @@
 import { socketURL } from './types';
-import type { CompanionPreferences } from './types';
+import type { CompanionPreferences, Room } from './types';
 
 type RealtimeMessage = { type: string; [key: string]: any };
 
@@ -29,7 +29,7 @@ export class VoiceClient {
   private hostResponses = new Set<string>();
   private activeSources = new Set<AudioBufferSourceNode>();
 
-  constructor(private roomID: string, private onState: (s: string) => void, private onText: (s: string, who: string) => void, private onError: (s: string) => void, private companion: CompanionPreferences = {style:'warm',frequency:'normal'}) {}
+  constructor(private roomID: string, private onState: (s: string) => void, private onText: (s: string, who: string) => void, private onError: (s: string) => void, private companion: CompanionPreferences = {style:'warm',frequency:'normal'}, private onRoom?: (room: Room) => void) {}
 
   setCompanion(value: CompanionPreferences) {
     this.companion = value;
@@ -97,6 +97,12 @@ export class VoiceClient {
             if (this.waitingForWake && !this.hostLive) {
               this.clearPlayback(); this.generationDone = true; this.onState('standby');
             } else if (!this.waitingForWake && wasWaiting) this.onState('thinking');
+          } else if (message.type === 'game_action') {
+            if (message.room?.id !== this.roomID || !message.room?.state?.id) return;
+            // Committed actions remain real after audio is interrupted. Let the
+            // shared snapshot reducer deduplicate this against the game socket.
+            this.onRoom?.(message.room);
+            if (!this.mutedUntilInput && typeof message.text === 'string') this.onText(message.text, 'linx');
           } else if (message.type === 'host_cue') {
             this.expectHost = true;
             if (typeof message.text === 'string' && message.text) this.onText(message.text, 'linx');

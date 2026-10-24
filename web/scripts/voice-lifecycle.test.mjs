@@ -168,3 +168,12 @@ test('changing preferences cancels a created host response without muting the ne
  ws.emit({type:'host_cancel'});assert.equal(playback[0].stopped,true);ws.emit(audio('host'));assert.equal(playback.length,1);
  ws.emit({type:'stt',text:'现在轮到谁'});ws.emit({type:'response.created',response:{id:'answer'}});ws.emit(audio('answer'));assert.equal(playback.length,2);client.disconnect();
 });
+
+test('committed voice receipts synchronize the board without model text and cannot target another room',async()=>{
+ const t=setup(),snapshots=[];t.client=new VoiceClient('room',s=>t.states.push(s),(text,who)=>t.texts.push({text,who}),e=>t.errors.push(e),{style:'warm',frequency:'normal'},r=>snapshots.push(r));
+ const pending=t.client.connect();await tick();const ws=sockets[0];ws.emit({type:'hello'});await pending;
+ const room={id:'room',seq:5,state:{id:'game',version:2,history:[{id:'roll',kind:'rolled',dice_rolls:[3]}]}};
+ ws.emit({type:'game_action',room,text:'实际掷出3点。'});assert.equal(snapshots.length,1);assert.deepEqual(snapshots[0],room);assert.equal(t.texts.at(-1).text,'实际掷出3点。');
+ ws.emit({type:'game_action',room:{...room,id:'another-room'},text:'不可见'});assert.equal(snapshots.length,1);assert.equal(t.texts.at(-1).text,'实际掷出3点。');
+ t.client.stopPlayback();const texts=t.texts.length;ws.emit({type:'game_action',room:{...room,seq:6},text:'打断后仍不播报'});assert.equal(snapshots.length,2);assert.equal(t.texts.length,texts);assert.equal(playback.length,0);t.client.disconnect();
+});

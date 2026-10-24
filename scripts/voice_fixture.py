@@ -9,7 +9,7 @@ import tempfile
 import wave
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--scenario', choices=['flight', 'lucky', 'coach'], default='flight')
+parser.add_argument('--scenario', choices=['flight', 'lucky', 'coach', 'roll'], default='flight')
 parser.add_argument('--output-dir', type=Path, required=True)
 args = parser.parse_args()
 if not shutil.which('say') or not shutil.which('ffmpeg'):
@@ -20,6 +20,8 @@ rate = 16000
 pcm = bytearray(rate * 2 * 8)
 segments = []
 phrases = [('现在轮到谁', 8), ('使用起飞卡', 10), ('请帮我掷骰子', 10), ('让小熊号起飞', 10), ('现在轮到谁', 10), ('不要掷骰子', 8)]
+if args.scenario == 'roll':
+    phrases = [('好，掷骰子', 10), ('不要掷骰子', 9), ('好，骰子', 9), ('刚才掷骰子了吗', 10), ('好，掷骰子', 8)]
 if args.scenario == 'coach':
     phrases = [('帮我选', 10), ('另一架呢', 10), ('安全一点', 10), ('刚才那个', 10), ('就它', 10), ('不要掷骰子', 8)]
 if args.scenario == 'lucky':

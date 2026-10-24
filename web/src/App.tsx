@@ -299,14 +299,14 @@ export default function App() {
     voice.current?.disconnect();
     const client = new VoiceClient(r.id, setVoiceState, (text, who) => setSpeech({ text, who }), message => {
       setAutoVoiceError(message); setToast(message);
-    }, companionRef.current);
+    }, companionRef.current, next => { if (roomRef.current?.id === next.id) accept(next); });
     voice.current = client;
     try { await client.connect(); } catch (error) {
       if (voice.current !== client) return;
       const message = error instanceof Error ? error.message : '语音连接失败';
       setAutoVoiceError(message); setToast(message);
     }
-  }, []);
+  }, [accept]);
   const changeCompanion = (next: CompanionPreferences) => {
     localStorage.setItem('fly-companion', JSON.stringify(next));
     narrator.current.stop(); voice.current?.setCompanion(next); setCompanion(next);
