@@ -41,7 +41,7 @@ try{
  await page.getByRole('button',{name:'创建游戏',exact:true}).click();
  const setup=page.getByRole('dialog',{name:'创建家庭房间'});
  await setup.getByLabel('房间名称',{exact:true}).fill('周末家庭机场');
- await setup.getByRole('checkbox',{name:/邀请灵矽加入/}).uncheck();
+ await setup.getByRole('checkbox',{name:/添加机器人陪玩/}).uncheck();
  await setup.getByRole('button',{name:'2 位',exact:true}).click();
  await capture('setup.png',setup);
  await setup.getByRole('button',{name:'创建并开始游戏',exact:true}).click();

@@ -15,7 +15,7 @@ const wait=async(fn,message)=>{for(let i=0;i<100;i++){if(await fn())return;await
 try {
  const h=await context(),g=await context(true),x=await context();let hp=await page(h),gp=await page(g);
  await hp.goto(base,{waitUntil:'networkidle'});await hp.getByRole('button',{name:'创建游戏',exact:true}).click();
- await hp.getByRole('checkbox',{name:/多人联网邀请房间/}).check();await hp.getByRole('button',{name:'2 位',exact:true}).click();
+ await hp.getByRole('checkbox',{name:/多人联网邀请房间/}).check();await hp.getByRole('checkbox',{name:/添加机器人陪玩/}).uncheck();await hp.getByRole('button',{name:'2 位',exact:true}).click();
  await hp.getByRole('textbox',{name:'第 1 位飞行员昵称'}).fill('房主');
  await hp.getByRole('button',{name:'创建邀请房间',exact:true}).click();
  await hp.getByRole('region',{name:'联网准备区'}).waitFor();let r=await session(h);assert.ok(r.network&&r.me.host);const roomID=r.id;

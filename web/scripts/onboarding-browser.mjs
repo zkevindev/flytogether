@@ -28,7 +28,7 @@ try{
  const t=await setup({seen:false});await t.page.goto(process.env.QA_BASE_URL,{waitUntil:'networkidle'});
  assert.equal(await t.page.getByRole('dialog',{name:'新手飞行指南'}).count(),0,'home does not force a tutorial');
  await t.page.getByRole('button',{name:'创建游戏',exact:true}).click();const form=t.page.getByRole('dialog',{name:'创建家庭房间'});
- await form.getByRole('checkbox',{name:/邀请灵矽加入/}).uncheck();await form.getByRole('button',{name:'2 位',exact:true}).click();
+ await form.getByRole('checkbox',{name:/添加机器人陪玩/}).uncheck();await form.getByRole('button',{name:'2 位',exact:true}).click();
  await form.getByRole('button',{name:'创建并开始游戏',exact:true}).click();
  console.log('QA: room created, waiting for first guide');
  const guide=t.page.getByRole('dialog',{name:'新手飞行指南'});await guide.waitFor({state:'visible'});const initial=await t.state();
