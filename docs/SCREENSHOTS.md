@@ -113,4 +113,4 @@ npm --prefix web run capture:docs
 
 ## 星际救援主题与观赛任务卡（#62）
 
-[mission/manifest.json](images/mission/manifest.json) 记录同屏桌面合作任务和联网观赛手机页两张真实 Chrome 截图。截图由 Go 创建的救援任务与服务端随机规则局生成，观赛页显示同一任务目标及进度；不是静态设计稿。
+[mission/manifest.json](images/mission/manifest.json) 记录同屏桌面合作任务和联网观赛手机页两张真实 Chrome 截图。截图由 Go 创建的救援任务与服务端随机骰子/合法走棋生成，手机观赛图显示跨设备同步后的 `1/2` 进度；不注入棋盘或点数，也不是静态设计稿。复跑见[合作任务验收](QA-MISSIONS.md)。

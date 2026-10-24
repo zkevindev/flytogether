@@ -1,6 +1,6 @@
 # 一起飞 · 项目进展
 
-- 更新日期：2026-10-24（Asia/Shanghai）
+- 更新日期：2026-10-25（Asia/Shanghai）
 - 当前阶段：P1陪玩风格/频率、亲子/经典预设与按需棋盘已部署；用户确认亲子/实体手机完成；家庭档案/真实跨局历史已交付；轻量棋盘/减少动画/键盘首版已交付；星河救援合作挑战已合并；玩法平衡继续收集真实家庭反馈
 - 比赛安排：三天两晚，一人开发
 - 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
@@ -13,7 +13,7 @@
 | M2：家庭飞行棋玩法 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 点击玩法和三种棋盘已同步到 main；实际浏览器演示通过 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
 | M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | PR #58 已合并；浏览器断网恢复、可见性事件和 30 分钟累计回复队列模拟已完成；真实手机切网/后台/声学与灵矽长连仍待现场 | [PR #58](https://github.com/zkevindev/flytogether/pull/58) · merge `802c893` · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 | 产品化 1.0 | [#17](https://github.com/zkevindev/flytogether/issues/17) | 星河救援合作挑战和首轮试玩平衡流程已合并；跨家庭玩法/道具反馈仍在收集 | [PR #59](https://github.com/zkevindev/flytogether/pull/59) · merge `29e4019` · [PLAYTEST-BALANCE](PLAYTEST-BALANCE.md) |
-| 星际救援与 Realtime MCP | [#62](https://github.com/zkevindev/flytogether/issues/62) | 主题、合作任务卡和只读MCP实现完成；PR开放，CI/Review进行中 | [PR #63](https://github.com/zkevindev/flytogether/pull/63) · `codex/issue-62-theme-tasks` |
+| 星际救援与 Realtime MCP | [#62](https://github.com/zkevindev/flytogether/issues/62) | 主题、任务卡和 MCP 已合并；审计修复观赛端进度展示滞后，PR #65 待合并 | [PR #63](https://github.com/zkevindev/flytogether/pull/63) · [PR #64](https://github.com/zkevindev/flytogether/pull/64) · [PR #65](https://github.com/zkevindev/flytogether/pull/65) |
 | 自定义语音唤醒（历史） | [#4](https://github.com/zkevindev/flytogether/issues/4) | 历史验收已完成，当前交互由 #14 直接对话替代 | [a85e63b](https://github.com/zkevindev/flytogether/commit/a85e63b)、[87a0d09](https://github.com/zkevindev/flytogether/commit/87a0d09)，直接 main |
 | 棋盘重做 | [#5](https://github.com/zkevindev/flytogether/issues/5) | 四角机场、连续彩色航线、中央骰子、放大和手机布局已实现并演示 | 直接 main，提交回链见 Issue |
 | 家庭道具 | [#6](https://github.com/zkevindev/flytogether/issues/6) | 三种道具、库存、AI 与语音用卡已实现 | [37b1a7c](https://github.com/zkevindev/flytogether/commit/37b1a7c)，界面提交见 Issue |
@@ -370,8 +370,10 @@ Go race/vet、前端单测/构建及Chrome实际道具流程通过；11项道具
 
 道具平衡继续按多个家庭、自然结束对局和主观反馈收集样本；本轮没有依据不足的任意调参。PR #59 已回链 [Issue #17](https://github.com/zkevindev/flytogether/issues/17)，后续真实反馈继续在该 Issue 记录。
 
-## 星际救援主题包与 Realtime MCP（#62，进行中）
+## 星际救援主题包与 Realtime MCP（#62）
 
-实现内容：合作局增加三种可选任务卡及 Go 权威进度；任务事件随已提交的走棋记录、持久化、重连与同配置再玩处理。灵矽 Realtime 通过原生 MCP 查询当前绑定对局的摘要、任务进度、规则和合法行动；MCP bearer 短时、哈希存储、可撤销并限流，工具只读，不替代现有受 Go 校验的写操作。
+实现内容：合作局提供可选主题和三种服务端白名单任务卡；进度从已提交的玩家统计派生，自动幂等、持久化并随联网房间同步。无额外任务时仍可按标准合作规则游玩；任务自然完成/失败、中途结束和重开均显示权威状态。装饰奖励不改变骰子、道具库存或胜负。
 
-本地 `go test ./...`、前端生产构建与单测通过；Chrome 合作任务/邀请回归、产品页多视口、观赛自然胜局与服务重启恢复通过；灵矽实际 Realtime 合成音频联调的观赛私聊回归通过。产品页和观赛页共8张截图已从实际运行界面重拍，来源和 SHA-256 已更新至图片清单。PR、CI 和合并仍待完成，故 Issue 尚未标记完成。
+灵矽 Realtime 使用原生只读 MCP 查询当前房间摘要、任务进度、规则与合法行动。短期 bearer 按房间/玩家会话绑定，哈希存储、可撤销和限流；失败/迟到工具事件不播报成功，玩家写操作仍通过 Go 规则与授权链路。公网真实 Realtime 已成功导入工具、查询任务并完整语音续答，查询前后游戏版本和任务进度不变。
+
+验证：Go race/vet、前端全量单测/生产构建通过；真实 Chrome 检查桌面房主、独立手机玩家与观赛手机，覆盖任务 `0/2→1/2→2/2`、手机断线期间完成后回位、重复请求幂等、刷新恢复、减少动画/静音偏好及自然完成/重开，页面错误为 0。观赛端之前读取动画队列中的旧棋局快照，现改为显示房间服务端最新任务状态。产品截图、观赛问答图和任务图均更新来源哈希；详情见 [合作任务验收](QA-MISSIONS.md)、[MCP验收](QA-MCP.md) 与 [截图说明](SCREENSHOTS.md)。主题和 MCP 由 [PR #63](https://github.com/zkevindev/flytogether/pull/63) 合并，截图与 MCP 实测记录由 [PR #64](https://github.com/zkevindev/flytogether/pull/64) 合并，多端回归与进度显示修复由 [PR #65](https://github.com/zkevindev/flytogether/pull/65) 跟踪。
