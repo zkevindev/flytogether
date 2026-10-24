@@ -22,6 +22,7 @@ npm --prefix web run test:mcp:realtime
 python3 scripts/voice_fixture.py --scenario mcp-summary --output-dir /tmp/flytogether-mcp-summary
 QA_BASE_URL=https://你的测试域名 \
 QA_MCP_MODE=quick \
+QA_MCP_EXPECT_TOOL=get_game_summary \
 QA_AUDIO_FILE=/tmp/flytogether-mcp-summary/browser-input.wav \
 QA_OUTPUT_DIR=/tmp/flytogether-mcp-summary-live \
 npm --prefix web run test:mcp:realtime
@@ -35,6 +36,7 @@ npm --prefix web run test:mcp:realtime
 
 - Go 的 MCP Streamable HTTP 协议用 MCP Go SDK 实际连接，验证四个只读工具导入、任务查询、未授权拒绝和会话撤销。
 - Go 回归覆盖轻快、完整飞行和合作模式；无任务的对局明确返回没有额外任务，主题、当前玩家及对局摘要保持通用可读。桥接按问句选择摘要、规则、合法走法或任务工具。
+- 公网 Realtime 浏览器回归除等待回复外，还必须观察到 MCP 成功状态和具体工具名；只根据上下文播报而未调用工具会判为失败。
 - 浏览器桥接测试模拟 Realtime 异步成功、失败、迟到完成和同一响应混合 MCP/Go 函数调用。
 - 本回归在真实灵矽 Realtime 上验证项目 MCP 的工具导入、实际工具调用、任务问答续答和棋局只读不变；它使用合成 WAV，不代表实体麦克风或亲子现场验收。
 
