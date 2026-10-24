@@ -1,3 +1,4 @@
+import { FamilyPanel, ProfilePicker, avatarIcon } from './components/FamilyPanel';
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { AirplaneTilt, ArrowClockwise, ArrowRight, ArrowUpRight, Check, GearSix, House, Info, Microphone, Pause, Play, Plus, Stop, Question, Robot, SpeakerHigh, SpeakerSlash, Sparkle, Waveform, X } from '@phosphor-icons/react';
 import { Tutorial, tutorialPreference } from './components/Tutorial';
@@ -10,7 +11,7 @@ import { BoardLoader } from './components/BoardLoader';
 import { DiceRollModal } from './components/DiceRollModal';
 import { PropTray } from './components/PropTray';
 import { api, APIError, palette, socketURL } from './lib/types';
-import type { CompanionPreferences, Config, Game, Options, Piece, Player, Room } from './lib/types';
+import type { CompanionPreferences, Config, Family, Game, Options, Piece, Player, Room } from './lib/types';
 import { cuesFor, Sfx } from './lib/sfx';
 import { VoiceClient } from './lib/voice';
 import { initialPresentation, presentationReducer } from './lib/presentation';
@@ -25,7 +26,7 @@ const rules = (game: Game) => [
 ];
 
 function Avatar({ player, size = '' }: { player: Player; size?: string }) {
-  return <span className={'avatar ' + player.color + ' ' + size}>{player.ai ? <Robot weight="duotone" /> : <AirplaneTilt weight="fill" />}</span>;
+  return <span className={'avatar ' + player.color + ' ' + size}>{player.ai ? <Robot weight="duotone" /> : player.avatar ? <span aria-hidden="true">{avatarIcon(player.avatar)}</span> : <AirplaneTilt weight="fill" />}</span>;
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
@@ -39,6 +40,8 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
 export default function App() {
   const [invite, setInvite] = useState(() => new URLSearchParams(location.hash.slice(1)).get('join') || '');
   const [joinName, setJoinName] = useState('');
+  const [joinProfile, setJoinProfile] = useState('');
+  const [family,setFamily] = useState<Family>({profiles:[],matches:[],total:0});
   const [joinError, setJoinError] = useState('');
   const [resultDismissed, setResultDismissed] = useState('');
   const [screen, setScreen] = useState<'home' | 'play'>(() => location.pathname === '/play' ? 'play' : 'home');
@@ -72,7 +75,7 @@ export default function App() {
   const [presentation, present] = useReducer(presentationReducer, initialPresentation);
   const [boardZoom, setBoardZoom] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [modal, setModal] = useState<'setup' | 'rules' | 'end' | 'props' | 'invite' | 'discard' | 'audio' | 'companion' | null>(null);
+  const [modal, setModal] = useState<'setup' | 'rules' | 'end' | 'props' | 'invite' | 'discard' | 'audio' | 'companion' | 'family' | null>(null);
   const [setupNew, setSetupNew] = useState(false);
   const [options, setOptions] = useState<Options>(defaults);
   const [voiceState, setVoiceState] = useState('disconnected');
@@ -107,6 +110,7 @@ export default function App() {
     try {
       const [configuration, session] = await Promise.all([api<Config>('/api/config'), api<{ room: Room | null }>('/api/session')]);
       setConfig(configuration);
+      try { setFamily(await api<Family>('/api/family')); } catch { /* Family availability does not block the current game. */ }
       if (invite) { if (session.room) accept(session.room); return; }
       let next = session.room || await api<Room>('/api/rooms', defaults);
       // Migrate existing rooms too, so an old preference cannot restore wake gating.
@@ -267,7 +271,7 @@ export default function App() {
   const openSetup = (newRoom = false) => {
     if (busy || (lifecycle === 'playing' && (voiceBusy || current?.ai))) { setToast('请等这一回合结束后再调整。'); return; }
     setSetupNew(newRoom);
-    setOptions({ preset: state?.preset || 'custom', room_name: newRoom ? '新的家庭机场' : room?.name || defaults.room_name, difficulty: state?.difficulty || 'normal', waiting: true, names: state?.players.map(p => p.name) || defaults.names, board: state?.board.id || 'cross', mode: state?.mode || 'quick', ai: state?.players.some(p => p.ai) || false, demo: false, props: state?.props_enabled ?? true, network: newRoom ? false : !!room?.network });
+    setOptions({ profile_ids: room?.profile_ids?.map(id=>family.profiles.some(p=>p.id===id)?id:''), avatars:state?.players.map(p=>p.avatar||''), preset: state?.preset || 'custom', room_name: newRoom ? '新的家庭机场' : room?.name || defaults.room_name, difficulty: state?.difficulty || 'normal', waiting: true, names: state?.players.map(p => p.name) || defaults.names, board: state?.board.id || 'cross', mode: state?.mode || 'quick', ai: state?.players.some(p => p.ai) || false, demo: false, props: state?.props_enabled ?? true, network: newRoom ? false : !!room?.network });
     setModal('setup');
   };
   const restart = async (demo = false) => {
@@ -276,7 +280,7 @@ export default function App() {
     try {
       void narrator.current.unlock();
       voice.current?.disconnect();
-      let next = await api<Room>(setupNew ? '/api/rooms/new' : '/api/rooms/' + room.id + '/matches', { ...options, waiting: false, demo });
+      let next = await api<Room>(setupNew ? '/api/rooms/new' : '/api/rooms/' + room.id + '/matches', { ...options, profile_ids:options.names.map((_,i)=>options.network&&i>0||options.ai&&i===options.names.length-1?'':options.profile_ids?.[i]||''), avatars:options.names.map((_,i)=>options.network&&i>0||options.ai&&i===options.names.length-1?'':options.avatars?.[i]||''), waiting: false, demo });
       accept(next); setModal(null); navigate('play');
       if (next.status === 'waiting' && !next.network) {
         next = await api<Room>('/api/rooms/' + next.id + '/commands', { command_id: crypto.randomUUID(), game_id: next.state.id, expected_version: next.state.version, action: 'start' });
@@ -342,7 +346,7 @@ export default function App() {
     try {
       const [id, token] = invite.split('.');
       if (!id || !token) throw new Error('邀请链接不完整，请向房主重新获取');
-      const next = await api<Room>('/api/rooms/' + encodeURIComponent(id) + '/join', { invite: token, name: joinName });
+      const next = await api<Room>('/api/rooms/' + encodeURIComponent(id) + '/join', { invite: token, name: joinName, profile_id:joinProfile });
       accept(next); setInvite(''); navigate('play');
     } catch (e) { setJoinError(e instanceof Error ? e.message : '入座失败'); }
     finally { locked.current=false; setBusy(false); }
@@ -372,7 +376,7 @@ export default function App() {
     try { await api('/api/rooms/' + room.id + '/leave', {}); voice.current?.disconnect(); navigate('home'); void load(); }
     catch(e) { setToast(e instanceof Error ? e.message : '离开失败'); }
   };
-  if (invite && !loading) return <div className="loading-page join-page"><AirplaneTilt size={48} weight="fill" /><h1>朋友邀你一起飞</h1><p>输入昵称，领取自己的飞行员席位。原浏览器重新打开邀请会回到原席位。</p><form onSubmit={e => { e.preventDefault(); void joinRoom(); }}><label className="field-label" htmlFor="join-name">你的昵称</label><input id="join-name" className="room-name-input" maxLength={10} required value={joinName} onChange={e => setJoinName(e.target.value)} /><button className="primary-button" disabled={busy}>加入房间 <ArrowRight /></button></form>{joinError && <p role="alert">{joinError}</p>}<button className="text-button" onClick={() => { setInvite(''); navigate('home'); }}>返回首页</button></div>;
+  if (invite && !loading) return <div className="loading-page join-page"><AirplaneTilt size={48} weight="fill" /><h1>朋友邀你一起飞</h1><p>输入昵称，领取自己的飞行员席位。原浏览器重新打开邀请会回到原席位。</p><form onSubmit={e => { e.preventDefault(); void joinRoom(); }}><ProfilePicker profiles={family.profiles} value={joinProfile} label="选择我的家庭档案" onChange={p=>{setJoinProfile(p?.id||'');if(p)setJoinName(p.name);}} /><label className="field-label" htmlFor="join-name">你的昵称</label><input id="join-name" className="room-name-input" maxLength={10} required value={joinName} onChange={e => {setJoinName(e.target.value);setJoinProfile('');}} /><button className="primary-button" disabled={busy}>加入房间 <ArrowRight /></button></form>{joinError && <p role="alert">{joinError}</p>}<button className="text-button" onClick={() => { setInvite(''); navigate('home'); }}>返回首页</button></div>;
   if (loading) return <div className="loading-page"><AirplaneTilt className="loading-plane" weight="fill" /><h1>正在准备家庭机场</h1><p>把棋盘铺好，快乐马上起飞。</p></div>;
   if (fatal || !room || !state || !current) return <div className="loading-page"><House size={48} /><h1>机场暂时还没连接上</h1><p>{fatal}</p><button className="primary-button" onClick={() => void load()}>重新连接 <ArrowClockwise /></button></div>;
   const winner = state.players.find(p => p.id === state.winner);
@@ -403,6 +407,7 @@ export default function App() {
             {(lifecycle === 'waiting' && network || lifecycle === 'playing' || lifecycle === 'paused') && state.phase !== 'finished' && <button className="outline-button" onClick={() => { navigate('play'); if (lifecycle === 'paused' && host) void command('resume'); }}>继续当前游戏<ArrowRight size={18} /></button>}
           </div>
           {room.saved_at && (lifecycle === 'playing' || lifecycle === 'paused' || lifecycle === 'waiting' && network) && state.phase !== 'finished' && <section className="saved-game" aria-label="已保存的对局"><strong>{room.restored ? '上次对局已恢复，等待继续' : room.name}</strong><p>已自动保存 · <time dateTime={room.saved_at}>{new Date(room.saved_at).toLocaleString('zh-CN')}</time></p><p>{room.restored ? '棋盘、骰子和道具已保留，继续后再开启语音。' : '刷新或服务重启后，可用当前浏览器回来继续。'}{config?.save_retention_hours ? `闲置存档保留 ${Math.round(config.save_retention_hours / 24)} 天。` : ''}</p>{host && <button className="text-button" onClick={() => setModal('discard')}>删除这份存档</button>}</section>}
+          <button className="outline-button family-entry" onClick={()=>setModal('family')}>家庭飞行员与战绩 <ArrowRight size={18}/></button>
           <div className="home-features"><span>2—4 位飞行员</span><span>三种棋盘</span><span>语音游戏搭子</span></div>
         </section>
         <div className="home-flight-art" aria-hidden="true"><div className="home-orbit orbit-one" /><div className="home-orbit orbit-two" /><span className="home-cloud cloud-one" /><span className="home-cloud cloud-two" /><AirplaneTilt weight="fill" /><span className="home-flight-label">下一站，快乐到家。</span></div>
@@ -459,6 +464,7 @@ export default function App() {
       {tutorialOpen && !modal && !presentation.active && <Tutorial gentle={state.preset === 'gentle'} voiceConfigured={!!config?.voice_configured} propsEnabled={state.props_enabled} quick={state.mode === 'quick'} onClose={closeTutorial} />}
       {presentation.active?.kind === 'dice' && <DiceRollModal key={presentation.active.id} roll={presentation.active.roll} onClose={() => { if (presentation.active) present({ type: 'advance', id: presentation.active.id }); }} />}
       {toast && <div className="toast" role="status"><Info size={19} /><span>{toast}</span><button aria-label="关闭提示" onClick={() => setToast('')}><X size={16} /></button></div>}
+      {modal === 'family' && <Modal title="家庭飞行员与战绩" onClose={()=>setModal(null)}><FamilyPanel onChange={setFamily}/></Modal>}
       {modal === 'props' && <Modal title={`${current.name}的道具口袋`} onClose={() => setModal(null)}><PropTray key={state.id + ':' + state.version} game={state} status={lifecycle} disabled={!canAct} onUse={(id, target) => { setModal(null); void command('prop', id, target); }} /></Modal>}
       {modal === 'rules' && <Modal title="一起飞，怎么玩？" onClose={() => setModal(null)}><p className="modal-description">{state.rules?.summary || '快速模式先到一架，完整模式全部抵达。'}</p><div className="rules-list">{rules(state).map(([title, text], i) => <div key={title}><span>{String(i + 1).padStart(2, '0')}</span><section><h3>{title}</h3><p>{text}</p></section></div>)}</div><p className="rule-note">机库、起飞位和自己的终点航道不参与撞机。相同位置可以叠放；不使用三连六惩罚或终点反弹。</p><button className="primary-button" onClick={() => setModal(null)}>懂啦，一起出发 <Check /></button></Modal>}
       {modal === 'end' && <Modal title="结束这一局？" onClose={() => setModal(null)}><p className="modal-description">结束后停止当前对局并返回首页，可以创建新游戏。</p><button className="primary-button" disabled={busy} onClick={() => { setModal(null); void command('end'); }}>结束游戏 <Stop weight="fill" /></button></Modal>}
@@ -466,7 +472,7 @@ export default function App() {
       {modal === 'audio' && <Modal title="声音设置" onClose={() => setModal(null)}><p className="modal-description">分别控制游戏音效、回合播报和对讲麦克风。总静音会立即关闭全部声音和麦克风，保留你的偏好。</p><div className="audio-settings"><label><input type="checkbox" checked={sound} onChange={e => { setSound(e.target.checked); localStorage.setItem('fly-sound', e.target.checked ? 'on' : 'off'); }} />游戏音效（掷骰、起飞、撞机、抵达）</label><label><input type="checkbox" checked={hostVoice} onChange={e => changeHostVoice(e.target.checked)} />关闭麦克风时也播报回合</label><label><input type="checkbox" checked={autoVoice} onChange={e => changeAutoVoice(e.target.checked)} />自动连接语音，直接说话</label><label><input type="checkbox" checked={masterMuted} onChange={e => changeMasterMute(e.target.checked)} />总静音（包含麦克风）</label></div><p className="rule-note">回合播报独立于音效；对讲连接时，灵矽的回复随麦克风一起开启。引导期间保持安静。</p><button className="primary-button" onClick={() => setModal(null)}>完成设置</button></Modal>}
       {modal === 'discard' && <Modal title="删除这份存档？" onClose={() => setModal(null)}><p className="modal-description">删除后这局无法继续。{network ? '房间和所有玩家的席位也会一并关闭。' : '可以从首页创建新游戏。'}</p><button className="primary-button" disabled={busy} onClick={() => void discard()}>确认删除存档</button></Modal>}
       {modal === 'invite'  && room.network && <Modal title="邀请朋友入座" onClose={() => setModal(null)}><p>复制下面的链接发给朋友，每位朋友用自己的设备打开。</p><input aria-label="邀请链接" className="room-name-input" readOnly onFocus={e => e.target.select()} value={location.origin + '/#join=' + room.id + '.' + room.network.invite} /></Modal>}
-      {winner && screen === 'play' && resultDismissed !== state.id && !presentation.active && !presentation.queue.length && !celebration && !modal && <Modal title="这次飞行，圆满抵达！" onClose={() => setResultDismissed(state.id)}><section className="match-result" aria-label="本局结算"><p className="result-winner">🏆 {winner.name}获胜</p><p>{state.board.name} · {state.mode === 'quick' ? '轻快一局' : '完整飞行'}{state.demo ? ' · 演示局' : ''}</p><div className="result-table"><table><caption>本局真实操作记录 · 幸运骰的两颗骰子算一次掷骰</caption><thead><tr><th>飞行员</th><th>掷骰</th><th>起飞</th><th>抵达</th><th>送回</th><th>道具</th></tr></thead><tbody>{state.players.map(p => <tr key={p.id}><th>{p.name}{p.id === winner.id ? ' 🏆' : ''}</th><td>{p.stats?.rolls || 0}</td><td>{p.stats?.takeoffs || 0}</td><td>{p.stats?.arrivals || 0}</td><td>{p.stats?.captures || 0}</td><td>{p.stats?.props_used || 0}</td></tr>)}</tbody></table></div>{host ? <><button className="primary-button" disabled={busy || !connected} onClick={() => void command('replay')}>同配置再玩一局 <ArrowClockwise /></button><button className="text-button" onClick={() => openSetup(true)}>调整配置创建新房间</button></> : <p>等房主再开一局，原席位会为你保留。</p>}<button className="outline-button" onClick={() => { setResultDismissed(state.id); navigate('home'); }}>返回首页 <House /></button></section></Modal>}
+      {winner && screen === 'play' && resultDismissed !== state.id && !presentation.active && !presentation.queue.length && !celebration && !modal && <Modal title="这次飞行，圆满抵达！" onClose={() => setResultDismissed(state.id)}><section className="match-result" aria-label="本局结算"><p className="result-winner">🏆 {winner.name}获胜</p><p>{state.board.name} · {state.mode === 'quick' ? '轻快一局' : '完整飞行'}{state.demo ? ' · 演示局，不计入战绩' : ' · 已保存到家庭飞行记录'}</p><div className="result-table"><table><caption>本局真实操作记录 · 幸运骰的两颗骰子算一次掷骰</caption><thead><tr><th>飞行员</th><th>掷骰</th><th>起飞</th><th>抵达</th><th>送回</th><th>道具</th></tr></thead><tbody>{state.players.map(p => <tr key={p.id}><th>{p.ai?'🤖':avatarIcon(p.avatar)} {p.name}{p.id === winner.id ? ' 🏆' : ''}</th><td>{p.stats?.rolls || 0}</td><td>{p.stats?.takeoffs || 0}</td><td>{p.stats?.arrivals || 0}</td><td>{p.stats?.captures || 0}</td><td>{p.stats?.props_used || 0}</td></tr>)}</tbody></table></div>{host ? <><button className="primary-button" disabled={busy || !connected} onClick={() => void command('replay')}>同配置再玩一局 <ArrowClockwise /></button><button className="text-button" onClick={() => openSetup(true)}>调整配置创建新房间</button></> : <p>等房主再开一局，原席位会为你保留。</p>}<button className="outline-button" onClick={() => { setResultDismissed(state.id); navigate('home'); }}>返回首页 <House /></button></section></Modal>}
       {modal === 'setup' && <Modal title={setupNew ? '创建家庭房间' : '准备下一次出发'} onClose={() => setModal(null)}>
         <form onSubmit={e => { e.preventDefault(); void restart(false); }}>
           <p className="modal-description">选好玩家、路线和难度，同屏模式直接进入棋盘；联网模式先进入准备区，分享链接让朋友自行填写昵称。</p>
@@ -482,11 +488,12 @@ export default function App() {
               if (used.has(name)) name = ['小朋友', '爸爸', '妈妈', '家人', '飞行员'].find(candidate => !used.has(candidate))!;
               used.add(name); return name;
             });
-            return { ...o, names };
+            return { ...o, names, profile_ids:names.map((name,i)=>name===o.names[i]?o.profile_ids?.[i]||'':''),avatars:names.map((name,i)=>name===o.names[i]?o.avatars?.[i]||'':'') };
           })}>{count} 位</button>)}</div>
           <p className="seat-composition" role="status">{options.names.length - (options.ai ? 1 : 0)} 位真人{options.ai ? ' + 1 位机器人' : ''} · 共 {options.names.length} 个席位{options.network ? '，朋友通过邀请链接自行填写昵称' : ''}</p>
-          <div className="name-fields">{options.names.map((name, i) => <label key={i}><span className="name-color" style={{ background: palette[['coral', 'gold', 'blue', 'jade'][i]] }} /><span className="sr-only">第 {i + 1} 位飞行员昵称</span><input maxLength={10} required disabled={!!options.network && i > 0} value={name} onChange={e => setOptions(o => ({ ...o, names: o.names.map((v, n) => n === i ? e.target.value : v) }))} />{options.ai && i === options.names.length - 1 && <Robot size={20} />}</label>)}</div>
-          <label className="toggle-row"><span><strong>添加机器人陪玩（占一个席位）</strong><small>最后一席自动准备、掷骰和走棋，同屏与联网均可用</small></span><input type="checkbox" checked={options.ai} onChange={e => setOptions(o => ({ ...o, ai: e.target.checked, names: o.names.map((name, i) => i === o.names.length - 1 ? (e.target.checked ? '灵矽机器人' : ['小朋友', '爸爸', '妈妈', '家人'][i]) : name) }))} /></label>
+          <div className="name-fields">{options.names.map((name, i) => <label key={i}><span className="name-color" style={{ background: palette[['coral', 'gold', 'blue', 'jade'][i]] }} /><span className="sr-only">第 {i + 1} 位飞行员昵称</span><input maxLength={10} required disabled={!!options.network && i > 0} value={name} onChange={e => setOptions(o => ({ ...o, names: o.names.map((v, n) => n === i ? e.target.value : v),profile_ids:o.names.map((_,n)=>n===i?'':o.profile_ids?.[n]||''),avatars:o.names.map((_,n)=>n===i?'':o.avatars?.[n]||'') }))} />{options.ai && i === options.names.length - 1 && <Robot size={20} />}</label>)}</div>
+          <div className="setup-profiles">{options.names.map((_,i)=>(!options.network||i===0)&&!(options.ai&&i===options.names.length-1)&&<label key={i}><span>第 {i+1} 位 · 复用档案</span><ProfilePicker profiles={family.profiles} value={options.profile_ids?.[i]||''} label={`第 ${i+1} 位家庭档案`} onChange={p=>setOptions(o=>({...o,names:o.names.map((v,n)=>n===i&&p?p.name:v),profile_ids:o.names.map((_,n)=>n===i?p?.id||'':o.profile_ids?.[n]||''),avatars:o.names.map((_,n)=>n===i?p?.avatar||'':o.avatars?.[n]||'')}))}/></label>)}</div><p className="wake-help">在首页“家庭飞行员与战绩”保存昵称和头像。选档案后修改昵称会改为临时飞行员。</p>
+          <label className="toggle-row"><span><strong>添加机器人陪玩（占一个席位）</strong><small>最后一席自动准备、掷骰和走棋，同屏与联网均可用</small></span><input type="checkbox" checked={options.ai} onChange={e => setOptions(o => ({ ...o, ai: e.target.checked, profile_ids:o.names.map((_,i)=>i===o.names.length-1?'':o.profile_ids?.[i]||''),avatars:o.names.map((_,i)=>i===o.names.length-1?'':o.avatars?.[i]||''), names: o.names.map((name, i) => i === o.names.length - 1 ? (e.target.checked ? '灵矽机器人' : ['小朋友', '爸爸', '妈妈', '家人'][i]) : name) }))} /></label>
           <p className="wake-help">灵矽语音助手不占席位，始终可按偏好开启，负责主持、讲解和帮助真人操作；机器人是自动参与对局的玩家。</p>
           <label className="toggle-row"><span><strong>趣味道具模式</strong><small>{options.preset==='gentle'?'亲子辅助补给，无炸弹':options.preset==='classic'?'经典飞行不使用道具':'每人五张道具：起飞、加速、幸运、炸弹、护盾'}</small></span><input type="checkbox" disabled={!!options.preset && options.preset !== 'custom'} checked={options.props} onChange={e => setOptions(o => ({ ...o, props: e.target.checked }))} /></label>
           <label className="field-label">这一局的节奏</label><div className="mode-options"><button type="button" disabled={!!options.preset && options.preset !== 'custom'} className={options.mode === 'quick' ? 'selected' : ''} onClick={() => setOptions(o => ({ ...o, mode: 'quick' }))}><Sparkle /><strong>轻快一局</strong><span>每人 2 架 · 先到 1 架获胜</span></button><button type="button" disabled={!!options.preset && options.preset !== 'custom'} className={options.mode === 'classic' ? 'selected' : ''} onClick={() => setOptions(o => ({ ...o, mode: 'classic' }))}><AirplaneTilt /><strong>完整飞行</strong><span>每人 4 架 · 全部抵达获胜</span></button></div>

@@ -31,7 +31,8 @@
     "test:companion:browser": "node scripts/companion-browser.mjs",
     "test:presets:browser": "node scripts/presets-browser.mjs",
     "test:loading:browser": "node scripts/loading-browser.mjs",
-    "test:companion:tts": "node scripts/companion-tts-browser.mjs"
+    "test:companion:tts": "node scripts/companion-tts-browser.mjs",
+    "test:family:browser": "node scripts/family-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

@@ -487,3 +487,39 @@ main { padding-top: 12px; }
 .board-loading { min-height: min(60vw, 620px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #426452; background: #e6f2f3; border-radius: 18px; padding: 24px; }
 
 .voice-panel > .text-button + .text-button { margin-left: 16px; }
+
+/* Family library keeps the board page focused on play. */
+.family-entry {margin-top:20px;width:fit-content;gap:12px;}
+.family-panel h3 {display:flex;align-items:center;justify-content:space-between;margin:24px 0 14px;}
+.family-panel h3 small {font-size:13px;font-weight:400;color:#696f72;}
+.family-profiles {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.family-profiles article {border:1px solid #dedbd3;border-radius:16px;padding:14px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;background:#faf8f2;min-width:0;overflow-wrap:anywhere;}
+.profile-portrait {font-size:34px;line-height:1.3;}
+.family-profiles article small {font-size:12px;color:#626b68;}
+.family-profiles article .text-button {padding:6px;font-size:12px;}
+.profile-editor {border-top:1px solid #dedbd3;margin-top:18px;padding-top:8px;}
+.avatar-choices {border:0;padding:12px 0;margin:0;display:flex;gap:8px;flex-wrap:wrap;}
+.avatar-choices legend {font-size:13px;color:#59635f;padding-top:12px;}
+.avatar-choices button {width:48px;height:48px;font-size:28px;border:2px solid transparent;border-radius:12px;background:#f2f0e8;cursor:pointer;}
+.avatar-choices button[aria-pressed="true"] {border-color:#328760;background:#e3f3e9;}
+.family-confirm {padding:12px;background:#fff0df;border-radius:12px;line-height:1.6;}
+.family-confirm p {font-size:13px;margin:0 0 12px;}
+.family-confirm .outline-button {font-size:13px;white-space:normal;}
+.match-history {display:grid;gap:10px;}
+.match-history details {border:1px solid #dedbd3;border-radius:14px;padding:12px;min-width:0;}
+.match-history summary {cursor:pointer;line-height:1.7;}
+.match-history summary span,.match-history summary small {display:block;font-size:12px;color:#5e6964;}
+.match-history details p {font-size:13px;overflow-wrap:anywhere;}
+.profile-picker {min-width:0;width:100%;padding:10px 8px;font:inherit;font-size:13px;border:1px solid #d4d7ce;border-radius:10px;background:#fafbf8;color:#273e34;}
+.setup-profiles {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0;}
+.setup-profiles label>span {display:block;font-size:12px;margin-bottom:6px;color:#59635f;}
+.join-page .profile-picker {margin-bottom:16px;}
+.avatar>span {font-size:24px;line-height:1;}
+@media(max-width:480px){.family-profiles,.setup-profiles{grid-template-columns:1fr;}.family-panel .result-table{font-size:12px;}}
+.family-entry {font-size:14px;}
+.family-tabs {display:flex;gap:6px;padding:5px;border-radius:12px;background:#f0f1e9;margin-top:18px;}
+.family-tabs button {flex:1;padding:11px 8px;border:0;border-radius:9px;font:inherit;font-size:14px;color:#59695e;background:transparent;cursor:pointer;}
+.family-tabs button[aria-selected="true"] {background:#fffefa;color:#23624a;box-shadow:0 2px 8px #203c2910;font-weight:700;}
+.family-panel .result-table table {min-width:0;table-layout:fixed;}
+.family-panel .result-table th:first-child {width:30%;}
+.family-panel .result-table th,.family-panel .result-table td {font-size:12px;padding:10px 3px;overflow-wrap:anywhere;}
