@@ -2,12 +2,14 @@ package room
 
 import (
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/zkevindev/flytogether/internal/game"
 )
 
 type Seat struct {
+	Host     bool   `json:"host,omitempty"`
 	Robot    bool   `json:"robot,omitempty"`
 	PlayerID string `json:"player_id"`
 	Occupied bool   `json:"occupied"`
@@ -15,8 +17,13 @@ type Seat struct {
 	Online   bool   `json:"online"`
 }
 type Lobby struct {
-	Invite string `json:"invite"`
-	Seats  []Seat `json:"seats"`
+	HostPlayerID         string     `json:"host_player_id"`
+	HostOnline           bool       `json:"host_online"`
+	HostClaimAt          *time.Time `json:"host_claim_at,omitempty"`
+	HostClaimWaitSeconds int        `json:"host_claim_wait_seconds"`
+	CanClaimHost         bool       `json:"can_claim_host"`
+	Invite               string     `json:"invite"`
+	Seats                []Seat     `json:"seats"`
 }
 type Me struct {
 	PlayerID string `json:"player_id"`
@@ -62,6 +69,7 @@ func (r *Room) personalized(session string) View {
 	if r.invite != "" {
 		if m, ok := r.members[session]; ok {
 			v.Me = &Me{PlayerID: r.state.Players[m.index].ID, Host: session == r.owner}
+			v.Network.CanClaimHost = r.hostClaimable && session != r.owner && r.online(session)
 		} else {
 			v.Network = nil
 		}
@@ -127,12 +135,20 @@ func (r *Room) lobbyView() *Lobby {
 	if r.invite == "" {
 		return nil
 	}
-	l := &Lobby{Invite: r.invite, Seats: make([]Seat, len(r.state.Players))}
+	l := &Lobby{Invite: r.invite, Seats: make([]Seat, len(r.state.Players)), HostPlayerID: r.state.Players[r.members[r.owner].index].ID, HostOnline: r.online(r.owner)}
+	if !r.hostOfflineSince.IsZero() {
+		at := r.hostOfflineSince.Add(r.hostDelay())
+		l.HostClaimAt = &at
+		remaining := time.Until(at)
+		if remaining > 0 {
+			l.HostClaimWaitSeconds = int((remaining + time.Second - 1) / time.Second)
+		}
+	}
 	for i, p := range r.state.Players {
 		l.Seats[i] = Seat{PlayerID: p.ID, Robot: p.AI, Occupied: p.AI, Ready: p.AI, Online: p.AI}
 	}
 	for session, m := range r.members {
-		l.Seats[m.index] = Seat{PlayerID: r.state.Players[m.index].ID, Occupied: true, Ready: m.ready, Online: r.online(session)}
+		l.Seats[m.index] = Seat{Host: session == r.owner, PlayerID: r.state.Players[m.index].ID, Occupied: true, Ready: m.ready, Online: r.online(session)}
 	}
 	return l
 }

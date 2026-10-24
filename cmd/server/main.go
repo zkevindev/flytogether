@@ -84,6 +84,12 @@ func main() {
 		slog.Error("cannot initialize diagnostics")
 		os.Exit(1)
 	}
+	hostDelay, err := positiveEnv("ROOM_HOST_RECLAIM_SECONDS", 60, 5, 600)
+	if err != nil {
+		slog.Error("invalid host reclaim delay")
+		os.Exit(1)
+	}
+	savedStore.SetHostReclaimDelay(time.Duration(hostDelay) * time.Second)
 	s.bridge.Observe = savedStore.Diagnostic
 	s.bridge.MaxConnections = limits["LINGXI_MAX_CONNECTIONS"]
 	s.bridge.SessionTimeout = time.Duration(limits["LINGXI_SESSION_SECONDS"]) * time.Second
@@ -100,7 +106,7 @@ func main() {
 		writeJSON(w, 200, map[string]any{"status": "ok", "voice_configured": s.bridge.Config.Enabled(), "storage": "sqlite"})
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "boards": game.Boards(), "diagnostics": savedStore.DiagnosticStatus()})
+		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "host_reclaim_seconds": hostDelay, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "boards": game.Boards(), "diagnostics": savedStore.DiagnosticStatus()})
 	})
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("GET /api/family", s.family)
@@ -115,7 +121,7 @@ func main() {
 	mux.HandleFunc("POST /api/rooms/{id}/leave", s.leave)
 	mux.HandleFunc("POST /api/rooms/{id}/discard", s.discard)
 	mux.HandleFunc("POST /api/rooms/{id}/commands", s.command)
- mux.HandleFunc("POST /api/rooms/{id}/diagnostics",s.clientDiagnostic)
+	mux.HandleFunc("POST /api/rooms/{id}/diagnostics", s.clientDiagnostic)
 	mux.HandleFunc("POST /api/rooms/{id}/voice-settings", s.voiceSettings)
 	mux.HandleFunc("POST /api/rooms/{id}/announcement", s.announcement)
 	mux.HandleFunc("GET /ws/game", s.gameSocket)
@@ -236,7 +242,7 @@ func failure(w http.ResponseWriter, err error) {
 		if code == "HOST_ONLY" || code == "NOT_YOUR_TURN" || code == "NOT_AUTHORIZED" {
 			status = 403
 		}
-		if code == "STALE_STATE" || code == "VOICE_BUSY" || code == "COMMAND_CONFLICT" {
+		if code == "STALE_STATE" || code == "VOICE_BUSY" || code == "COMMAND_CONFLICT" || code == "HOST_GRACE_PERIOD" || code == "HOST_ONLINE" {
 			status = 409
 		}
 	} else if err != nil {

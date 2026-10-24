@@ -15,6 +15,7 @@ import (
 )
 
 type View struct {
+	HostChange    *HostChange     `json:"host_change,omitempty"`
 	ProfileIDs    []string        `json:"profile_ids,omitempty"`
 	SaveError     bool            `json:"save_error,omitempty"`
 	Instance      string          `json:"instance_id"`
@@ -43,16 +44,17 @@ func DefaultVoiceSettings() VoiceSettings {
 }
 
 type Command struct {
-	Actor   string `json:"-"`
-	ID      string `json:"command_id"`
-	GameID  string `json:"game_id"`
-	Version int    `json:"expected_version"`
-	Action  string `json:"action"`
-	PieceID string `json:"piece_id,omitempty"`
-	PropID  string `json:"prop_id,omitempty"`
-	Token   string `json:"action_token,omitempty"`
-	Choice  string `json:"choice,omitempty"`
-	CoachID string `json:"coach_id,omitempty"`
+	TargetPlayerID string `json:"target_player_id,omitempty"`
+	Actor          string `json:"-"`
+	ID             string `json:"command_id"`
+	GameID         string `json:"game_id"`
+	Version        int    `json:"expected_version"`
+	Action         string `json:"action"`
+	PieceID        string `json:"piece_id,omitempty"`
+	PropID         string `json:"prop_id,omitempty"`
+	Token          string `json:"action_token,omitempty"`
+	Choice         string `json:"choice,omitempty"`
+	CoachID        string `json:"coach_id,omitempty"`
 }
 
 type Error struct {
@@ -69,38 +71,42 @@ type cached struct {
 }
 
 type Room struct {
-	saveError     bool
-	storage       *database
-	instance      string
-	savedAt       time.Time
-	restored      bool
-	owner         string
-	invite        string
-	members       map[string]member
-	names         map[string]string
-	voiceActor    string
-	voiceLease    string
-	grantActor    string
-	options       game.Options
-	mu            sync.Mutex
-	ID            string
-	name          string
-	status        string
-	state         *game.State
-	seq           int
-	voice         string
-	voiceSettings VoiceSettings
-	busy          bool
-	grant         string
-	grantVersion  int
-	grantGame     string
-	used          bool
-	cache         map[string]cached
-	listeners     map[chan []byte]string
-	updated       time.Time
-	coach         *Coach
-	coachPrevious string
-	coachExpired  bool
+	hostChange       *HostChange
+	hostOfflineSince time.Time
+	hostClaimable    bool
+	hostReclaimDelay time.Duration
+	saveError        bool
+	storage          *database
+	instance         string
+	savedAt          time.Time
+	restored         bool
+	owner            string
+	invite           string
+	members          map[string]member
+	names            map[string]string
+	voiceActor       string
+	voiceLease       string
+	grantActor       string
+	options          game.Options
+	mu               sync.Mutex
+	ID               string
+	name             string
+	status           string
+	state            *game.State
+	seq              int
+	voice            string
+	voiceSettings    VoiceSettings
+	busy             bool
+	grant            string
+	grantVersion     int
+	grantGame        string
+	used             bool
+	cache            map[string]cached
+	listeners        map[chan []byte]string
+	updated          time.Time
+	coach            *Coach
+	coachPrevious    string
+	coachExpired     bool
 }
 
 func New(o game.Options) *Room {
@@ -113,7 +119,7 @@ func New(o game.Options) *Room {
 	if name == "" {
 		name = "家庭机场"
 	}
-	return &Room{instance: game.ID(), options: o, name: name, status: status, ID: game.ID(), state: game.New(o), voice: "disconnected", voiceSettings: DefaultVoiceSettings(), cache: map[string]cached{},
+	return &Room{hostReclaimDelay: DefaultHostReclaimDelay, instance: game.ID(), options: o, name: name, status: status, ID: game.ID(), state: game.New(o), voice: "disconnected", voiceSettings: DefaultVoiceSettings(), cache: map[string]cached{},
 		listeners: map[chan []byte]string{}, updated: time.Now()}
 }
 
@@ -124,7 +130,7 @@ func (r *Room) view() View {
 		t := r.savedAt
 		savedAt = &t
 	}
-	return View{Instance: r.instance, SavedAt: savedAt, Restored: r.restored, SaveError: r.saveError, ID: r.ID, Name: r.name, Status: r.status, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings, Coach: r.coach, CoachExpired: r.coachExpired, Network: r.lobbyView()}
+	return View{HostChange: r.hostChange, Instance: r.instance, SavedAt: savedAt, Restored: r.restored, SaveError: r.saveError, ID: r.ID, Name: r.name, Status: r.status, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings, Coach: r.coach, CoachExpired: r.coachExpired, Network: r.lobbyView()}
 }
 
 func (r *Room) VoiceSettings() VoiceSettings {
@@ -181,8 +187,15 @@ func (r *Room) SubscribeFor(session string) (chan []byte, func()) {
 	defer r.mu.Unlock()
 	ch := make(chan []byte, 1)
 	r.listeners[ch] = session
+	r.updateHostPresence(time.Now())
 	r.publish()
-	return ch, func() { r.mu.Lock(); delete(r.listeners, ch); r.publish(); r.mu.Unlock() }
+	return ch, func() {
+		r.mu.Lock()
+		delete(r.listeners, ch)
+		r.updateHostPresence(time.Now())
+		r.publish()
+		r.mu.Unlock()
+	}
 }
 
 func (r *Room) Restart(o game.Options) (View, error) { return r.RestartAs(o, "") }
@@ -226,13 +239,9 @@ func (r *Room) Do(c Command, voice bool) (result View, err error) {
 	before := r.beforeMutation()
 	defer r.rollback(before, &err)
 	if r.invite != "" {
-		host := c.Action == "start" || c.Action == "pause" || c.Action == "resume" || c.Action == "end" || c.Action == "replay"
 		// Retried commands remain bound to the original actor, even after the turn advanced.
 		if !r.isMember(c.Actor) {
 			return View{}, fail("NOT_AUTHORIZED", "请先入座")
-		}
-		if host && c.Actor != r.owner {
-			return View{}, fail("HOST_ONLY", "这个操作需要房主来完成")
 		}
 	}
 	if !voice && c.Token != "" {
@@ -247,11 +256,17 @@ func (r *Room) Do(c Command, voice bool) (result View, err error) {
 		}
 		return r.personalized(c.Actor), nil
 	}
+	if r.invite != "" && (c.Action == "start" || c.Action == "pause" || c.Action == "resume" || c.Action == "end" || c.Action == "replay" || c.Action == "transfer_host") && c.Actor != r.owner {
+		return View{}, fail("HOST_ONLY", "这个操作需要房主来完成")
+	}
 	if c.ID == "" || len(c.ID) > 160 {
 		return View{}, fail("INVALID_COMMAND", "操作编号无效")
 	}
 	if c.GameID != r.state.ID || (c.Version != r.state.Version && c.Action != "pause" && c.Action != "end") {
 		return View{}, fail("STALE_STATE", "棋局已经更新，请重新选择")
+	}
+	if c.Action == "transfer_host" || c.Action == "claim_host" {
+		return r.changeHost(c, voice)
 	}
 	if c.Action == "replay" {
 		if voice || r.status == "playing" && r.state.Phase != "finished" {
@@ -511,15 +526,16 @@ func (r *Room) tool(name string, args map[string]string, actor string) (any, err
 }
 
 type Store struct {
-	storage   *database
-	retention time.Duration
-	mu        sync.Mutex
-	rooms     map[string]*Room
-	sessions  map[string]string
+	hostReclaimDelay time.Duration
+	storage          *database
+	retention        time.Duration
+	mu               sync.Mutex
+	rooms            map[string]*Room
+	sessions         map[string]string
 }
 
 func NewStore() *Store {
-	return &Store{retention: DefaultRetention, rooms: map[string]*Room{}, sessions: map[string]string{}}
+	return &Store{hostReclaimDelay: DefaultHostReclaimDelay, retention: DefaultRetention, rooms: map[string]*Room{}, sessions: map[string]string{}}
 }
 func (s *Store) Create(session string, o game.Options) (*Room, error) {
 	var err error
@@ -538,6 +554,7 @@ func (s *Store) Create(session string, o game.Options) (*Room, error) {
 	r := New(o)
 	r.initOwner(session, o.Network)
 	r.storage = s.storage
+	r.hostReclaimDelay = s.hostReclaimDelay
 	if _, err := r.finish(nil, saveChange{Session: session}); err != nil {
 		return nil, err
 	}
@@ -606,6 +623,7 @@ func (s *Store) Run(ctxDone <-chan struct{}) {
 					return
 				default:
 				}
+				r.refreshHostPresence()
 				r.AI()
 			}
 		}
@@ -665,6 +683,7 @@ func (s *Store) CreateNew(session string, o game.Options) (*Room, error) {
 	r := New(o)
 	r.initOwner(session, o.Network)
 	r.storage = s.storage
+	r.hostReclaimDelay = s.hostReclaimDelay
 	r.voiceSettings = settings
 	if _, err := r.finish(nil, saveChange{Session: session, DeleteRoom: deleteID}); err != nil {
 		return nil, err

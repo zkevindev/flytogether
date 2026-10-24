@@ -37,6 +37,7 @@ values.update({
 })
 values.setdefault('SAVE_PATH','/var/lib/flytogether/games.db')
 values.setdefault('SAVE_RETENTION_HOURS','168')
+values.setdefault('ROOM_HOST_RECLAIM_SECONDS','60')
 values.setdefault('ADMIN_ACCESS_KEY','')
 values.setdefault('DIAGNOSTICS_RETENTION_HOURS','168')
 values.setdefault('DIAGNOSTICS_TRANSCRIPTS','true')

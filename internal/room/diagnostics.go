@@ -189,6 +189,9 @@ func (d *database) saveDiagnostics(ctx context.Context, tx *sql.Tx, p roomRecord
 		action = "recording_started"
 	}
 	e := DiagnosticEvent{At: now, RoomID: p.ID, GameID: p.State.ID, Version: p.State.Version, Kind: "command", Source: source, Action: action}
+	if (action == "transfer_host" || action == "claim_host") && p.HostChange != nil {
+		e.Text = DiagnosticText(p.HostChange.From + "已将房主管理权交给" + p.HostChange.To)
+	}
 	if err = insertDiagnostic(ctx, tx, e, "state:"+p.State.ID+":"+strings.TrimSpace(timeKey(p.Seq))+":"+action); err != nil {
 		return err
 	}

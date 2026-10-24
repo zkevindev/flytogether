@@ -20,8 +20,8 @@ import (
 
 const saveSchema = 1
 
-// Version 4 adds bounded private diagnostic matches and event history.
-const databaseSchema = 4
+// Version 5 permits a persisted host in any human seat. Older binaries must not quarantine transferred rooms.
+const databaseSchema = 5
 const DefaultRetention = 7 * 24 * time.Hour
 
 type savedMember struct {
@@ -29,6 +29,7 @@ type savedMember struct {
 	Ready bool `json:"ready"`
 }
 type roomRecord struct {
+	HostChange    *HostChange            `json:"host_change,omitempty"`
 	Schema        int                    `json:"schema"`
 	ID            string                 `json:"id"`
 	Owner         string                 `json:"owner"`
@@ -65,9 +66,10 @@ func (r *Room) record() roomRecord {
 	for key, m := range r.members {
 		members[key] = savedMember{m.index, m.ready}
 	}
-	return roomRecord{Schema: saveSchema, ID: r.ID, Owner: r.owner, Invite: r.invite, Members: members, Names: r.names, Options: r.options, Name: r.name, Status: r.status, State: r.state, Seq: r.seq, Updated: r.updated, SavedAt: r.savedAt, VoiceSettings: r.voiceSettings}
+	return roomRecord{HostChange: r.hostChange, Schema: saveSchema, ID: r.ID, Owner: r.owner, Invite: r.invite, Members: members, Names: r.names, Options: r.options, Name: r.name, Status: r.status, State: r.state, Seq: r.seq, Updated: r.updated, SavedAt: r.savedAt, VoiceSettings: r.voiceSettings}
 }
 func (r *Room) readRecord(p roomRecord) {
+	r.hostChange = p.HostChange
 	r.ID, r.owner, r.invite, r.names, r.options = p.ID, p.Owner, p.Invite, p.Names, p.Options
 	r.name, r.status, r.state, r.seq, r.updated, r.savedAt = p.Name, p.Status, p.State, p.Seq, p.Updated, p.SavedAt
 	r.voiceSettings = p.VoiceSettings
@@ -87,6 +89,8 @@ type rollbackPoint struct {
 	voice, grant, grantGame, grantActor, voiceActor, lease string
 	grantVersion                                           int
 	busy, used, restored                                   bool
+	hostOfflineSince                                       time.Time
+	hostClaimable                                          bool
 }
 
 func (r *Room) beforeMutation() *rollbackPoint {
@@ -94,7 +98,7 @@ func (r *Room) beforeMutation() *rollbackPoint {
 		return nil
 	}
 	data, _ := json.Marshal(r.record())
-	return &rollbackPoint{data, r.cache, r.coach, r.coachPrevious, r.coachExpired, r.voice, r.grant, r.grantGame, r.grantActor, r.voiceActor, r.voiceLease, r.grantVersion, r.busy, r.used, r.restored}
+	return &rollbackPoint{data, r.cache, r.coach, r.coachPrevious, r.coachExpired, r.voice, r.grant, r.grantGame, r.grantActor, r.voiceActor, r.voiceLease, r.grantVersion, r.busy, r.used, r.restored, r.hostOfflineSince, r.hostClaimable}
 }
 func (r *Room) rollback(p *rollbackPoint, err *error) {
 	if p == nil || *err == nil {
@@ -112,6 +116,7 @@ func (r *Room) restore(p *rollbackPoint) {
 	r.cache, r.coach, r.coachPrevious, r.coachExpired = p.cache, p.coach, p.previous, p.expired
 	r.voice, r.grant, r.grantGame, r.grantActor, r.voiceActor, r.voiceLease = p.voice, p.grant, p.grantGame, p.grantActor, p.voiceActor, p.lease
 	r.grantVersion, r.busy, r.used, r.restored = p.grantVersion, p.busy, p.used, p.restored
+	r.hostOfflineSince, r.hostClaimable = p.hostOfflineSince, p.hostClaimable
 }
 
 // finish commits both game and idempotency key before any client can observe success.
@@ -200,7 +205,7 @@ func OpenStore(path string, retention time.Duration) (*Store, error) {
 		`CREATE TABLE IF NOT EXISTS diagnostic_events (id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL UNIQUE,at TEXT NOT NULL,room_id TEXT NOT NULL,game_id TEXT NOT NULL,version INTEGER NOT NULL,kind TEXT NOT NULL,source TEXT NOT NULL,session_id TEXT NOT NULL,input_id TEXT NOT NULL,ref TEXT NOT NULL,text TEXT NOT NULL,action TEXT NOT NULL,code TEXT NOT NULL,duration_ms INTEGER NOT NULL)`,
 		`CREATE INDEX IF NOT EXISTS diagnostic_events_game ON diagnostic_events(game_id,id DESC)`,
 		`CREATE INDEX IF NOT EXISTS diagnostic_events_at ON diagnostic_events(at)`,
-		"PRAGMA user_version=4",
+		"PRAGMA user_version=5",
 	} {
 		if _, err = tx.Exec(query); err != nil {
 			tx.Rollback()
@@ -413,7 +418,7 @@ func validRecord(p roomRecord) bool {
 	}
 	if p.Invite != "" {
 		owner, ok := p.Members[p.Owner]
-		if !ok || owner.Index != 0 {
+		if !ok || owner.Index < 0 || owner.Index >= len(p.State.Players) || p.State.Players[owner.Index].AI {
 			return false
 		}
 		used := map[int]bool{}
