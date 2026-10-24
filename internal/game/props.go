@@ -1,8 +1,11 @@
 package game
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
-var PropNames = map[string]string{"launch": "起飞卡", "boost": "加速卡", "luck": "幸运骰", "bomb": "炸弹", "shield": "护盾"}
+var PropNames = map[string]string{"launch": "起飞卡", "boost": "加速卡", "luck": "幸运骰", "bomb": "炸弹", "shield": "护盾", "boomerang": "回旋镖", "rescue": "救援卡", "escort": "团队护航"}
 
 // Props share one slot per roll; targeted effects commit immediately.
 func (s *State) UseProp(id string) error { return s.UsePropOn(id, "") }
@@ -21,8 +24,8 @@ func (s *State) UsePropOn(id, pieceID string) error {
 	if s.ActiveProp != "" {
 		return fmt.Errorf("本次掷骰已经选择了道具，不能叠加使用")
 	}
-	if s.Preset == "gentle" && id == "bomb" {
-		return fmt.Errorf("亲子轻松模式不提供炸弹")
+	if s.Preset == "gentle" && (id == "bomb" || id == "boomerang") {
+		return fmt.Errorf("亲子轻松模式不提供攻击道具")
 	}
 	p := &s.Players[s.Current]
 	if p.Props[id] <= 0 {
@@ -46,40 +49,58 @@ func (s *State) UsePropOn(id, pieceID string) error {
 			return fmt.Errorf("所有飞机都已离开机库，无需使用起飞卡")
 		}
 	}
-	if id == "bomb" || id == "shield" {
+	if id == "bomb" || id == "shield" || id == "boomerang" || id == "rescue" || id == "escort" {
+		if id == "escort" && pieceID != "" {
+			return fmt.Errorf("团队护航无需指定飞机")
+		}
 		targets := s.PropTargets(id)
-		var target *Piece
-		var owner string
+		effects := []PropEffect{}
+		descriptions := []string{}
 		for i := range s.Players {
 			for j := range s.Players[i].Pieces {
-				piece := &s.Players[i].Pieces[j]
-				for _, allowed := range targets {
-					if piece.ID == pieceID && allowed == pieceID {
-						target, owner = piece, s.Players[i].Name
-					}
+				target := &s.Players[i].Pieces[j]
+				allowed := false
+				for _, candidate := range targets {
+					allowed = allowed || candidate == target.ID
 				}
+				if !allowed || (id != "escort" && target.ID != pieceID) {
+					continue
+				}
+				from, kind := target.Progress, id
+				text := s.Players[i].Name + "的" + target.Label
+				switch {
+				case id == "shield" || id == "escort":
+					target.Shield = true
+					text += "获得护盾，抵挡一次攻击或撞机"
+				case id == "rescue":
+					target.Progress, target.Shield = 0, false
+					text += "安全撤回起飞位，护盾解除"
+				case target.Shield:
+					target.Shield = false
+					kind = "blocked"
+					text += "的护盾抵挡攻击，飞机留在原地"
+				case id == "boomerang":
+					target.Progress = max(1, target.Progress-3)
+					text += fmt.Sprintf("后退%d格，不触发跳跃、飞行或撞机", from-target.Progress)
+				default:
+					target.Progress = -1
+					p.Stats.Captures++
+					text += "被送回机场"
+				}
+				effects = append(effects, PropEffect{PieceID: target.ID, From: from, To: target.Progress, Kind: kind})
+				descriptions = append(descriptions, text)
 			}
 		}
-		if target == nil {
-			return fmt.Errorf("请指定%s的合法目标：炸弹选对手公共航线飞机，护盾选自己未受保护的公共航线飞机", name)
-		}
-		effect := owner + "的" + target.Label
-		if id == "shield" {
-			target.Shield = true
-			effect += "获得护盾，抵挡一次炸弹或撞机"
-		} else if target.Shield {
-			target.Shield = false
-			effect += "的护盾被炸弹抵消，飞机留在原地"
-		} else {
-			target.Progress = -1
-			p.Stats.Captures++
-			effect += "被送回机场"
+		if len(effects) == 0 {
+			return fmt.Errorf("请为%s选择合法公共航线目标：攻击选对手，救援和保护选自己", name)
 		}
 		p.Stats.PropsUsed++
 		p.Props[id]--
 		s.ActiveProp = id
 		s.Version++
-		s.add("prop", p.Name+"使用了"+name+"："+effect+"。请继续掷骰子。", pieceID)
+		s.add("prop", p.Name+"使用了"+name+"："+strings.Join(descriptions, "；")+"。请继续掷骰子。", pieceID)
+		s.History[len(s.History)-1].PropID = id
+		s.History[len(s.History)-1].Effects = effects
 		return nil
 	}
 	if pieceID != "" {
@@ -90,6 +111,7 @@ func (s *State) UsePropOn(id, pieceID string) error {
 	s.ActiveProp = id
 	s.Version++
 	s.add("prop", p.Name+"使用了"+name+"，下一次掷骰生效。", "")
+	s.History[len(s.History)-1].PropID = id
 	return nil
 }
 
@@ -126,10 +148,33 @@ func (s *State) SuggestedPropTarget() (string, string) {
 			}
 		}
 	}
+	if p.Props["boomerang"] > 0 {
+		for _, id := range s.PropTargets("boomerang") {
+			for _, other := range s.Players {
+				for _, piece := range other.Pieces {
+					if piece.ID == id && piece.Progress > 3 && !piece.Shield {
+						return "boomerang", id
+					}
+				}
+			}
+		}
+	}
+	if p.Props["escort"] > 0 && len(s.PropTargets("escort")) >= 2 {
+		return "escort", ""
+	}
+	if p.Props["rescue"] > 0 {
+		for _, id := range s.PropTargets("rescue") {
+			for _, piece := range p.Pieces {
+				if piece.ID == id && piece.Progress <= 3 && !piece.Shield && len(s.PropTargets("bomb")) > 0 {
+					return "rescue", id
+				}
+			}
+		}
+	}
 	return s.SupportProp(), ""
 }
 
-// Normal difficulty uses only movement aids; hard adds targeted attack/defense.
+// Normal difficulty uses movement aids; hard adds targeted attack and defense.
 func (s *State) SupportProp() string {
 	if !s.PropsEnabled || s.Phase != "roll" || s.ActiveProp != "" {
 		return ""
@@ -155,12 +200,17 @@ func (s *State) SupportProp() string {
 // PropTargets never includes hangars, launch pads or protected home lanes.
 func (s *State) PropTargets(id string) []string {
 	out := []string{}
+	attack := id == "bomb" || id == "boomerang"
+	own := id == "shield" || id == "rescue" || id == "escort"
+	if !attack && !own {
+		return out
+	}
 	for i, player := range s.Players {
-		if (id == "bomb" && i == s.Current) || (id == "shield" && i != s.Current) || (id != "bomb" && id != "shield") {
+		if (attack && i == s.Current) || (own && i != s.Current) {
 			continue
 		}
 		for _, piece := range player.Pieces {
-			if piece.Progress > 0 && piece.Progress <= s.Board.RingLength && (id != "shield" || !piece.Shield) {
+			if piece.Progress > 0 && piece.Progress <= s.Board.RingLength && ((id != "shield" && id != "escort") || !piece.Shield) {
 				out = append(out, piece.ID)
 			}
 		}

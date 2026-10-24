@@ -272,3 +272,19 @@ func TestDiceSpeechAlwaysResolvesOrClarifiesWithoutFabrication(t *testing.T) {
 		}
 	}
 }
+
+func TestExpandedPropVoiceSelection(t *testing.T) {
+	s := game.New(game.Options{Names: []string{"妈妈", "爸爸"}, Props: true, Demo: true})
+	for text, want := range map[string]struct{ prop, target string }{"用回旋镖攻击爸爸的小熊号": {"boomerang", "p1-0"}, "使用救援卡救援妈妈的小熊号": {"rescue", "p0-0"}, "使用团队护航": {"escort", ""}} {
+		a, ok := resolveVoiceAction(*s, text)
+		if !ok || a.Name != "use_prop" || a.PropID != want.prop || a.PieceID != want.target {
+			t.Fatalf("%s: %+v", text, a)
+		}
+	}
+	for _, text := range []string{"不要使用救援卡", "回旋镖怎么用", "使用回旋镖攻击自己的小熊号", "使用救援卡救援对方的小熊号", "使用回旋镖", "使用救援卡救援妈妈的小熊号和兔子号"} {
+		a, ok := resolveVoiceAction(*s, text)
+		if !ok || a.Name != "get_game_state" {
+			t.Fatalf("unsafe action %s: %+v", text, a)
+		}
+	}
+}

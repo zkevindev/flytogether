@@ -477,7 +477,7 @@ func (r *Room) tool(name string, args map[string]string, actor string) (any, err
 		suggested, target := r.state.SuggestedPropTarget()
 		reason := r.state.Rules().Summary + " 本局起飞需要" + r.state.LaunchRule() + "，只有六点可再掷；不能通过语音指定点数，超过终点不能移动，请只选 legal_moves 中的棋子。"
 		if r.state.PropsEnabled {
-			reason += "掷骰前最多用一张已有道具；起飞卡让任意点数起飞，加速卡对已离开机库的飞机增加两步，幸运骰立即真实掷两次取较大值，无需再单独掷骰。护盾抵挡一次撞机或炸弹，目标只能来自prop_targets，不能选择机库、起飞位和终点航道。"
+			reason += "掷骰前最多用一张已有道具；起飞卡让任意点数起飞，加速卡对已离开机库的飞机增加两步，幸运骰立即真实掷两次取较大值，无需再单独掷骰。护盾抵挡一次撞机或攻击，回旋镖让对手后退3格且不触发跳跃或撞机，救援卡让自己的飞机撤回起飞位并解除护盾，团队护航保护自己全部未加盾公共航线飞机。定向道具目标只能来自prop_targets，不能选择机库、起飞位和终点航道。"
 			if r.state.Preset != "gentle" {
 				reason += "炸弹立即把指定对手公共航线上的飞机送回机场。"
 			}
@@ -487,7 +487,7 @@ func (r *Room) tool(name string, args map[string]string, actor string) (any, err
 		voiceView.Network = nil
 		voiceView.Me = nil
 		return map[string]any{"room": voiceView, "action_token": token, "rules_hint": reason,
-			"prop_targets": map[string][]string{"bomb": r.state.PropTargets("bomb"), "shield": r.state.PropTargets("shield")}, "suggested_prop": map[string]string{"prop_id": suggested, "piece_id": target},
+			"prop_targets": map[string][]string{"bomb": r.state.PropTargets("bomb"), "shield": r.state.PropTargets("shield"), "boomerang": r.state.PropTargets("boomerang"), "rescue": r.state.PropTargets("rescue"), "escort": r.state.PropTargets("escort")}, "suggested_prop": map[string]string{"prop_id": suggested, "piece_id": target},
 			"current_player": r.state.Players[r.state.Current], "legal_moves": r.state.Legal}, nil
 	}
 	if name != "roll_dice" && name != "move_piece" && name != "use_prop" && name != "coach_move" && name != "confirm_coach" {

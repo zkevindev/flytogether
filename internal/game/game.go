@@ -89,13 +89,22 @@ type Move struct {
 	Summary  string   `json:"summary"`
 }
 
+type PropEffect struct {
+	PieceID string `json:"piece_id"`
+	From    int    `json:"from"`
+	To      int    `json:"to"`
+	Kind    string `json:"kind"`
+}
+
 type Event struct {
-	ID        string `json:"id"`
-	Kind      string `json:"kind"`
-	Text      string `json:"text"`
-	Player    string `json:"player_id,omitempty"`
-	PieceID   string `json:"piece_id,omitempty"`
-	DiceRolls []int  `json:"dice_rolls,omitempty"`
+	PropID    string       `json:"prop_id,omitempty"`
+	Effects   []PropEffect `json:"effects,omitempty"`
+	ID        string       `json:"id"`
+	Kind      string       `json:"kind"`
+	Text      string       `json:"text"`
+	Player    string       `json:"player_id,omitempty"`
+	PieceID   string       `json:"piece_id,omitempty"`
+	DiceRolls []int        `json:"dice_rolls,omitempty"`
 }
 
 type State struct {
@@ -175,10 +184,10 @@ func New(o Options) *State {
 	s := &State{Preset: o.Preset, ID: ID(), Ruleset: "family-v1", Difficulty: o.Difficulty, Board: board, Mode: o.Mode, Demo: o.Demo, Version: 1,
 		Turn: 1, Phase: "roll", Legal: []Move{}, History: []Event{}, Players: []Player{}, PropsEnabled: o.Props, DiceRolls: []int{}}
 	if o.Props {
-		s.Ruleset = "family-props-v2"
+		s.Ruleset = "family-props-v3"
 	}
 	if o.Preset == "gentle" {
-		s.Ruleset = "family-gentle-v1"
+		s.Ruleset = "family-gentle-v2"
 	}
 	if o.Preset == "classic" {
 		s.Ruleset = "family-classic-v1"
@@ -190,9 +199,9 @@ func New(o Options) *State {
 			p.Avatar = o.Avatars[i]
 		}
 		if o.Props {
-			p.Props = map[string]int{"launch": 1, "boost": 1, "luck": 1, "bomb": 1, "shield": 1}
+			p.Props = map[string]int{"launch": 1, "boost": 1, "luck": 1, "bomb": 1, "shield": 1, "boomerang": 1, "rescue": 1, "escort": 1}
 			if o.Preset == "gentle" {
-				p.Props = map[string]int{"launch": 2, "boost": 1, "luck": 1, "bomb": 0, "shield": 2}
+				p.Props = map[string]int{"launch": 2, "boost": 1, "luck": 1, "bomb": 0, "shield": 2, "rescue": 1, "escort": 1}
 			}
 		}
 		for j := 0; j < count; j++ {

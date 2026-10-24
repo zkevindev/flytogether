@@ -248,3 +248,40 @@ func TestSaveRetentionDoesNotResetAtStartup(t *testing.T) {
 		t.Fatal("expired save restored")
 	}
 }
+
+func TestExpandedPropsSurviveRestartAndRetry(t *testing.T) {
+	for _, id := range []string{"boomerang", "rescue", "escort"} {
+		t.Run(id, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "games.db")
+			s := openTestSaves(t, path)
+			r, e := s.Create("browser", game.Options{Names: []string{"孩子", "家长"}, Props: true, Demo: true})
+			if e != nil {
+				t.Fatal(e)
+			}
+			c := savedDo(t, r, "browser", "prop", func(c *Command) {
+				c.PropID = id
+				if id == "boomerang" {
+					c.PieceID = "p1-0"
+				} else if id == "rescue" {
+					c.PieceID = "p0-0"
+				}
+			})
+			before := r.Snapshot()
+			s.Close()
+			again := openTestSaves(t, path)
+			restored := again.Get("browser", r.ID)
+			if restored == nil {
+				t.Fatal("new prop rejected on restore")
+			}
+			if string(restored.Snapshot().State) != string(before.State) {
+				t.Fatal("effect/inventory lost on restart")
+			}
+			if _, e = restored.DoAs(c, "browser"); e != nil {
+				t.Fatal(e)
+			}
+			if string(restored.Snapshot().State) != string(before.State) {
+				t.Fatal("retry repeated effect")
+			}
+		})
+	}
+}

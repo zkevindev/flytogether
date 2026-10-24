@@ -96,7 +96,7 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		return voiceAction{Name: "get_game_state", Notice: "这把已经掷过了，是" + strconv.Itoa(state.Dice) + "点。" + hostCue(state), Cheer: n}, true
 	}
 	var props []string
-	for _, id := range []string{"launch", "boost", "luck", "bomb", "shield"} {
+	for _, id := range []string{"launch", "boost", "luck", "bomb", "shield", "boomerang", "rescue", "escort"} {
 		hit := strings.Contains(text, game.PropNames[id]) || (id == "luck" && (strings.Contains(text, "幸运投") || strings.Contains(text, "幸运头")))
 		if id == "bomb" && state.Phase == "roll" && bombVerb(text) {
 			hit = true
@@ -106,7 +106,7 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		}
 	}
 	if len(props) > 1 {
-		return voiceAction{Name: "get_game_state", Notice: "一次只能用一张道具，请选择起飞卡、加速卡、幸运骰、炸弹或护盾中的一张。"}, true
+		return voiceAction{Name: "get_game_state", Notice: "一次只能用一张道具，请一次只选择一种道具。"}, true
 	}
 	if len(props) == 1 {
 		id := props[0]
@@ -120,9 +120,9 @@ func resolveVoiceAction(state game.State, text string) (voiceAction, bool) {
 		if !explicit {
 			return voiceAction{Name: "get_game_state", Notice: "只是提及道具，没有明确使用指令。本轮不操作，请回答问题或给出建议。"}, true
 		}
-		if id == "bomb" || id == "shield" {
-			if (id == "bomb" && (strings.Contains(text, "我的") || strings.Contains(text, "自己"))) || (id == "shield" && strings.Contains(text, "对方")) {
-				return voiceAction{Name: "get_game_state", Notice: "目标所属玩家不合法，没有使用道具。炸弹只能选对手，护盾只能保护自己。"}, true
+		if id == "bomb" || id == "shield" || id == "boomerang" || id == "rescue" {
+			if ((id == "bomb" || id == "boomerang") && (strings.Contains(text, "我的") || strings.Contains(text, "自己"))) || ((id == "shield" || id == "rescue") && strings.Contains(text, "对方")) {
+				return voiceAction{Name: "get_game_state", Notice: "目标所属玩家不合法，没有使用道具。攻击道具只能选对手，保护和救援只能选自己。"}, true
 			}
 			labels := 0
 			for _, label := range game.Labels {

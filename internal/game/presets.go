@@ -27,7 +27,7 @@ func ResolveOptions(o Options) Options {
 func (s *State) Rules() RuleSpec {
 	switch s.Preset {
 	case "gentle":
-		return RuleSpec{"gentle", "亲子轻松", "5或6起飞；只有6可再掷；每人2架，先到1架获胜；起飞卡2、加速卡1、幸运骰1、护盾2，无炸弹。", []int{5, 6}}
+		return RuleSpec{"gentle", "亲子轻松", "5或6起飞；只有6可再掷；每人2架，先到1架获胜；起飞卡2、加速卡1、幸运骰1、护盾2、救援1、团队护航1，无攻击道具。", []int{5, 6}}
 	case "classic":
 		return RuleSpec{"classic", "经典飞行", "6点起飞并可再掷；每人4架，全部抵达获胜；无道具，终点需要恰好点数。", []int{6}}
 	default:
@@ -36,7 +36,7 @@ func (s *State) Rules() RuleSpec {
 			summary = "6点起飞并可再掷；每人4架，全部抵达获胜。"
 		}
 		if s.PropsEnabled {
-			summary += "五种道具各1张。"
+			summary += "道具库存见本局口袋；新局八种道具各1张。"
 		} else {
 			summary += "无道具。"
 		}
