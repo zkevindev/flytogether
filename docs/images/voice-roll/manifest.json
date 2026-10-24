@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-10-24T07:11:36.283207+00:00",
+  "app_commit": "5683f8e",
+  "browser": "155.0.8059.85",
+  "scope": "Actual Chrome synthetic Tingting microphone through AudioWorklet, Go and real Lingxi. Game WebSocket messages deliberately held; voice receipt presents one actual random die. No injected transcript, die or game state. Local sample, not physical microphone.",
+  "captures": [
+    {
+      "file": "voice-roll-popup.png",
+      "sha256": "f3837237aa22b2764c99bf8150c1456ee51136949f70e9a7a0d8c87cb0055911",
+      "actual_die": 3,
+      "game_version": 3,
+      "rolls": 1,
+      "visible_dialogs": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 1000
+      },
+      "capture": "settled dice dialog element"
+    }
+  ]
+}

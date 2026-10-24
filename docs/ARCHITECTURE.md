@@ -598,3 +598,9 @@ BoardLoader通过React.lazy按需导入Board/Three.js，Suspense显示加载提�
 SQLite schema3：`family_profiles(session,id,name,avatar)` 与 `family_history(session,game_id,completed_at,payload)` 不依赖rooms外键。`database.save`在确认最终动作之前，为自然完成且非演示的棋局写入结果快照；房间/去重命令/战绩共同提交，失败共同回滚。结果按浏览器+gameID唯一，重复命令、结束后保存或启动加载不会重复计数。联网每个真人各收一份相同对局事实，仅自己的条目含档案关联；机器人无资料库。
 
 GET `/api/family` 返回本人档案、总记录数与最近50局；POST `/api/family/profiles`、`/profiles/{id}/delete`、`/history/clear` 提供资料编辑与独立清理。最近50局统计只聚合返回的已完成记录，不从24条滚动事件日志推算。清空将payload置NULL而保留去重收据，避免旧房间复写；房间超期或删除不级联删除战绩。仍是单实例SQLite，资料和备份按敏感数据管理。
+
+## 语音动作确认与动画（#30）
+
+明确指令在请求播报前执行Go规则并提交。含糊骰子话语、否定和掷骰问句只读；每条新转写清理上一段朗读上下文。对于本地已处理的回合，除发送tool_choice=none，还在网关拒绝后续模型工具，防止朗读阶段意外多操作。
+
+语音WS的game_action含当前授权浏览器的权威Room快照和Go事实文案。前端VoiceClient把它交给App.accept，与/ws/game共用序号/实例去重及presentation事件队列；双通道不会重复掷骰或播放动画，棋局通道延迟时语音确认仍可展示实际投掷。它不创建浏览器端随机点数或补写动作；模型的自然语言不能替代确认，停止播放不回滚已提交棋步。
