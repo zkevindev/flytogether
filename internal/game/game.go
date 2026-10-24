@@ -65,6 +65,7 @@ type MatchStats struct {
 }
 
 type Player struct {
+	Avatar string         `json:"avatar,omitempty"`
 	Stats  MatchStats     `json:"stats"`
 	ID     string         `json:"id"`
 	Name   string         `json:"name"`
@@ -122,6 +123,8 @@ type State struct {
 }
 
 type Options struct {
+	ProfileIDs []string `json:"profile_ids,omitempty"`
+	Avatars    []string `json:"avatars,omitempty"`
 	Preset     string   `json:"preset,omitempty"`
 	RoomName   string   `json:"room_name"`
 	Difficulty string   `json:"difficulty"`
@@ -183,6 +186,9 @@ func New(o Options) *State {
 	s.RuleInfo = s.Rules()
 	for i, name := range o.Names {
 		p := Player{ID: fmt.Sprintf("player-%d", i), Name: name, Color: Colors[i], AI: o.AI && i == len(o.Names)-1, Pieces: []Piece{}, Props: map[string]int{}}
+		if i < len(o.Avatars) && ValidAvatar(o.Avatars[i]) && !p.AI {
+			p.Avatar = o.Avatars[i]
+		}
 		if o.Props {
 			p.Props = map[string]int{"launch": 1, "boost": 1, "luck": 1, "bomb": 1, "shield": 1}
 			if o.Preset == "gentle" {

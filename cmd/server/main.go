@@ -80,6 +80,10 @@ func main() {
 		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "boards": game.Boards()})
 	})
 	mux.HandleFunc("GET /api/session", s.session)
+	mux.HandleFunc("GET /api/family", s.family)
+	mux.HandleFunc("POST /api/family/profiles", s.saveProfile)
+	mux.HandleFunc("POST /api/family/profiles/{id}/delete", s.deleteProfile)
+	mux.HandleFunc("POST /api/family/history/clear", s.clearHistory)
 	mux.HandleFunc("POST /api/rooms", s.create)
 	mux.HandleFunc("POST /api/rooms/new", s.create)
 	mux.HandleFunc("POST /api/rooms/{id}/matches", s.restart)
@@ -297,6 +301,9 @@ func (s *server) owned(w http.ResponseWriter, r *http.Request, id string) *room.
 	return v
 }
 func (s *server) session(w http.ResponseWriter, r *http.Request) {
+	if key := cookie(r); key != "" {
+		s.setSession(w, key)
+	}
 	v := s.store.Get(cookie(r), "")
 	if v == nil {
 		writeJSON(w, 200, map[string]any{"room": nil})
@@ -324,7 +331,7 @@ func (s *server) create(w http.ResponseWriter, r *http.Request) {
 		failure(w, e)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: "flytogether", Value: key, Path: "/", HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteStrictMode, MaxAge: 7 * 86400})
+	s.setSession(w, key)
 	writeJSON(w, 201, v.SnapshotFor(key))
 }
 func (s *server) restart(w http.ResponseWriter, r *http.Request) {
@@ -333,6 +340,11 @@ func (s *server) restart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o, e := options(w, r)
+	if e != nil {
+		failure(w, e)
+		return
+	}
+	o, e = s.store.FamilyOptions(cookie(r), o)
 	if e != nil {
 		failure(w, e)
 		return

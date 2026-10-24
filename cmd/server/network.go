@@ -6,12 +6,14 @@ import (
 )
 
 func (s *server) setSession(w http.ResponseWriter, key string) {
-	http.SetCookie(w, &http.Cookie{Name: "flytogether", Value: key, Path: "/", HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteStrictMode, MaxAge: 7 * 86400})
+	http.SetCookie(w, &http.Cookie{Name: "flytogether", Value: key, Path: "/", HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteStrictMode, MaxAge: 365 * 86400})
 }
 func (s *server) join(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Invite string `json:"invite"`
-		Name   string `json:"name"`
+		Invite    string `json:"invite"`
+		Name      string `json:"name"`
+		ProfileID string `json:"profile_id"`
+		Avatar    string `json:"avatar"`
 	}
 	if err := decode(w, r, &in); err != nil {
 		failure(w, err)
@@ -21,7 +23,7 @@ func (s *server) join(w http.ResponseWriter, r *http.Request) {
 	if key == "" {
 		key = game.ID()
 	}
-	v, err := s.store.Join(key, r.PathValue("id"), in.Invite, in.Name)
+	v, err := s.store.JoinProfile(key, r.PathValue("id"), in.Invite, in.Name, in.ProfileID, in.Avatar)
 	if err != nil {
 		failure(w, err)
 		return

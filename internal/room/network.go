@@ -51,6 +51,14 @@ func (r *Room) HasMember(session string) bool {
 }
 func (r *Room) personalized(session string) View {
 	v := r.view()
+	if r.isMember(session) {
+		v.ProfileIDs = make([]string, len(r.state.Players))
+		for i, id := range r.options.ProfileIDs {
+			if i < len(v.ProfileIDs) && (r.invite == "" || r.members[session].index == i) {
+				v.ProfileIDs[i] = id
+			}
+		}
+	}
 	if r.invite != "" {
 		if m, ok := r.members[session]; ok {
 			v.Me = &Me{PlayerID: r.state.Players[m.index].ID, Host: session == r.owner}
@@ -128,7 +136,10 @@ func (r *Room) lobbyView() *Lobby {
 	}
 	return l
 }
-func (r *Room) Join(session, invite, name string) (result View, err error) {
+func (r *Room) Join(session, invite, name string) (View, error) {
+	return r.joinProfile(session, invite, name, "", "")
+}
+func (r *Room) joinProfile(session, invite, name, profileID, avatar string) (result View, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	before := r.beforeMutation()
@@ -174,6 +185,14 @@ func (r *Room) Join(session, invite, name string) (result View, err error) {
 			r.members[session] = member{index: i}
 			r.names[session] = name
 			r.state.Players[i].Name = name
+			r.state.Players[i].Avatar = avatar
+			for len(r.options.ProfileIDs) < len(r.state.Players) {
+				r.options.ProfileIDs = append(r.options.ProfileIDs, "")
+			}
+			for len(r.options.Avatars) < len(r.state.Players) {
+				r.options.Avatars = append(r.options.Avatars, "")
+			}
+			r.options.ProfileIDs[i], r.options.Avatars[i] = profileID, avatar
 			r.state.Version++
 			if _, err = r.finish(nil, saveChange{Session: session}); err != nil {
 				return View{}, err
@@ -225,13 +244,26 @@ func (r *Room) Leave(session string) (err error) {
 	return err
 }
 func (s *Store) Join(session, id, invite, name string) (*Room, error) {
+	return s.JoinProfile(session, id, invite, name, "", "")
+}
+func (s *Store) JoinProfile(session, id, invite, name, profileID, avatar string) (*Room, error) {
+	if !game.ValidAvatar(avatar) {
+		return nil, fail("INVALID_PROFILE", "请选择内置头像")
+	}
+	if profileID != "" {
+		p, err := s.profile(session, profileID)
+		if err != nil {
+			return nil, err
+		}
+		name, avatar = p.Name, p.Avatar
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r := s.rooms[id]
 	if r == nil {
 		return nil, fail("INVALID_INVITE", "房间不存在或已过期")
 	}
-	if _, e := r.Join(session, invite, name); e != nil {
+	if _, e := r.joinProfile(session, invite, name, profileID, avatar); e != nil {
 		return nil, e
 	}
 	s.sessions[session] = id

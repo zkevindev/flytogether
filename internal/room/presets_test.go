@@ -20,7 +20,7 @@ func TestPresetSurvivesRestartAndReplay(t *testing.T) {
 	}
 	var schema int
 	_ = s.storage.db.QueryRow("PRAGMA user_version").Scan(&schema)
-	if schema != 2 {
+	if schema != databaseSchema {
 		t.Fatal("preset saves must block unsafe older executables")
 	}
 	id := r.ID

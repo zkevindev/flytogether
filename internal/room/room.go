@@ -13,6 +13,7 @@ import (
 )
 
 type View struct {
+	ProfileIDs    []string        `json:"profile_ids,omitempty"`
 	SaveError     bool            `json:"save_error,omitempty"`
 	Instance      string          `json:"instance_id"`
 	SavedAt       *time.Time      `json:"saved_at,omitempty"`
@@ -519,6 +520,11 @@ func NewStore() *Store {
 	return &Store{retention: DefaultRetention, rooms: map[string]*Room{}, sessions: map[string]string{}}
 }
 func (s *Store) Create(session string, o game.Options) (*Room, error) {
+	var err error
+	o, err = s.FamilyOptions(session, o)
+	if err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if old := s.rooms[s.sessions[session]]; old != nil && old.HasMember(session) {
@@ -625,6 +631,11 @@ func (r *Room) control(action string) error {
 
 // CreateNew explicitly replaces this browser's same-screen room.
 func (s *Store) CreateNew(session string, o game.Options) (*Room, error) {
+	var err error
+	o, err = s.FamilyOptions(session, o)
+	if err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	old := s.rooms[s.sessions[session]]

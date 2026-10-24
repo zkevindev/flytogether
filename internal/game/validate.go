@@ -29,7 +29,7 @@ func (s *State) Validate() error {
 		count = 4
 	}
 	for i, p := range s.Players {
-		if p.ID != fmt.Sprintf("player-%d", i) || len(p.Pieces) != count || p.Name == "" {
+		if p.ID != fmt.Sprintf("player-%d", i) || len(p.Pieces) != count || p.Name == "" || !ValidAvatar(p.Avatar) {
 			return fmt.Errorf("invalid players")
 		}
 		for j, piece := range p.Pieces {
