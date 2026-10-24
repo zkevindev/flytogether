@@ -462,6 +462,9 @@ func (r *Room) AI() {
 
 func (r *Room) BeginSpeech() error { return r.beginSpeech("", "") }
 func (r *Room) beginSpeech(actor, lease string) error {
+	return r.beginSpeechMode(actor, lease, false)
+}
+func (r *Room) beginSpeechMode(actor, lease string, readOnly bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.actorOK(actor, false); err != nil {
@@ -473,12 +476,15 @@ func (r *Room) beginSpeech(actor, lease string) error {
 	if r.status != "playing" || r.state.Phase == "finished" {
 		return fail("GAME_NOT_ACTIVE", "请先开始或继续游戏，再开启语音")
 	}
-	if r.busy && r.voice == "listening" {
+	if !readOnly && r.busy && r.voice == "listening" {
 		return fail("VOICE_BUSY", "上一句话还在处理，请稍等")
 	}
-	r.busy = true
+	r.busy = !readOnly
 	r.voice = "listening"
-	r.grant = game.ID()
+	r.grant = ""
+	if !readOnly {
+		r.grant = game.ID()
+	}
 	r.grantActor = actor
 	r.used = false
 	r.grantGame = r.state.ID

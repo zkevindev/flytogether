@@ -78,6 +78,14 @@ func TestResolveVoiceActionAnswersQuestionsWithoutActing(t *testing.T) {
 	if _, handled := resolveVoiceAction(state, "随便聊聊"); handled {
 		t.Fatal("plain conversation was treated as a game action")
 	}
+	requested, handled := resolveVoiceAction(state, "帮我掷骰子")
+	if !handled || requested.Name != "roll_dice" {
+		t.Fatalf("test phrase did not resolve to a roll: %+v", requested)
+	}
+	blocked := readonlyAction(state, requested)
+	if blocked.Name != "get_game_state" || !strings.Contains(blocked.Notice, "这次没有执行棋局操作") {
+		t.Fatalf("read-only voice did not clearly refuse the action: %+v", blocked)
+	}
 	// A finished match answers turn questions differently.
 	finished := state
 	finished.Phase = "finished"

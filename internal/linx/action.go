@@ -20,6 +20,13 @@ type voiceAction struct {
 	CoachID string
 }
 
+func readonlyAction(state game.State, action voiceAction) voiceAction {
+	if action.Name == "get_game_state" {
+		return action
+	}
+	return voiceAction{Name: "get_game_state", Notice: "只问不操作已开启，这次没有执行棋局操作。" + hostCue(state)}
+}
+
 // Cheer is a spoken dice call. It never changes the roll; it is resolved after a real roll event.
 type Cheer struct {
 	Die   int

@@ -40,7 +40,7 @@
     "test:player-markers": "node --experimental-strip-types --test scripts/player-markers.test.mjs",
     "test:player-markers:browser": "node scripts/player-markers-browser.mjs",
     "test:accessibility:browser": "node scripts/accessibility-browser.mjs",
-    "test:unit": "npm run test:board && npm run test:voice && npm run test:presentation && npm run test:scene && npm run test:narration && npm run test:experience && npm run test:key-move && npm run test:player-markers && npm run test:replay-card",
+    "test:unit": "npm run test:board && npm run test:voice && npm run test:presentation && npm run test:scene && npm run test:narration && npm run test:experience && npm run test:key-move && npm run test:player-markers && npm run test:replay-card && npm run test:voice-readonly",
     "test:admin:browser": "node scripts/admin-browser.mjs",
     "test:admin:records": "node scripts/admin-records-browser.mjs",
     "test:admin:client-error": "node scripts/admin-client-error-browser.mjs",
@@ -55,7 +55,9 @@
     "test:pass-device:browser": "node scripts/pass-device-prompt-browser.mjs",
     "test:product:browser": "node scripts/product-browser.mjs",
     "test:replay-card": "node --experimental-strip-types --test scripts/replay-card.test.mjs",
-    "test:replay-card:browser": "node scripts/replay-card-browser.mjs"
+    "test:replay-card:browser": "node scripts/replay-card-browser.mjs",
+    "test:voice-readonly": "node --experimental-strip-types --test scripts/voice-readonly.test.mjs",
+    "test:voice-readonly:browser": "node scripts/voice-readonly-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

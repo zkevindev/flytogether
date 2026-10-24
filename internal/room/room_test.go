@@ -94,6 +94,45 @@ func TestVoiceGrantAllowsOneMutationAndClickCannotRace(t *testing.T) {
 	r.VoiceState("ready")
 }
 
+func TestReadOnlyVoiceSessionAllowsQuestionsButRejectsMutations(t *testing.T) {
+	r := New(game.Options{Names: []string{"甲", "乙"}, Mode: "quick"})
+	voice, err := r.VoiceForMode("browser", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer voice.Close()
+	if !voice.ReadOnly() {
+		t.Fatal("read-only mode was not bound to the voice session")
+	}
+	if err = voice.BeginSpeech(); err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	busy := r.busy
+	r.mu.Unlock()
+	if busy || voice.CurrentActionToken() != "" {
+		t.Fatal("read-only speech must not lock clicks or create a write grant")
+	}
+	if _, err = voice.Tool("get_game_state", nil); err != nil {
+		t.Fatalf("question was rejected: %v", err)
+	}
+	before := current(r)
+	for _, name := range []string{"roll_dice", "move_piece", "use_prop", "coach_move", "confirm_coach"} {
+		if _, err = voice.Tool(name, map[string]string{"action_token": voice.CurrentActionToken()}); err == nil {
+			t.Fatalf("read-only voice executed %s", name)
+		} else {
+			errorCode(t, err, "VOICE_READ_ONLY")
+		}
+	}
+	if after := current(r); after.Version != before.Version || after.Phase != before.Phase || after.Dice != before.Dice {
+		t.Fatalf("read-only voice mutated game: before=%+v after=%+v", before, after)
+	}
+	state := current(r)
+	if _, err = r.DoAs(Command{ID: game.ID(), GameID: state.ID, Version: state.Version, Action: "roll"}, "browser"); err != nil {
+		t.Fatalf("click was blocked during read-only voice: %v", err)
+	}
+}
+
 func TestRestartRejectsOldGameAndOldVoiceToken(t *testing.T) {
 	r := New(game.Options{Names: []string{"甲", "乙"}, Mode: "quick"})
 	_ = r.BeginSpeech()
