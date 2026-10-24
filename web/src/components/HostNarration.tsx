@@ -34,11 +34,11 @@ export function HostNarration({ roomID, game, enabled, narrator, onText }: {
         let response = await request();
         if (response.status === 429) { await new Promise(resolve => setTimeout(resolve, 300)); if (controller.signal.aborted) return; response = await request(); }
         if (response.status === 409) { if (epoch === generation.current) setStatus(''); return; }
-        if (!response.ok) throw new Error('灵矽播报暂时不可用');
+        if (!response.ok) { const failure = await response.json().catch(() => ({})); throw new Error(failure.message || '灵矽播报暂时不可用'); }
         const value: Speech = await response.json();
         if (value.key !== key || controller.signal.aborted || epoch !== generation.current) return;
         await play(value, epoch);
-      } catch { if (!controller.signal.aborted && epoch === generation.current) setStatus('重试灵矽回合播报'); }
+      } catch (error) { if (!controller.signal.aborted && epoch === generation.current) setStatus(error instanceof Error && error.message.includes('额度') ? error.message : '重试灵矽回合播报'); }
     })();
     return () => { generation.current++; controller.abort(); narrator.stop(); };
   }, [enabled, key, roomID, narrator, onText, retry]);
