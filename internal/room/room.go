@@ -13,6 +13,10 @@ import (
 )
 
 type View struct {
+	SaveError     bool            `json:"save_error,omitempty"`
+	Instance      string          `json:"instance_id"`
+	SavedAt       *time.Time      `json:"saved_at,omitempty"`
+	Restored      bool            `json:"restored,omitempty"`
 	Network       *Lobby          `json:"network,omitempty"`
 	Me            *Me             `json:"me,omitempty"`
 	ID            string          `json:"id"`
@@ -57,11 +61,16 @@ func (e *Error) Error() string        { return e.Message }
 func fail(code, message string) error { return &Error{code, message} }
 
 type cached struct {
-	Input  Command
-	Output View
+	Input       Command
+	Unavailable bool
 }
 
 type Room struct {
+	saveError     bool
+	storage       *database
+	instance      string
+	savedAt       time.Time
+	restored      bool
 	owner         string
 	invite        string
 	members       map[string]member
@@ -100,13 +109,18 @@ func New(o game.Options) *Room {
 	if name == "" {
 		name = "家庭机场"
 	}
-	return &Room{options: o, name: name, status: status, ID: game.ID(), state: game.New(o), voice: "disconnected", voiceSettings: DefaultVoiceSettings(), cache: map[string]cached{},
+	return &Room{instance: game.ID(), options: o, name: name, status: status, ID: game.ID(), state: game.New(o), voice: "disconnected", voiceSettings: DefaultVoiceSettings(), cache: map[string]cached{},
 		listeners: map[chan []byte]string{}, updated: time.Now()}
 }
 
 func (r *Room) view() View {
 	b, _ := json.Marshal(r.state)
-	return View{ID: r.ID, Name: r.name, Status: r.status, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings, Coach: r.coach, CoachExpired: r.coachExpired, Network: r.lobbyView()}
+	var savedAt *time.Time
+	if !r.savedAt.IsZero() {
+		t := r.savedAt
+		savedAt = &t
+	}
+	return View{Instance: r.instance, SavedAt: savedAt, Restored: r.restored, SaveError: r.saveError, ID: r.ID, Name: r.name, Status: r.status, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings, Coach: r.coach, CoachExpired: r.coachExpired, Network: r.lobbyView()}
 }
 
 func (r *Room) VoiceSettings() VoiceSettings {
@@ -115,7 +129,7 @@ func (r *Room) VoiceSettings() VoiceSettings {
 	return r.voiceSettings
 }
 
-func (r *Room) SetVoiceSettings(settings VoiceSettings) (View, error) {
+func (r *Room) SetVoiceSettings(settings VoiceSettings) (result View, err error) {
 	settings.WakeWord = strings.TrimSpace(settings.WakeWord)
 	if count := utf8.RuneCountInString(settings.WakeWord); count < 2 || count > 16 {
 		return View{}, fail("INVALID_WAKE_WORD", "唤醒词需要 2 到 16 个字")
@@ -127,16 +141,20 @@ func (r *Room) SetVoiceSettings(settings VoiceSettings) (View, error) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	before := r.beforeMutation()
+	defer r.rollback(before, &err)
 	r.invalidateCoach()
 	r.voiceSettings = settings
 	r.grant, r.busy = "", false
-	r.publish()
-	return r.view(), nil
+	return r.finish(nil, saveChange{})
 }
 func (r *Room) Snapshot() View { r.mu.Lock(); defer r.mu.Unlock(); return r.view() }
 func (r *Room) publish() {
 	r.seq++
 	r.updated = time.Now()
+	r.broadcast()
+}
+func (r *Room) broadcast() {
 	for ch, session := range r.listeners {
 		b, _ := json.Marshal(map[string]any{"type": "state", "room": r.personalized(session)})
 		select {
@@ -164,9 +182,11 @@ func (r *Room) SubscribeFor(session string) (chan []byte, func()) {
 }
 
 func (r *Room) Restart(o game.Options) (View, error) { return r.RestartAs(o, "") }
-func (r *Room) RestartAs(o game.Options, actor string) (View, error) {
+func (r *Room) RestartAs(o game.Options, actor string) (result View, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	before := r.beforeMutation()
+	defer r.rollback(before, &err)
 	if err := r.actorOK(actor, true); err != nil {
 		return View{}, err
 	}
@@ -178,6 +198,7 @@ func (r *Room) RestartAs(o game.Options, actor string) (View, error) {
 	}
 	r.invalidateCoach()
 	r.options = o
+	r.restored = false
 	r.state = game.New(o)
 	r.status = "playing"
 	if o.Waiting {
@@ -190,14 +211,15 @@ func (r *Room) RestartAs(o game.Options, actor string) (View, error) {
 	r.cache = map[string]cached{}
 	r.grant = ""
 	r.used = false
-	r.publish()
-	return r.view(), nil
+	return r.finish(nil, saveChange{ResetCommands: true})
 }
 
 func (r *Room) DoAs(c Command, actor string) (View, error) { c.Actor = actor; return r.Do(c, false) }
-func (r *Room) Do(c Command, voice bool) (View, error) {
+func (r *Room) Do(c Command, voice bool) (result View, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	before := r.beforeMutation()
+	defer r.rollback(before, &err)
 	if r.invite != "" {
 		host := c.Action == "start" || c.Action == "pause" || c.Action == "resume" || c.Action == "end" || c.Action == "replay"
 		// Retried commands remain bound to the original actor, even after the turn advanced.
@@ -208,15 +230,17 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 			return View{}, fail("HOST_ONLY", "这个操作需要房主来完成")
 		}
 	}
+	if !voice && c.Token != "" {
+		return View{}, fail("INVALID_COMMAND", "点击操作不接受语音授权令牌")
+	}
 	if old, ok := r.cache[c.ID]; ok {
+		if old.Unavailable {
+			return View{}, fail("RETRY_UNAVAILABLE", "此操作记录已隔离，请以当前已保存棋局为准，不会重新执行")
+		}
 		if old.Input != c {
 			return View{}, fail("COMMAND_CONFLICT", "同一个操作编号不能重复用于不同动作")
 		}
-		v := old.Output
-		if r.invite != "" {
-			v = r.personalized(c.Actor)
-		}
-		return v, nil
+		return r.personalized(c.Actor), nil
 	}
 	if c.ID == "" || len(c.ID) > 160 {
 		return View{}, fail("INVALID_COMMAND", "操作编号无效")
@@ -232,6 +256,7 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 		o.Demo = false
 		o.Waiting = r.invite != ""
 		r.state = game.New(o)
+		r.restored = false
 		if r.invite != "" {
 			for session, m := range r.members {
 				r.state.Players[m.index].Name = r.names[session]
@@ -248,10 +273,8 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 		r.voice = "disconnected"
 		r.voiceLease = ""
 		r.voiceActor = ""
-		r.publish()
-		v := r.personalized(c.Actor)
-		r.cache = map[string]cached{c.ID: {c, v}}
-		return v, nil
+		r.cache = map[string]cached{}
+		return r.finish(&c, saveChange{ResetCommands: true})
 	}
 	if c.Action == "start" || c.Action == "pause" || c.Action == "resume" || c.Action == "end" {
 		if voice {
@@ -266,10 +289,10 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 			return View{}, err
 		}
 		r.invalidateCoach()
-		r.publish()
-		v := r.personalized(c.Actor)
-		r.cache[c.ID] = cached{c, v}
-		return v, nil
+		if c.Action == "resume" {
+			r.restored = false
+		}
+		return r.finish(&c, saveChange{})
 	}
 	if err := r.actorOK(c.Actor, false); err != nil {
 		return View{}, err
@@ -292,7 +315,6 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 	if len(r.cache) >= 4096 {
 		return View{}, fail("ROOM_LIMIT", "这局操作次数较多，请开始新的一局")
 	}
-	var err error
 	switch c.Action {
 	case "coach":
 		err = r.propose(c.Choice)
@@ -332,10 +354,7 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 	if voice {
 		r.used = true
 	}
-	r.publish()
-	v := r.personalized(c.Actor)
-	r.cache[c.ID] = cached{c, v}
-	return v, nil
+	return r.finish(&c, saveChange{})
 }
 
 func (r *Room) AI() {
@@ -344,6 +363,7 @@ func (r *Room) AI() {
 	if r.status != "playing" || r.busy || r.state.Phase == "finished" || !r.state.Players[r.state.Current].AI {
 		return
 	}
+	before := r.beforeMutation()
 	if r.state.Phase == "roll" {
 		prop, target := "", ""
 		if r.state.Difficulty == "hard" {
@@ -362,7 +382,11 @@ func (r *Room) AI() {
 	} else {
 		_ = r.state.Move(r.state.AIMove().PieceID)
 	}
-	r.publish()
+	if _, err := r.finish(nil, saveChange{}); err != nil {
+		r.restore(before)
+		r.status = "paused"
+		r.publish()
+	}
 }
 
 func (r *Room) BeginSpeech() error { return r.beginSpeech("", "") }
@@ -475,12 +499,16 @@ func (r *Room) tool(name string, args map[string]string, actor string) (any, err
 }
 
 type Store struct {
-	mu       sync.Mutex
-	rooms    map[string]*Room
-	sessions map[string]string
+	storage   *database
+	retention time.Duration
+	mu        sync.Mutex
+	rooms     map[string]*Room
+	sessions  map[string]string
 }
 
-func NewStore() *Store { return &Store{rooms: map[string]*Room{}, sessions: map[string]string{}} }
+func NewStore() *Store {
+	return &Store{retention: DefaultRetention, rooms: map[string]*Room{}, sessions: map[string]string{}}
+}
 func (s *Store) Create(session string, o game.Options) (*Room, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -492,6 +520,10 @@ func (s *Store) Create(session string, o game.Options) (*Room, error) {
 	}
 	r := New(o)
 	r.initOwner(session, o.Network)
+	r.storage = s.storage
+	if _, err := r.finish(nil, saveChange{Session: session}); err != nil {
+		return nil, err
+	}
 	s.rooms[r.ID] = r
 	s.sessions[session] = r.ID
 	return r, nil
@@ -523,9 +555,14 @@ func (s *Store) Run(ctxDone <-chan struct{}) {
 			all := make([]*Room, 0, len(s.rooms))
 			for id, r := range s.rooms {
 				r.mu.Lock()
-				expired := time.Since(r.updated) > 4*time.Hour && len(r.listeners) == 0 && !r.busy
+				expired := time.Since(r.updated) > s.retention && len(r.listeners) == 0 && !r.busy
 				r.mu.Unlock()
 				if expired {
+					if s.storage != nil {
+						if err := s.storage.remove(id); err != nil {
+							continue
+						}
+					}
 					delete(s.rooms, id)
 					for key, rid := range s.sessions {
 						if rid == id {
@@ -538,6 +575,11 @@ func (s *Store) Run(ctxDone <-chan struct{}) {
 			}
 			s.mu.Unlock()
 			for _, r := range all {
+				select {
+				case <-ctxDone:
+					return
+				default:
+				}
 				r.AI()
 			}
 		}
@@ -576,25 +618,33 @@ func (r *Room) control(action string) error {
 func (s *Store) CreateNew(session string, o game.Options) (*Room, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	settings := DefaultVoiceSettings()
 	old := s.rooms[s.sessions[session]]
 	if (old == nil || old.invite != "") && len(s.rooms) >= 256 {
 		return nil, fmt.Errorf("房间已满，请稍后再试")
 	}
+	settings := DefaultVoiceSettings()
+	deleteID := ""
 	if old != nil && old.invite == "" {
+		deleteID = old.ID
 		old.mu.Lock()
+		defer old.mu.Unlock()
 		settings = old.voiceSettings
-		if old.status != "ended" {
-			_ = old.control("end")
-			old.publish()
-		}
-		old.mu.Unlock()
-		delete(s.rooms, old.ID)
 	}
 	o.Waiting = true
 	r := New(o)
 	r.initOwner(session, o.Network)
+	r.storage = s.storage
 	r.voiceSettings = settings
+	if _, err := r.finish(nil, saveChange{Session: session, DeleteRoom: deleteID}); err != nil {
+		return nil, err
+	}
+	if deleteID != "" {
+		if old.status != "ended" {
+			_ = old.control("end")
+			old.publish()
+		}
+		delete(s.rooms, deleteID)
+	}
 	s.rooms[r.ID] = r
 	s.sessions[session] = r.ID
 	return r, nil

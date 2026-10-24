@@ -6,7 +6,7 @@ import (
 )
 
 func (s *server) setSession(w http.ResponseWriter, key string) {
-	http.SetCookie(w, &http.Cookie{Name: "flytogether", Value: key, Path: "/", HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteStrictMode, MaxAge: 86400})
+	http.SetCookie(w, &http.Cookie{Name: "flytogether", Value: key, Path: "/", HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteStrictMode, MaxAge: 7 * 86400})
 }
 func (s *server) join(w http.ResponseWriter, r *http.Request) {
 	var in struct {

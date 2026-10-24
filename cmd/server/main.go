@@ -7,11 +7,13 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -35,17 +37,28 @@ func main() {
 	loadEnv(".env")
 	addr := env("LISTEN_ADDR", "127.0.0.1:8080")
 	public, _ := url.Parse(os.Getenv("PUBLIC_URL"))
-	s := &server{store: room.NewStore(), bridge: &linx.Bridge{Config: linx.Config{
+	retention, err := positiveEnv("SAVE_RETENTION_HOURS", 168, 1, 8760)
+	if err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
+	savedStore, err := room.OpenStore(env("SAVE_PATH", "data/games.db"), time.Duration(retention)*time.Hour)
+	if err != nil {
+		slog.Error("cannot open game saves", "error", err)
+		os.Exit(1)
+	}
+	defer savedStore.Close()
+	s := &server{store: savedStore, bridge: &linx.Bridge{Config: linx.Config{
 		URL:    env("LINGXI_REALTIME_URL", "wss://xrobo-io.qiniuapi.com/v1/realtime"),
 		APIKey: os.Getenv("LINGXI_REALTIME_API_KEY"), Model: os.Getenv("LINGXI_REALTIME_MODEL")}}, publicHost: public.Host, secureCookie: public.Scheme == "https"}
 	s.speaker = &linx.Speaker{Config: s.bridge.Config}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"status": "ok"}) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"status": "ok", "voice_configured": s.bridge.Config.Enabled()})
+		writeJSON(w, 200, map[string]any{"status": "ok", "voice_configured": s.bridge.Config.Enabled(), "storage": "sqlite"})
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "boards": game.Boards()})
+		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "persistence_enabled": true, "boards": game.Boards()})
 	})
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("POST /api/rooms", s.create)
@@ -54,6 +67,7 @@ func main() {
 	mux.HandleFunc("POST /api/rooms/{id}/join", s.join)
 	mux.HandleFunc("POST /api/rooms/{id}/ready", s.ready)
 	mux.HandleFunc("POST /api/rooms/{id}/leave", s.leave)
+	mux.HandleFunc("POST /api/rooms/{id}/discard", s.discard)
 	mux.HandleFunc("POST /api/rooms/{id}/commands", s.command)
 	mux.HandleFunc("POST /api/rooms/{id}/voice-settings", s.voiceSettings)
 	mux.HandleFunc("POST /api/rooms/{id}/announcement", s.announcement)
@@ -96,9 +110,12 @@ func main() {
 	})
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go s.store.Run(ctx.Done())
-	httpServer := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 16384}
+	workersDone := make(chan struct{})
+	go func() { defer close(workersDone); s.store.Run(ctx.Done()) }()
+	shutdownDone := make(chan struct{})
+	httpServer := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 16384, BaseContext: func(net.Listener) context.Context { return ctx }}
 	go func() {
+		defer close(shutdownDone)
 		<-ctx.Done()
 		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -109,6 +126,8 @@ func main() {
 		slog.Error("server failed", "error", err)
 		os.Exit(1)
 	}
+	<-shutdownDone
+	<-workersDone
 }
 
 func env(k, fallback string) string {
@@ -164,6 +183,9 @@ func failure(w http.ResponseWriter, err error) {
 	var re *room.Error
 	if errors.As(err, &re) {
 		code, message = re.Code, re.Message
+		if code == "SAVE_UNAVAILABLE" {
+			status = 503
+		}
 		if code == "HOST_ONLY" || code == "NOT_YOUR_TURN" || code == "NOT_AUTHORIZED" {
 			status = 403
 		}
@@ -279,7 +301,7 @@ func (s *server) create(w http.ResponseWriter, r *http.Request) {
 		failure(w, e)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: "flytogether", Value: key, Path: "/", HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteStrictMode, MaxAge: 86400})
+	http.SetCookie(w, &http.Cookie{Name: "flytogether", Value: key, Path: "/", HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteStrictMode, MaxAge: 7 * 86400})
 	writeJSON(w, 201, v.SnapshotFor(key))
 }
 func (s *server) restart(w http.ResponseWriter, r *http.Request) {
@@ -406,4 +428,27 @@ func (s *server) voiceSocket(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		_ = c.Write(ctx, websocket.MessageText, b)
 	}
+}
+
+func positiveEnv(name string, fallback, min, max int) (int, error) {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < min || value > max {
+		return 0, errors.New(name + " is outside allowed range")
+	}
+	return value, nil
+}
+func (s *server) discard(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		failure(w, errors.New("请使用 JSON 请求"))
+		return
+	}
+	if err := s.store.Discard(cookie(r), r.PathValue("id")); err != nil {
+		failure(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
 }

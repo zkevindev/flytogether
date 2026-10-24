@@ -128,13 +128,18 @@ func (r *Room) lobbyView() *Lobby {
 	}
 	return l
 }
-func (r *Room) Join(session, invite, name string) (View, error) {
+func (r *Room) Join(session, invite, name string) (result View, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	before := r.beforeMutation()
+	defer r.rollback(before, &err)
 	if r.invite == "" || invite != r.invite || r.status == "ended" {
 		return View{}, fail("INVALID_INVITE", "邀请链接已失效，请向房主获取新链接")
 	}
 	if r.isMember(session) {
+		if _, err = r.finish(nil, saveChange{Session: session}); err != nil {
+			return View{}, err
+		}
 		return r.personalized(session), nil
 	}
 	if r.status != "waiting" {
@@ -170,15 +175,19 @@ func (r *Room) Join(session, invite, name string) (View, error) {
 			r.names[session] = name
 			r.state.Players[i].Name = name
 			r.state.Version++
-			r.publish()
+			if _, err = r.finish(nil, saveChange{Session: session}); err != nil {
+				return View{}, err
+			}
 			return r.personalized(session), nil
 		}
 	}
 	return View{}, fail("ROOM_FULL", "房间已满，请联系房主")
 }
-func (r *Room) SetReady(session string, ready bool) (View, error) {
+func (r *Room) SetReady(session string, ready bool) (result View, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	before := r.beforeMutation()
+	defer r.rollback(before, &err)
 	m, ok := r.members[session]
 	if !ok || r.invite == "" {
 		return View{}, fail("NOT_AUTHORIZED", "请先入座")
@@ -191,12 +200,16 @@ func (r *Room) SetReady(session string, ready bool) (View, error) {
 	}
 	m.ready = ready
 	r.members[session] = m
-	r.publish()
+	if _, err = r.finish(nil, saveChange{}); err != nil {
+		return View{}, err
+	}
 	return r.personalized(session), nil
 }
-func (r *Room) Leave(session string) error {
+func (r *Room) Leave(session string) (err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	before := r.beforeMutation()
+	defer r.rollback(before, &err)
 	if r.invite == "" || !r.isMember(session) {
 		return fail("NOT_AUTHORIZED", "不在此房间中")
 	}
@@ -208,8 +221,8 @@ func (r *Room) Leave(session string) error {
 	}
 	delete(r.members, session)
 	r.state.Version++
-	r.publish()
-	return nil
+	_, err = r.finish(nil, saveChange{Session: session, Forget: true})
+	return err
 }
 func (s *Store) Join(session, id, invite, name string) (*Room, error) {
 	s.mu.Lock()

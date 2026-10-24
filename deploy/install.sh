@@ -35,6 +35,8 @@ values.update({
     'WEB_DIR': os.environ['APP_ROOT']+'/current/web',
     'PUBLIC_URL': os.environ['PUBLIC_URL'],
 })
+values.setdefault('SAVE_PATH','/var/lib/flytogether/games.db')
+values.setdefault('SAVE_RETENTION_HOURS','168')
 values.setdefault('LINGXI_REALTIME_URL','wss://xrobo-io.qiniuapi.com/v1/realtime')
 for key in ['LINGXI_REALTIME_MODEL','LINGXI_REALTIME_API_KEY']:
     values.setdefault(key,'')
