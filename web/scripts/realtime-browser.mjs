@@ -38,7 +38,7 @@ try {
  const options={demo:coaching,room_name:'直接对话联调',names:['小朋友','爸爸'],board:'cross',mode:'quick',ai:false,props:true,waiting:false};
  let res=await page.request.post('/api/rooms/'+room.id+'/matches',{data:options});assert.equal(res.status(),200);room=await res.json();
  if(coaching){
-  const roll=await page.request.post('/api/rooms/'+room.id+'/commands',{data:{command_id:crypto.randomUUID(),game_id:room.state.id,expected_version:room.state.version,action:'roll'}});assert.equal(roll.status(),200);
+  const roll=await page.request.post('/api/rooms/'+room.id+'/commands',{data:{command_id:crypto.randomUUID(),game_id:room.state.id,expected_version:room.state.version,action:'roll'}});assert.equal(roll.status(),200);room=await roll.json();
   const dice=page.getByRole('dialog',{name:'3D 掷骰结果'});await dice.waitFor({state:'visible'});await dice.getByRole('button',{name:'继续飞行',exact:true}).click();
  }
  await page.getByRole('button',{name:'关闭对讲麦克风',exact:true}).waitFor({state:'visible',timeout:30000});
@@ -96,7 +96,7 @@ try {
  }
  const replies=await page.evaluate(()=>window.__qa.events.filter(e=>e.type.endsWith('audio_transcript.done')||e.type==='response.output_text.done').map(e=>({at:e.at,text:e.text})));
  log({phase:'actual_spoken_replies',replies});
- if(coaching){const turns=await page.evaluate(()=>window.__qa.events.filter(e=>e.type==='stt').map(e=>e.at));const advice=replies.filter(r=>r.at>=turns[0]&&r.at<turns[4]).map(r=>r.text||'').join('');assert.ok(!/没有风险|无风险|不会被.{0,5}撞|很安全|绝对安全|保证安全/.test(advice),'voice must not turn a limited risk estimate into a safety guarantee');}
+ if(coaching){const turns=await page.evaluate(()=>window.__qa.events.filter(e=>e.type==='stt').map(e=>e.at));const advice=replies.filter(r=>r.at>=turns[0]&&r.at<turns[4]).map(r=>r.text||'').join('');assert.ok(!/没有风险|无风险|不会被.{0,5}撞|很安全|绝对安全|保证安全/.test(advice.replace(/(?:不能|无法|不)保证安全/g,'')),'voice must not turn a limited risk estimate into a safety guarantee');}
  if(lucky){
   const dice=(await state()).dice_rolls;
   const turns=await page.evaluate(()=>window.__qa.events.filter(e=>e.type==='stt').map(e=>e.at));

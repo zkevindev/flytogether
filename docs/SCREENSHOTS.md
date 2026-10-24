@@ -13,9 +13,11 @@ README 使用 [`images/current/`](images/current/) 中从真实应用重新截�
 | [props.png](images/current/props.png) | 五种道具、实际库存和不可用原因 |
 | [dice-3d.png](images/current/dice-3d.png) | 使用起飞卡后，Go 实际随机点数的 3D 弹窗 |
 | [move-preview.png](images/current/move-preview.png) | 选飞机后的预计落点与确认入口；此时尚未执行移动 |
+| [coach-desktop.png](images/current/coach-desktop.png) | 实际教练推荐、比较按钮和高亮落点，未执行移动 |
+| [coach-mobile.png](images/current/coach-mobile.png) | 手机视口的教练预览和确认入口 |
 | [play-mobile.png](images/current/play-mobile.png) | 实际确认起飞后，390×844 视口的响应式布局 |
 
-截图关闭对讲麦克风和主动播报，避免文档采集申请声音权限；不伪造已连接状态、语音回复、骰子或飞机位置。两位玩家使用通用昵称。新手指南通过正式入口打开，其余操作均经实际页面完成。
+截图关闭对讲麦克风和主动播报，避免文档采集申请声音权限；不伪造已连接状态、语音回复、骰子或飞机位置。骰子截图临时暂停浏览器展示计时，防止短弹窗在截图时消失；随机结果仍取真实 Go 事件，其他流程恢复正常计时。两位玩家使用通用昵称。新手指南通过正式入口打开，其余操作均经实际页面完成。
 
 手机图片是桌面 Chrome 缩小视口的结果，不能替代真实 Android/iOS 验收。语音与撒花、坠机等额外证据见 [语音验收](QA-VOICE.md)；`images/` 根目录旧图保留为历史证据，不能拿来代表最新完整页面。
 

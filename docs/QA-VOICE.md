@@ -75,3 +75,18 @@ QA_BASE_URL=http://127.0.0.1:8080 QA_AUDIO_FILE=/tmp/flytogether-lucky/browser-i
 ```
 
 本轮还复跑完整起飞链路（实际随机 1 点、版本 1→2→3→4）及独立灵矽 TTS，返回 107332 字节 PCM，麦克风请求为零。自然随机走棋准备后，真实网页验证撞机回库/音效与抵达撒花通过。
+
+
+## 教练建议与连续确认（#20）
+
+合成麦克风场景输入“帮我选→另一架呢→安全一点→刚才那个→就它→不要掷骰子”，通过真实 Chrome、AudioWorklet、Go 和灵矽。演示起始位置由正式选项创建，骰子真实随机；初始掷骰后版本为 2，前四句仅改变建议和可见高亮，确认后才变为 3，否定和重连不增加版本。
+
+测试曾将“另一架呢”识别为“晾衣架呢”，已在存在当前建议时限定兼容，不把无上下文的相似词当作操作。首次试听发现模型会把有限风险解释成“没有风险”，已收紧当前局势措辞与提示；真实回复回归检查推荐期间不得作绝对安全保证。它不代表所有口音、噪声和模型回复都已覆盖，也不替代真实亲子试听。
+
+```sh
+QA_BASE_URL=http://127.0.0.1:8080 npm --prefix web run test:coach:browser
+python3 scripts/voice_fixture.py --scenario coach --output-dir /tmp/flytogether-coach-fixture
+QA_BASE_URL=http://127.0.0.1:8080 QA_AUDIO_FILE=/tmp/flytogether-coach-fixture/browser-input.wav QA_SCENARIO=coach npm --prefix web run test:voice:realtime
+```
+
+点击浏览器回归不申请麦克风，验证建议与比较不改棋局、双页同步、刷新、手动覆盖、确认一次、旧 ID 拒绝、取消、暂停/继续、新局和 2/4 架可选飞机的手机布局。Go 用例另覆盖询问/否定不走棋、风险计算不改原状态、语音一次授权和断开失效。

@@ -19,7 +19,8 @@ try{
  });
  const capture=async(name,target=page)=>{
   await page.evaluate(()=>document.fonts.ready);
-  await target.screenshot({path:join(output,name),...(target===page?{fullPage:true}:{})});
+  const clip=target===page?undefined:await target.boundingBox();if(target!==page)assert.ok(clip,'capture target must be rendered');
+  await page.screenshot({path:join(output,name),animations:'disabled',...(target===page?{fullPage:true}:{clip})});
   const viewport=page.viewportSize();const bytes=await readFile(join(output,name));
   captures.push({file:name,viewport,sha256:createHash('sha256').update(bytes).digest('hex')});
  };
@@ -28,7 +29,10 @@ try{
   await page.waitForTimeout(600);
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth);
   assert.equal(overflow,false,'screenshots should not hide page overflow');
+  const inside=await page.locator('.flight-host').evaluate(el=>{const box=el.getBoundingClientRect();return [...el.querySelectorAll('.plane-marker b')].every(n=>{const r=n.getBoundingClientRect();return r.left>=box.left&&r.right<=box.right&&r.top>=box.top&&r.bottom<=box.bottom;});});
+  assert.ok(inside,'every plane must remain inside the rendered board');
  };
+ await page.clock.install();
  await page.goto(process.env.QA_BASE_URL,{waitUntil:'networkidle'});
  await page.getByRole('button',{name:'创建游戏',exact:true}).waitFor({state:'visible'});
  assert.equal(await page.locator('.flight-host').count(),0);
@@ -49,11 +53,14 @@ try{
  await page.getByRole('button',{name:/道具口袋/}).click();
  await capture('props.png',page.getByRole('dialog'));
  await page.getByRole('button',{name:'使用起飞卡',exact:true}).click();
- await page.locator('.roll-button').click();
+ await page.waitForFunction(()=>!document.querySelector('.roll-button')?.disabled);
+ await page.clock.pauseAt(new Date(Date.now()+100));
+ await page.locator('.roll-button').click({force:true});
  const dice=page.getByRole('dialog',{name:'3D 掷骰结果'});
+ await dice.waitFor({state:'visible'});await page.clock.runFor(1000);
  await dice.getByRole('heading',{name:/点！/}).waitFor({state:'visible'});
  await capture('dice-3d.png',dice);
- await dice.getByRole('button',{name:'继续飞行',exact:true}).click();
+ await dice.getByRole('button',{name:'继续飞行',exact:true}).click();await page.clock.resume();
  await page.getByRole('button',{name:'小熊号',exact:true}).click();
  await page.locator('.landing-marker:not([hidden])').waitFor({state:'visible'});
  await capture('move-preview.png');
