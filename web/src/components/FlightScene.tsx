@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { Game, Move, Piece } from '../lib/types';
 import { colors, palette } from '../lib/types';
+import { playerMarker } from '../lib/player-markers';
 import { boardPieces, createBoardLayout, piecePosition, type BoardLayout, type Point } from '../lib/board-layout';
 import type { BoardSpec } from '../lib/types';
 import { createDie, dieQuaternion } from '../lib/die';
@@ -138,7 +139,7 @@ export function FlightScene(props: Handlers) {
         mesh.position.copy(toWorld({ x: airport.x + airport.size / 2, y: airport.y + airport.size / 2 }, 0.02));
         mesh.receiveShadow = true;
         table.add(mesh);
-        const name = sprite(player ? player.name : '等待登机', '#ffffff');
+        const name = sprite(`${playerMarker(index).symbol} ${player ? player.name : '等待登机'}`, '#ffffff');
         name.position.copy(toWorld({ x: airport.x + airport.size / 2, y: airport.y + 28 }, 0.28));
         table.add(name);
       });
@@ -395,10 +396,10 @@ export function FlightScene(props: Handlers) {
 
   return <>
     <div ref={host} className={'flight-host' + (status !== 'ready' ? ' scene-hidden' : '')} aria-hidden="true">
-      <div className="plane-labels"><span ref={landingLabel} hidden className="landing-marker" aria-hidden="true">预计落点</span>{props.game.players.flatMap(player => player.pieces.map(piece => <span
-        className="plane-marker" key={piece.id} ref={node => { if (node) labels.current.set(piece.id, node); else labels.current.delete(piece.id); }}
+      <div className="plane-labels"><span ref={landingLabel} hidden className="landing-marker" aria-hidden="true">预计落点</span>{props.game.players.flatMap((player, playerIndex) => player.pieces.map(piece => <span
+        className="plane-marker" data-player-marker={playerMarker(playerIndex).id} key={piece.id} ref={node => { if (node) labels.current.set(piece.id, node); else labels.current.delete(piece.id); }}
         style={{ color: palette[player.color] }} title={`${player.name} · ${piece.number}号 ${piece.label}`}>
-        <b>{piece.number}</b><small>{piece.label}</small>
+        <i aria-hidden="true">{playerMarker(playerIndex).symbol}</i><b>{piece.number}</b><small>{piece.label}</small>
       </span>))}</div>
     </div>
     {status !== 'ready' && <div className="scene-recovery" role="status">

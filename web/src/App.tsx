@@ -9,6 +9,7 @@ import { Celebration } from './components/Celebration';
 import { HostNarration } from './components/HostNarration';
 import { KeyMoveNarration } from './components/KeyMoveNarration';
 import { PassDevicePrompt } from './components/PassDevicePrompt';
+import { PlayerMarker } from './components/PlayerMarker';
 import { loadCompanion } from './lib/companion';
 import { Narrator } from './lib/narration';
 import { BoardLoader } from './components/BoardLoader';
@@ -464,7 +465,7 @@ export default function App() {
       </main> : <main id="game-main" tabIndex={-1} className="play-main">
         <div className="play-layout">
           <section className="board-panel" aria-label="对局棋盘与玩家">
-            <div className="board-turnbar"><span style={{ color: palette[current.color] }}><AirplaneTilt weight="fill" />{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span>
+            <div className="board-turnbar"><span style={{ color: palette[current.color] }}><PlayerMarker index={state.current} /><AirplaneTilt weight="fill" />{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span>
               <strong>{state.demo ? '演示局面' : state.board.name}{state.phase === 'move' ? ` · ${state.dice} 点` : ''}</strong>
               <div className="play-turn-actions">{lifecycle === 'playing' && !winner && state.phase === 'roll' && <button data-turn-control className="primary-button roll-button" disabled={!canAct} onClick={() => void command('roll')}>{current.ai ? '机器人回合' : busy ? (pendingAction === 'roll' ? (reducedMotion ? '正在掷骰…' : '骰子转呀转…') : '正在同步…') : '掷骰子'}</button>}
                 {lifecycle === 'playing' && !current.ai && state.phase === 'move' && <button className="prop-shortcut coach-shortcut" disabled={!canAct} onClick={() => void command('coach', 'best')}><Sparkle weight="fill" />帮我选</button>}
@@ -473,7 +474,7 @@ export default function App() {
                 {winner && <button className="prop-shortcut" onClick={() => setResultDismissed('')}>查看结算</button>}
               </div>
             </div>
-            <PassDevicePrompt name={current.name} phase={state.phase} isRobot={current.ai} visible={!network && lifecycle === 'playing' && !winner} />
+            <PassDevicePrompt name={current.name} index={state.current} phase={state.phase} isRobot={current.ai} visible={!network && lifecycle === 'playing' && !winner} />
             <KeyMoveNarration game={presentation.game || state} />
             {lifecycle === 'playing' && !winner && !presentation.active && !presentation.queue.length && <p className="turn-help" role="status">{currentDelegated ? `托管正在替${current.name}掷骰与走棋，不使用道具。` : current.ai ? `${current.name}正在自动行动，稍等它走完。` : !myTurn ? `等待${current.name}操作，你可以看棋盘和听播报。` : state.phase === 'move' ? '点一架亮着的飞机，先看落点；确认后再飞行。' : state.active_prop === 'launch_used' ? '起飞卡已让一架飞机到起飞位；继续掷骰，按点数移动。' : state.active_prop === 'launch' ? '旧存档起飞卡已启用，掷骰后任意点数都能选择机库飞机起飞。' : current.pieces.every(piece => piece.progress < 0) ? `轮到${current.name}先掷骰子。机库飞机要掷到${state.preset === 'gentle' ? '五点或六点' : '六点'}才能起飞${state.props_enabled && current.props.launch > 0 ? '；也可以使用起飞卡，直接把一架飞机送到起飞位' : ''}。` : `轮到${current.name}先掷骰子，再选择飞机。`}</p>}
             <details className="match-rules"><summary>本局规则 · {state.rules?.name || '自定义家庭规则'}</summary><p>{state.rules?.summary || '六点起飞；快速模式先到一架，完整模式全部抵达。'} 规则在本局固定。</p></details><div className={'board-viewport ' + (boardZoom ? 'is-zoomed' : '')}><div className="board-stage">{celebration && <Celebration key={celebration.id} text={celebration.text} won={celebration.won} reducedMotion={reducedMotion} onDismiss={()=>setCelebration(undefined)} />}{impact && <Suspense fallback={null}><PropEffects key={impact.event?.id} event={impact.event!} game={presentation.game || state} light={experience.board === 'flat'} reducedMotion={reducedMotion} /></Suspense>}{lifecycle !== 'playing' && <div className="game-status-overlay"><strong>{lifecycle === 'waiting' ? '飞行员准备好了吗？' : lifecycle === 'paused' ? '先休息一下' : '这一趟飞行已结束'}</strong><p>{lifecycle === 'waiting' ? (network ? '邀请朋友入座，所有人在线并准备后由房主开局。' : '确认玩家和难度后，点击开始游戏。') : lifecycle === 'paused' ? (room.restored ? '上次对局已恢复，骰子、道具和席位已保留，由房主确认继续。' : '棋盘、道具和骰子已保留，随时继续。') : '保留本局记录，重新准备下一次出发。'}</p>{host && <button className="primary-button" disabled={busy || !connected || (network && lifecycle === 'waiting' && !allReady)} onClick={() => lifecycle === 'ended' ? void command('replay') : void command(lifecycle === 'waiting' ? 'start' : 'resume')}><Play weight="fill" />{lifecycle === 'waiting' ? '开始游戏' : lifecycle === 'paused' ? '继续游戏' : '重新准备'}</button>}{network && !host && <p>等待房主{lifecycle === 'paused' ? '继续游戏' : '开始游戏'}，席位状态见下方准备区。</p>}</div>}<BoardLoader light={experience.board === 'flat'} reducedMotion={reducedMotion} onLight={()=>changeExperience({...experience,board:'flat'})} game={presentation.game || state} onPiece={onPiece} disabled={!canAct} onRoll={() => void command('roll')} rolling={busy && pendingAction === 'roll'} preview={preview} /></div></div>
@@ -483,7 +484,7 @@ export default function App() {
             <details className="keyboard-help"><summary>键盘操作</summary><p>Tab 切换控件，Enter 激活。焦点在棋盘主区域时：空格掷骰，1～4 选飞机，Enter 确认，Esc 取消，P 打开道具。</p></details>
             <div className="crew-list" style={{ '--seats': state.players.length } as React.CSSProperties}>
               {state.players.map((player, i) => <div key={player.id} className={'crew-seat ' + (state.current === i && state.phase !== 'finished' ? 'current' : '')} style={{ '--player-color': palette[player.color] } as React.CSSProperties}>
-                <Avatar player={player} /><div className="crew-detail"><strong>{player.name}{player.ai && <span className="ai-tag">机器人</span>}{room.network?.seats[i]?.delegated && <span className="ai-tag">托管</span>}</strong><span>{player.pieces.filter(p => p.progress === state.board.finish).length}/{state.mode === 'quick' ? '1' : player.pieces.length} 架抵达</span></div>{state.current === i && state.phase !== 'finished' && <span className="seat-turn">本回合</span>}
+                <Avatar player={player} /><div className="crew-detail"><strong><PlayerMarker index={i} />{player.name}{player.ai && <span className="ai-tag">机器人</span>}{room.network?.seats[i]?.delegated && <span className="ai-tag">托管</span>}</strong><span>{player.pieces.filter(p => p.progress === state.board.finish).length}/{state.mode === 'quick' ? '1' : player.pieces.length} 架抵达</span></div>{state.current === i && state.phase !== 'finished' && <span className="seat-turn"><PlayerMarker index={i} />本回合</span>}
               </div>)}
             </div>
           </section>

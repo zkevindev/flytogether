@@ -3,6 +3,7 @@ import { AirplaneTilt, ArrowClockwise, House, Microphone, SpeakerHigh, SpeakerSl
 import { BoardLoader } from './BoardLoader';
 import { KeyMoveNarration } from './KeyMoveNarration';
 import { latestKeyMove } from '../lib/key-move';
+import { PlayerMarker } from './PlayerMarker';
 import { DiceRollModal } from './DiceRollModal';
 import { AudienceChat } from './Audience';
 import { useExperience } from '../lib/experience';
@@ -144,7 +145,7 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
       <div className="header-actions"><strong className="watch-badge">观赛中</strong><button className="icon-button" aria-label={muted ? '恢复声音' : '静音'} onClick={() => { const next = !muted; setMuted(next); localStorage.setItem('fly-master-muted', next ? 'on' : 'off'); if (next) voice.current?.disconnect(); }}>{muted ? <SpeakerSlash /> : <SpeakerHigh />}</button><button className="text-button" onClick={() => change({ ...preferences, board: preferences.board === 'flat' ? 'auto' : 'flat' })}>{preferences.board === 'flat' ? '立体棋盘' : '轻量棋盘'}</button><button className="text-button" onClick={() => change({ ...preferences, motion: reducedMotion ? 'system' : 'reduced' })}>{reducedMotion ? '恢复动画' : '减少动画'}</button></div>
     </header>
     <main id="watch-main" tabIndex={-1} className="play-main"><div className="play-layout">
-      <section className="board-panel" aria-label="观赛棋盘"><div className="board-turnbar"><span style={{ color: palette[current.color] }}>{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span><strong>{state.board.name}{state.phase === 'move' ? ` · ${state.dice} 点` : ''} · {room.audience.online} 人正在看</strong></div>
+      <section className="board-panel" aria-label="观赛棋盘"><div className="board-turnbar"><span style={{ color: palette[current.color] }}><PlayerMarker index={state.current} />{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span><strong>{state.board.name}{state.phase === 'move' ? ` · ${state.dice} 点` : ''} · {room.audience.online} 人正在看</strong></div>
         {(room.status === 'waiting' || room.status === 'paused') && <div className="game-status-overlay"><strong>{room.status === 'waiting' ? '等待开局' : '比赛暂停'}</strong><p>{room.status === 'waiting' ? '选手入座后由房主开始，你可以先观看准备情况。' : '棋盘保留在原地，继续后会从这里同步。'}</p><button className="outline-button" onClick={() => void leave()}><House />返回首页</button></div>}
         {(winner || room.status === 'ended') && <p className="watch-result" role="status">{winner ? `${winner.name}获胜。` : '房主结束了这一局。'}可以查看棋盘和最近棋步，观众不能再开一局。</p>}
         {!connected && !closed && <p role="status" className="connection-hint">正在重新连接观赛，比赛本身不受影响。</p>}
@@ -153,7 +154,7 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
         <div className="board-stage">{impact && <Suspense fallback={null}><PropEffects key={impact.id} event={impact} game={state} light={preferences.board === 'flat'} reducedMotion={reducedMotion} /></Suspense>}<BoardLoader light={preferences.board === 'flat'} reducedMotion={reducedMotion} game={state} disabled onPiece={() => {}} onRoll={() => {}} /></div>
         <ol className="watch-steps" aria-label="最近棋步">{steps.map(step => <li key={step.id}>{step.text}</li>)}</ol>
         <details className="keyboard-help"><summary>键盘操作</summary><p>Tab 在提问、表情和短消息之间移动，Enter 发送。空格和数字不会掷骰或选飞机。Esc 可关闭骰子提示。</p></details>
-        <div className="crew-list">{state.players.map((player, index) => <div key={player.id} className={'crew-seat ' + (state.current === index && state.phase !== 'finished' ? 'current' : '')}><strong>{player.name}{player.ai ? ' · 机器人' : ''}{room.network?.seats[index]?.host ? ' · 房主' : ''}</strong><span>{player.pieces.filter(piece => piece.progress === state.board.finish).length} 架抵达</span></div>)}</div>
+        <div className="crew-list">{state.players.map((player, index) => <div key={player.id} className={'crew-seat ' + (state.current === index && state.phase !== 'finished' ? 'current' : '')}><strong><PlayerMarker index={index} />{player.name}{player.ai ? ' · 机器人' : ''}{room.network?.seats[index]?.host ? ' · 房主' : ''}</strong><span>{player.pieces.filter(piece => piece.progress === state.board.finish).length} 架抵达</span></div>)}</div>
       </section>
       <aside className="side-column">
         <section className="voice-panel" aria-label="我的灵犀"><h2>问我的灵犀</h2><p>只回答你本人，不广播给选手，也不能替他们操作。</p><div className="voice-bubble" aria-live="polite">{speech || '可以问现在轮到谁、谁更接近终点，或刚才为什么被送回。'}</div>
