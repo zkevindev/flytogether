@@ -34,7 +34,8 @@
     "test:companion:tts": "node scripts/companion-tts-browser.mjs",
     "test:family:browser": "node scripts/family-browser.mjs",
     "test:roll:voice": "node scripts/roll-voice-browser.mjs",
-    "test:experience": "node --test scripts/experience.test.mjs"
+    "test:experience": "node --test scripts/experience.test.mjs",
+    "test:accessibility:browser": "node scripts/accessibility-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

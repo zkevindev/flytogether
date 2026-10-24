@@ -32,6 +32,12 @@
 
 自然获胜后由 Go 同时保存棋局和真实战绩，可查看最近50局、档案在这50局中的参与/获胜数及每局五项操作。演示和手动结束不计入。支持删除档案或单独清空记录；删除存档不会删除历史，清空只影响当前浏览器。档案按浏览器 Cookie 找回，访问时续期一年，清理 Cookie 或换设备无法找回；房间闲置7天保留期不变。
 
+### 按设备调整显示与操作
+
+右上角 **显示与操作设置** 可以切换自动立体/轻量平面、跟随系统/减少动画，当前浏览器保存，切换保留对局。轻量棋盘跳过立体模块；减少动画时直接显示骰子结果，按“继续飞行”或 Enter 继续。
+
+可用 Tab 导航、Enter/空格激活控件。焦点在棋盘主区域时：空格掷骰，1～4 按编号看落点，Enter确认、Esc取消，P打开道具；输入昵称和打开弹窗时不会触发棋盘快捷键。头部的“跳到主要内容”可跳过导航。
+
 ## 当前界面
 
 | 首页 | 创建游戏 |
@@ -64,6 +70,10 @@
 | --- | --- |
 | ![昵称与六种内置头像](docs/images/family/family-profiles.png) | ![自然结算的真实历史](docs/images/family/family-history.png) |
 
+| 显示与操作设置 | 轻量棋盘 |
+| --- | --- |
+| ![当前浏览器的显示与操作设置](docs/images/accessibility/experience-settings.png) | ![键盘操作后的轻量棋盘](docs/images/accessibility/light-keyboard-board.png) |
+
 [查看手机对局页](docs/images/current/play-mobile.png) · [终点撒花](docs/images/finish-confetti.png) · [截图版本与复跑方式](docs/SCREENSHOTS.md)
 
 主图及上表为 2026-10-24 从运行中的应用重新截取，非设计稿。常规界面截图关闭语音采集与自动播报；声音设置图来自受控 PCM 与 Chrome 合成麦克风回归，未使用实体录音。语音实测单独记录在 [QA-VOICE](docs/QA-VOICE.md)。
@@ -79,7 +89,8 @@
 | 结算再玩 | 动作级累计五项真实统计、刷新不重复、同配置再玩；联网保留席位 |
 | 玩法预设 | 亲子轻松、经典飞行、原自定义规则；本局固定，点击/AI/语音一致 |
 | 陪玩偏好 | 三种风格、三档主动频率，刷新保留；可跳过解说 |
-| 首次加载 | 进入对局才下载3D棋盘；实测冷首页JS减少约60%，加载失败可重试 |
+| 显示与键盘 | 自动立体/轻量平面、系统/减少动画；焦点恢复、键盘主流程和关键44px触控入口 |
+| 首次加载 | 进入对局才下载棋盘，轻量跳过立体模块；设置按需加载，模块失败可转轻量 |
 | 机器人陪玩 | 同屏或联网添加一位机器人，占最后一席；Go 规则策略自动行动，轻松/普通/挑战三档 |
 | 三种棋盘 | 经典十字 52 格、长航线 84 格、环形航线 52 格；Three.js 棋盘、飞机编号、2D 降级 |
 | 新手与预览 | 首次三步指南、跳过/重看、回合提示；预览服务端合法落点与特殊效果，确认后移动 |
@@ -172,7 +183,7 @@ LINGXI_REALTIME_API_KEY=你的服务端API密钥
 
 音效、回合播报、对讲麦克风可独立设置，顶部总静音立即停止全部音频和录音，刷新保留偏好。语音时长、并发与 UTC 日额度可通过环境变量配置，详见[存档与声音验收](docs/QA-RELIABILITY.md)。
 
-[1.0 路线与逐项验收标准](docs/ROADMAP.md)保留规则平衡、更多玩法和更广的可访问性交互等未完成项。
+[1.0 路线与逐项验收标准](docs/ROADMAP.md)保留规则平衡、更多玩法和专项稳定性等未完成项；显示/键盘首版见[验收记录](docs/QA-ACCESSIBILITY.md)。
 
 ## 验证与演示
 
@@ -182,12 +193,14 @@ npm --prefix web run test:board
 npm --prefix web run test:presentation
 npm --prefix web run test:voice
 npm --prefix web run test:narration
+npm --prefix web run test:experience
 npm --prefix web run build
 ```
 
 服务启动后可运行浏览器流程：
 
 ```sh
+QA_BASE_URL=http://127.0.0.1:8080 npm --prefix web run test:accessibility:browser
 QA_BASE_URL=http://127.0.0.1:8080 npm --prefix web run test:network:browser
 QA_BASE_URL=http://127.0.0.1:8080 npm --prefix web run test:network:bot
 QA_BASE_URL=http://127.0.0.1:8080 npm --prefix web run test:coach:browser

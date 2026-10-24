@@ -5,7 +5,7 @@ import { join } from 'node:path';
 assert.ok(process.env.QA_BASE_URL, 'Set QA_BASE_URL to the application under test');
 const output = process.env.QA_OUTPUT_DIR || 'test-results/scene';
 await mkdir(output, { recursive: true });
-const browser=await chromium.launch({channel:process.env.QA_BROWSER_CHANNEL || 'chrome',headless:true,args:[...(process.platform==='darwin'?['--use-angle=metal']:[]),'--autoplay-policy=no-user-gesture-required']});
+const browser=await chromium.launch({channel:process.env.QA_BROWSER_CHANNEL || 'chrome',headless:true,args:[...(process.platform==='darwin'?['--use-angle=metal']:[])]});
 const page=await browser.newPage({baseURL:process.env.QA_BASE_URL,viewport:{width:1280,height:1100}});
 try {
 const errors=[]; page.on('pageerror',e=>errors.push(e.message));

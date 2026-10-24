@@ -604,3 +604,11 @@ GET `/api/family` 返回本人档案、总记录数与最近50局；POST `/api/f
 明确指令在请求播报前执行Go规则并提交。含糊骰子话语、否定和掷骰问句只读；每条新转写清理上一段朗读上下文。对于本地已处理的回合，除发送tool_choice=none，还在网关拒绝后续模型工具，防止朗读阶段意外多操作。
 
 语音WS的game_action含当前授权浏览器的权威Room快照和Go事实文案。前端VoiceClient把它交给App.accept，与/ws/game共用序号/实例去重及presentation事件队列；双通道不会重复掷骰或播放动画，棋局通道延迟时语音确认仍可展示实际投掷。它不创建浏览器端随机点数或补写动作；模型的自然语言不能替代确认，停止播放不回滚已提交棋步。
+
+## 显示偏好与键盘（#31）
+
+`fly-experience`仅存本浏览器，合法值为board:auto/flat、motion:system/reduced；未知值回默认，系统偏好change事件与同浏览器storage变更实时同步。设置面板和两种棋盘分别lazy加载；共用BoardFrame/SVG布局，轻量入口不引入Three。立体切换为轻量时卸载FlightScene，执行原有几何/纹理/材质、RAF、observer与context清理，不重启Go棋局。
+
+有效减少动画取显式设置或系统偏好。CSS通过html[data-motion]禁用过渡/装饰，Three逐帧读取当前标志，骰子停止旋转、飞机直接到目标、合法/落点高亮不脉动，庆祝保留文字并不创建粒子。presentation仍按服务端真实事件先骰子后飞机，只缩短过渡，静态骰子等待确认。
+
+所有入口保留原生按钮。useDialog统一showModal、Tab边界与异步焦点恢复；新焦点已经进入预览/控件时，旧cleanup不抢回。快捷键只在对局主区域且无弹窗/输入/按钮焦点及合法canAct状态下执行，数字先只读预览，Enter仍提交Go命令，不改变授权、版本或去重。页面跳转定位main，SVG与文字操作保留编号/状态辅助。
