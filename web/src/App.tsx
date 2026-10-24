@@ -326,14 +326,19 @@ export default function App() {
     autoVoiceAttempt.current = r.id + ':' + r.state.id;
     setAutoVoiceError('');
     voice.current?.disconnect();
+    const reportVoiceFailure=(message:string)=>{
+      if(!config?.diagnostics?.enabled)return;
+      const code=/权限|Permission|NotAllowed/i.test(message)?'microphone_denied':/声音|AudioContext/.test(message)?'audio_unlock':/过长|积压/.test(message)?'playback_overflow':/解码/.test(message)?'audio_decode':/断开|中断/.test(message)?'voice_disconnected':'voice_failed';
+      void api('/api/rooms/'+r.id+'/diagnostics',{game_id:r.state.id,code}).catch(()=>{});
+    };
     const client = new VoiceClient(r.id, setVoiceState, (text, who) => { if(who === 'you') { keyboardInput.current = false; setKeyboardMode(false); } setSpeech({ text, who }); }, message => {
-      setAutoVoiceError(message); setToast(message);
+      setAutoVoiceError(message); setToast(message); reportVoiceFailure(message);
     }, companionRef.current, next => { if (roomRef.current?.id === next.id) accept(next); });
     voice.current = client;
     try { await client.connect(); } catch (error) {
       if (voice.current !== client) return;
       const message = error instanceof Error ? error.message : '语音连接失败';
-      setAutoVoiceError(message); setToast(message);
+      setAutoVoiceError(message); setToast(message); reportVoiceFailure(message);
     }
   }, [accept]);
   const changeCompanion = (next: CompanionPreferences) => {
@@ -488,7 +493,7 @@ export default function App() {
                 <button className={'voice-button ' + (effectiveVoice === 'listening' ? 'listening' : '')} onClick={() => changeAutoVoice(false)}><Microphone size={21} />关闭对讲麦克风</button>}
               {autoVoiceError && <p className="voice-connection-error" role="alert">{autoVoiceError}</p>}
               {effectiveVoice === 'speaking' && <button className="stop-speech" onClick={() => voice.current?.stopPlayback()}>停止播报</button>}
-              <button className="text-button" onClick={() => setModal('audio')}>声音设置</button><button className="text-button" onClick={() => setModal('companion')}>陪玩偏好</button>{masterMuted && <p role="status">总静音中，麦克风已关闭；恢复声音后沿用原来的设置。</p>}<div className="voice-examples"><strong>试着跟我说</strong><span>“掷骰子”</span><span>“使用起飞卡”</span><span>“让小熊号起飞”</span><span>“现在轮到谁”</span></div><p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : `${autoVoice ? '开始游戏后自动连接' : '开启语音后'}，直接说话即可。首次需允许麦克风；开启期间音频会发送给灵矽识别，可随时关闭。`}</p>
+              <button className="text-button" onClick={() => setModal('audio')}>声音设置</button><button className="text-button" onClick={() => setModal('companion')}>陪玩偏好</button>{masterMuted && <p role="status">总静音中，麦克风已关闭；恢复声音后沿用原来的设置。</p>}<div className="voice-examples"><strong>试着跟我说</strong><span>“掷骰子”</span><span>“使用起飞卡”</span><span>“让小熊号起飞”</span><span>“现在轮到谁”</span></div><p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : `${autoVoice ? '开始游戏后自动连接' : '开启语音后'}，直接说话即可。首次需允许麦克风；开启期间音频会发送给灵矽识别，可随时关闭。`}</p>{config?.diagnostics?.enabled && config.diagnostics.transcripts && <p className="voice-footnote">语音文本用于故障排查，保留{Math.ceil(config.diagnostics.retention_hours/24)}天，不保存录音。</p>}
             </section>
           </aside>
         </div>
