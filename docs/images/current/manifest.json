@@ -1,8 +1,8 @@
 {
-  "captured_at": "2026-10-24T08:33:52.108Z",
-  "app_commit": "2f1bb79",
+  "captured_at": "2026-10-24T09:48:56.834Z",
+  "app_commit": "05de003",
   "browser": "155.0.8059.85",
-  "scope": "Actual app UI: home, create, board, five props, random dice, coaching preview and takeoff; two human seats; voice switched off; no mocked state or microphone",
+  "scope": "Actual app UI: home, create, board, eight props, random dice, coaching preview and takeoff; two human seats; voice switched off; no mocked state or microphone",
   "captures": [
     {
       "file": "home.png",
@@ -18,7 +18,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "06a5ca75025b288c3b342b803e0ba6ed4454e21562ea9efbd39c6a18b5c36547"
+      "sha256": "94361c25c14221306faa950f4e1be9a427dd586983fb07be8c73de2226edce08"
     },
     {
       "file": "play-desktop.png",
@@ -26,7 +26,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "c4e6ee1aaa90da930a41c29efb753748f17c82833e70d28b7418bdc7e873907f"
+      "sha256": "9caa091da8b5b7ccd189a8c5524b4bb8e711263cd6ba7d03923bc0ead30365a6"
     },
     {
       "file": "onboarding.png",
@@ -42,7 +42,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "90c751778884ec93c108544dc6b2f942af9c5b05511f2045d11443104e7e2ec5"
+      "sha256": "458adf943f48e2d993a58b7c8507bd42a5d718ee90d6f834c8f93dd02d0af59a"
     },
     {
       "file": "dice-3d.png",
@@ -50,7 +50,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "cff9317ee3b75478379a3bc4ebe77c29ab34b4217a22fcef3091cb72cfbfffa8"
+      "sha256": "db11cd3b393066ffa0ce54b820c2c53173f25e5d6040a1296ef785b871d4b5dd"
     },
     {
       "file": "move-preview.png",
@@ -58,7 +58,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "f3aef766ad93c5f93963236552705de32b186e85465382fc5e040f5407363079"
+      "sha256": "22ad6e6aebc59a1577ff6f0c7302ded254836b4cdee13bd847857ef825bad9b0"
     },
     {
       "file": "coach-desktop.png",
@@ -66,7 +66,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "8894f7d1e90d74bf7ad763b6bb3f964ea4870302f0586760286673e9225f1d9e"
+      "sha256": "9a63772ccbc5014352fe19b95c4e5e304a7ee712e505d8472085188a682219e2"
     },
     {
       "file": "coach-mobile.png",
@@ -74,7 +74,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "72f0328e0f57bedaf3b391d8734078a94138cc0b7d6eb0022cacb8ea33ecf3a8"
+      "sha256": "4890959ca218d79dd5361dd669aacbee8ebd58cfd74145aa3bb767d7c4dd19a3"
     },
     {
       "file": "play-mobile.png",
@@ -82,7 +82,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "06bdc06cbfcd9a9530e6a6e410ee2ac5481d6d6e2c2a27101c202ff946c08110"
+      "sha256": "22d923b1816923f9f0e0663ab1f219a6754f74e1e092c3c8ad4296e9a8f9d84d"
     }
   ],
   "console_errors": 0,

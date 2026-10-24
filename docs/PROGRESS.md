@@ -1,7 +1,7 @@
 # 一起飞 · 项目进展
 
 - 更新日期：2026-10-24（Asia/Shanghai）
-- 当前阶段：P1陪玩风格/频率、亲子/经典预设与按需棋盘已部署；用户确认亲子/实体手机完成；家庭档案/真实跨局历史已交付；轻量棋盘/减少动画/键盘首版已交付；玩法平衡与更多玩法继续迭代
+- 当前阶段：P1陪玩风格/频率、亲子/经典预设与按需棋盘已部署；用户确认亲子/实体手机完成；家庭档案/真实跨局历史已交付；轻量棋盘/减少动画/键盘首版已交付；八种策略道具/反馈特效已交付；原生Realtime MCP已核对，玩法平衡继续迭代
 - 比赛安排：三天两晚，一人开发
 - 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
 
@@ -315,3 +315,11 @@ Go race 与构建通过。本地实际 Chrome 两真人＋挑战机器人自然�
 ## 房间管理交付（#35，2026-10-24）
 
 [f7b1e7d](https://github.com/zkevindev/flytogether/commit/f7b1e7d)、[83115c1](https://github.com/zkevindev/flytogether/commit/83115c1)直接main，主动转让与离线宽限后确认接任已发布。Go race/vet、40个前端测试、同屏引导/幸运骰、联机自然结算及加载预算回归通过；本地与公网真实Chrome房主交接通过，公网实际等待60秒，无棋局状态注入。详见QA-NETWORK。覆盖率专项#34按用户指示暂缓，当前推进#36道具/特效与#37 MCP核对。
+
+## 八种道具与原生MCP核对（#36 / #37）
+
+规则11a7fd8、语音配置确认6fa5816、特效1a6eb72、卡片布局05de003，直接main分批。新增回旋镖、救援、团队护航，旧库存不补发，Go/机器人/语音/联机/SQLite共用真实效果；八卡特效不增加WebGL renderer，保留减少动画与静音。公网11种点击/双端同步案例及三句真实灵矽合成语音通过。曾发现旧开场提示串入，匹配session.updated后再生成已修正，并实际复验；五句骰子回归仍真实4点、一次弹窗且无额外写入。Go vet/race、42项前端测试、30次图形资源与降级/恢复通过。[应用CI](https://github.com/zkevindev/flytogether/actions/runs/40083165193)及Codecov上传成功。
+
+原生MCP实际接受session.tools type:mcp，导入远端只读工具、查公开仓库、拿到结果并续答；不是/v1/ws的hello接法。游戏写工具尚未切换MCP，详见LINGXI-MCP。#17保留平衡与扩展，#3保留专项/比赛交付，#34覆盖率专项按用户要求暂缓。
+
+最终05de003卡片收尾已部署，运行二进制/13份静态资源一致，schema5与配置/数据权限600；当前10张截图来源05de003，新增4张特效图来源1a6eb72，均保留SHA-256。[最终应用CI](https://github.com/zkevindev/flytogether/actions/runs/40083361212)通过。

@@ -10,7 +10,7 @@ README 使用 [`images/current/`](images/current/) 中从真实应用重新截�
 | [setup.png](images/current/setup.png) | 实际创建弹窗，两个真人席位、经典十字、趣味道具 |
 | [play-desktop.png](images/current/play-desktop.png) | 桌面独立对局页，1440×1120 视口 |
 | [onboarding.png](images/current/onboarding.png) | 可跳过、可重看的新手飞行指南 |
-| [props.png](images/current/props.png) | 五种道具、实际库存和不可用原因 |
+| [props.png](images/current/props.png) | 八种道具、实际库存、用途和不可用原因 |
 | [dice-3d.png](images/current/dice-3d.png) | 使用起飞卡后，Go 实际随机点数的 3D 弹窗 |
 | [move-preview.png](images/current/move-preview.png) | 选飞机后的预计落点与确认入口；此时尚未执行移动 |
 | [coach-desktop.png](images/current/coach-desktop.png) | 实际教练推荐、比较按钮和高亮落点，未执行移动 |
@@ -87,3 +87,7 @@ npm --prefix web run capture:docs
 ## 房间管理（#35）
 
 `images/ownership/manifest.json`四张来自已部署83115c1的真实邀请/交接/离线接任页面，390px为桌面Chrome视口；没有麦克风采集、位置或点数注入。旧截图保留原始来源。
+
+## 八种道具与反馈（#36）
+
+当前10张界面从已部署05de003重拍：八卡两列布局、用途/不可用原因、配置页新补给和原引导/真实骰子/预览/起飞。新 `images/props/manifest.json` 四张来自已部署1a6eb72的正式demo局，记录回旋镖、救援、护航与炸弹效果；05de003只收尾卡片布局，特效保持一致。动态效果截图捕获实际动画帧，减少动画视口保留静态效果，不注入历史或位置；390px是桌面视口。当前目录与旧版本P1/保存/网络/后台图分别保留来源。

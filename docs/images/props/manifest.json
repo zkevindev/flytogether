@@ -1,0 +1,38 @@
+{
+  "source_commit": "1a6eb72",
+  "scope": "Actual deployed Chrome UI with official demo initialization; no injected state/dice/transcripts; mobile viewport is desktop Chrome; no microphone",
+  "captures": [
+    {
+      "file": "boomerang.png",
+      "sha256": "68e2694c8e9e5d471a718c8ff672f07cb2d14b3b4f935b8771ebc16f5c782a85",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      }
+    },
+    {
+      "file": "rescue.png",
+      "sha256": "df837be113fc874e9ae7520980c2e5684a75d053cd7b6094641ed4f9b143c931",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      }
+    },
+    {
+      "file": "escort.png",
+      "sha256": "3e7430924f777ad7fc36b45bc0fe86bcd551614eeed9571172f2cccb8091bb05",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "file": "bomb.png",
+      "sha256": "b2af61611c61a4987ee137231e752bb19f0d9f97eac1a42fbf51dd65cba0a429",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      }
+    }
+  ]
+}

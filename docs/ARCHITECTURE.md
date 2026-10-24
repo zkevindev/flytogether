@@ -621,3 +621,11 @@ GET `/api/family` 返回本人档案、总记录数与最近50局；POST `/api/f
 schema4在原SQLite增加`diagnostic_matches`和`diagnostic_events`。每次`database.save`在同一事务保存去私密身份字段的game.State、最新对局信息和新增游戏事件；按game_id/event_id或状态序号去重。旧存档建立记录起点，重开保持上一局，rooms删除不级联删除排障表；过期查询先排除，启动/小时清理。语音传输为独立有界写入，失败只增加计数；Go事务写入失败仍回滚棋局。
 
 Bridge只提交显式DTO，包括新生成session_id、上游input_id/response关联、最终转写/assistant消息、工具完成/拒绝、第一段PCM到达与连接生命周期。输出式TTS只记生成结果，不持久化音频；浏览器故障只允许固定枚举、原席位和当前棋局，短窗合并。没有序列化原始HTTP/WS/工具包或授权信息。自由文本限制与常见凭据屏蔽、可关闭新文本、默认7天保留。详见 [后台](ADMIN.md) 与 [验收](QA-ADMIN.md)。
+
+## 道具与Realtime补充（#36 / #37）
+
+新建趣味局8种道具，回旋镖/救援/护航由同一Go事务执行，event附prop_id及effects（piece_id/from/to/kind）。浏览器展示队列只播放新事件，不发送附加命令；平面路径/中央提示及音效共用真实事件，DOM/CSS特效不创建Three renderer。旧库存不补发，新预设规则标记family-props-v3/family-gentle-v2，已保存棋局保留自身标记。
+
+语音每轮更新配置后，等待instructions匹配的session.updated，再发response.create，避免旧播报串入；8秒未确认提示重连，权威游戏结果不回滚。响应依然绑定原语音动作授权，打断后旧确认不触发新生成。
+
+真实上游已验证原生type:mcp配置、远端工具导入/调用/结果续答，但生产游戏仍走既有function授权链路，未来MCP写工具须继续校验房间/席位/轮次与幂等。MCP完成可能晚于response.done，集成不能把生成结束当工具完成。详见[接入核对](LINGXI-MCP.md)。
