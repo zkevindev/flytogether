@@ -93,9 +93,9 @@ try {
   assert.equal(toolStatus, 'loaded', `Realtime MCP tool import failed: ${JSON.stringify(await page.evaluate(() => window.__mcpQA.events))}`);
   await page.waitForFunction(() => window.__mcpQA.events.some(e => e.type === 'stt'), null, { timeout: 45000 });
   await page.waitForFunction(() => window.__mcpQA.events.some(e => e.type === 'mcp_call_status' && e.status === 'completed'), null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__mcpQA.events.some(e => e.type === 'response.output_audio_transcript.done' || e.type === 'response.audio_transcript.done'), null, { timeout: 45000 });
   await page.getByRole('button', { name: '关闭对讲麦克风', exact: true }).click();
   await page.waitForFunction(() => window.__mcpQA.tracks.every(track => track.readyState === 'ended'));
-  await page.waitForFunction(() => window.__mcpQA.events.some(e => e.type === 'response.output_audio_transcript.done' || e.type === 'response.audio_transcript.done'), null, { timeout: 45000 });
 
   const events = await page.evaluate(() => window.__mcpQA.events);
   const userText = events.find(event => event.type === 'stt')?.text || '';

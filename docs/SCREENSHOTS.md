@@ -105,11 +105,11 @@ npm --prefix web run capture:docs
 
 ## 产品介绍页（#51）
 
-`images/product/` 保存首屏、完整桌面和手机视口三张页面截图。它们展示的是明确标注的玩法预览，不是正在进行的真实对局。使用项目FlatBoard组件，无图片生成、虚构评价或统计；来源/视口/哈希见 [manifest](images/product/manifest.json)，复跑见 [QA-PRODUCT](QA-PRODUCT.md)。
+`images/product/` 保存首屏、完整桌面和手机视口三张页面截图。2026-10-25 从公网应用 `2648f3b` 重新拍摄，并通过 `test:product:browser` 验证桌面、平板及两种手机宽度。它们展示明确标注的玩法预览，不是正在进行的真实对局；使用项目 FlatBoard 组件，无图片生成、虚构评价或统计。来源、视口与哈希见 [manifest](images/product/manifest.json)，复跑见 [QA-PRODUCT](QA-PRODUCT.md)。
 
 ## 品牌字形更正（2026-10-24）
 
-将产品截图中误写的“灵犀”统一改为“灵矽”后，按实际应用重新拍摄了产品页三张图，以及观赛桌面、手机和结算图。观赛语音回答图通过真实灵矽 Realtime 与合成 WAV 重新采集；观赛重启恢复图通过本地服务重启流程重新采集。图片没有做像素级文字替换，新的截图哈希及来源记录在各自的 [产品清单](images/product/manifest.json) 和 [观赛清单](images/audience/manifest.json)。
+逐张审阅 README 引用的截图并 OCR 扫描了 `docs/images/` 的 81 张图片。产品首屏、桌面和手机截图都使用“灵矽”，本次从公网应用 `2648f3b` 重新拍摄并更新了哈希。审阅发现观赛私聊旧图仍显示“灵犀”，已使用真实灵矽 Realtime 与合成 WAV 重新采集；手机、桌面和结算图的品牌字样也核对无误。没有用像素编辑替换图片文字。产品和观赛截图的提交来源及哈希分别见 [产品清单](images/product/manifest.json) 与 [观赛清单](images/audience/manifest.json)。
 
 ## 星际救援主题与观赛任务卡（#62）
 

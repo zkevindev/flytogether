@@ -35,7 +35,8 @@ if args.scenario == 'audience-a':
 if args.scenario == 'audience-b':
     phrases = [('我的暗号是橘子，现在轮到谁', 16), ('谁更接近终点', 14), ('现在轮到谁', 25)]
 if args.scenario == 'mcp':
-    phrases = [('请查一下本局星际救援任务卡的目标和当前进展', 15)]
+    # Give the real Realtime response time to finish before Chrome loops the WAV.
+    phrases = [('请查一下本局星际救援任务卡的目标和当前进展', 60)]
 with tempfile.TemporaryDirectory(prefix='fly-voice-fixture-') as temp:
     source, target = Path(temp) / 'phrase.aiff', Path(temp) / 'phrase.pcm'
     for text, silence in phrases:

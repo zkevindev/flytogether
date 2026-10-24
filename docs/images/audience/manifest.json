@@ -1,7 +1,7 @@
 {
   "captured_on": "2026-10-24",
   "browser": "Chrome 155.0.8059.85",
-  "scope": "Current product UI screenshots captured from the actual local application. Main spectator flow and service-restart restoration use real server state; private voice uses real Lingxi Realtime with synthetic WAV. No injected game state or physical phone claim.",
+  "scope": "Spectator screenshots from actual app/browser flows; current watch-private-voice image captured from public app commit 2648f3b using real Lingxi Realtime and synthetic WAV. No injected game state or physical phone claim.",
   "captures": [
     {
       "file": "watch-desktop.png",
@@ -32,12 +32,13 @@
     },
     {
       "file": "watch-private-voice.png",
-      "source_commit": "8772cce2c022bdc5945bb2c5b08ba370e6ff0ee9",
-      "sha256": "5a5c9ce031a328e707cbb504bf99cb18c73e7ff895998ca01b369033a882385f",
+      "source_commit": "2648f3b489505c8d7fc72e1a4934b2dc2d1ef6da",
+      "sha256": "8c71ffc7941e67f19dcd9f1488efc6a043b40eb696ba6839b44ce147af685d9e",
       "viewport": {
         "width": 1360,
         "height": 1000
-      }
+      },
+      "captured_on": "2026-10-25"
     },
     {
       "file": "watch-restored.png",
