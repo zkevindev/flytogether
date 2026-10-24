@@ -35,12 +35,13 @@ type Me struct {
 	Host     bool   `json:"host"`
 }
 type member struct {
-	delegated        bool
-	autoDelegate     bool
-	delegationReason string
-	offlineSince     time.Time
-	index            int
-	ready            bool
+	delegated         bool
+	autoDelegate      bool
+	delegationReason  string
+	delegationVersion int
+	offlineSince      time.Time
+	index             int
+	ready             bool
 }
 
 // Credentials and the membership map never enter a room snapshot.

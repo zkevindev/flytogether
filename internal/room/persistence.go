@@ -25,11 +25,12 @@ const databaseSchema = 6
 const DefaultRetention = 7 * 24 * time.Hour
 
 type savedMember struct {
-	Delegated        bool   `json:"delegated,omitempty"`
-	AutoDelegate     bool   `json:"auto_delegate,omitempty"`
-	DelegationReason string `json:"delegation_reason,omitempty"`
-	Index            int    `json:"index"`
-	Ready            bool   `json:"ready"`
+	Delegated         bool   `json:"delegated,omitempty"`
+	AutoDelegate      bool   `json:"auto_delegate,omitempty"`
+	DelegationReason  string `json:"delegation_reason,omitempty"`
+	DelegationVersion int    `json:"delegation_version,omitempty"`
+	Index             int    `json:"index"`
+	Ready             bool   `json:"ready"`
 }
 type roomRecord struct {
 	HostChange    *HostChange            `json:"host_change,omitempty"`
@@ -67,7 +68,7 @@ type database struct {
 func (r *Room) record() roomRecord {
 	members := map[string]savedMember{}
 	for key, m := range r.members {
-		members[key] = savedMember{Index: m.index, Ready: m.ready, Delegated: m.delegated, AutoDelegate: m.autoDelegate, DelegationReason: m.delegationReason}
+		members[key] = savedMember{Index: m.index, Ready: m.ready, Delegated: m.delegated, AutoDelegate: m.autoDelegate, DelegationReason: m.delegationReason, DelegationVersion: m.delegationVersion}
 	}
 	return roomRecord{HostChange: r.hostChange, Schema: saveSchema, ID: r.ID, Owner: r.owner, Invite: r.invite, Members: members, Names: r.names, Options: r.options, Name: r.name, Status: r.status, State: r.state, Seq: r.seq, Updated: r.updated, SavedAt: r.savedAt, VoiceSettings: r.voiceSettings}
 }
@@ -78,7 +79,12 @@ func (r *Room) readRecord(p roomRecord) {
 	r.voiceSettings = p.VoiceSettings
 	r.members = map[string]member{}
 	for key, m := range p.Members {
-		r.members[key] = member{index: m.Index, ready: m.Ready, delegated: m.Delegated, autoDelegate: m.AutoDelegate, delegationReason: m.DelegationReason}
+		r.members[key] = member{index: m.Index, ready: m.Ready, delegated: m.Delegated, autoDelegate: m.AutoDelegate, delegationReason: m.DelegationReason, delegationVersion: m.DelegationVersion}
+		if m.Delegated && m.DelegationVersion == 0 {
+			member := r.members[key]
+			member.delegationVersion = p.State.Version
+			r.members[key] = member
+		}
 	}
 }
 
@@ -438,7 +444,7 @@ func validRecord(p roomRecord) bool {
 			if key == "" || m.Index < 0 || m.Index >= len(p.State.Players) || p.State.Players[m.Index].AI || used[m.Index] || p.Names[key] == "" {
 				return false
 			}
-			if (m.Delegated && m.DelegationReason != "manual" && m.DelegationReason != "offline") || (!m.Delegated && m.DelegationReason != "") {
+			if (m.Delegated && m.DelegationReason != "manual" && m.DelegationReason != "offline") || (!m.Delegated && (m.DelegationReason != "" || m.DelegationVersion != 0)) || (m.Delegated && (m.DelegationVersion < 0 || m.DelegationVersion > p.State.Version)) {
 				return false
 			}
 			used[m.Index] = true

@@ -353,3 +353,19 @@ func TestDelegatedHumansFinishNaturalGameWithoutSpendingProps(t *testing.T) {
 		}
 	}
 }
+
+func TestReclaimAcceptsCurrentDelegationDespiteNewDiceButRejectsOlderCycle(t *testing.T) {
+	r, _, _ := delegationRoom(t, NewStore())
+	delegateCommand(t, r, "h", "delegate")
+	s := roomStateForHost(r)
+	reclaim := Command{ID: game.ID(), GameID: s.ID, Version: s.Version, Action: "reclaim"}
+	r.AI()
+	if _, e := r.DoAs(reclaim, "h"); e != nil {
+		t.Fatal("live AI progress made reclaim unusable", e)
+	}
+	delegateCommand(t, r, "h", "delegate")
+	reclaim.ID = game.ID()
+	if _, e := r.DoAs(reclaim, "h"); e == nil {
+		t.Fatal("old cycle reclaimed new delegation")
+	}
+}

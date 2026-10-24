@@ -81,6 +81,12 @@ func (r *Room) delegationEvent(session, reason string, delegated bool) {
 		text += "已回来接管，继续当前棋局，已掷点数保留。"
 	}
 	r.state.Version++
+	m = r.members[session]
+	m.delegationVersion = 0
+	if delegated {
+		m.delegationVersion = r.state.Version
+	}
+	r.members[session] = m
 	r.state.History = append(r.state.History, game.Event{ID: game.ID(), Kind: "delegation", Text: text, Player: r.state.Players[m.index].ID})
 	if len(r.state.History) > 24 {
 		r.state.History = r.state.History[len(r.state.History)-24:]
@@ -126,6 +132,9 @@ func (r *Room) changeDelegation(c Command, voice bool) (View, error) {
 	case "reclaim":
 		if !m.delegated {
 			return View{}, fail("NOT_DELEGATED", "当前由你本人操作，无需接管")
+		}
+		if c.Version < m.delegationVersion {
+			return View{}, fail("STALE_STATE", "这次接管属于更早的托管，请重新确认")
 		}
 		r.delegationEvent(c.Actor, "", false)
 	case "auto_delegate_on", "auto_delegate_off":

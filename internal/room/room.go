@@ -266,7 +266,7 @@ func (r *Room) Do(c Command, voice bool) (result View, err error) {
 	if c.ID == "" || len(c.ID) > 160 {
 		return View{}, fail("INVALID_COMMAND", "操作编号无效")
 	}
-	if c.GameID != r.state.ID || (c.Version != r.state.Version && c.Action != "pause" && c.Action != "end") {
+	if c.GameID != r.state.ID || (c.Version != r.state.Version && c.Action != "pause" && c.Action != "end" && (c.Action != "reclaim" || c.Version > r.state.Version)) {
 		return View{}, fail("STALE_STATE", "棋局已经更新，请重新选择")
 	}
 	if c.Action == "delegate" || c.Action == "reclaim" || c.Action == "auto_delegate_on" || c.Action == "auto_delegate_off" {
@@ -291,6 +291,7 @@ func (r *Room) Do(c Command, voice bool) (result View, err error) {
 				m.delegated = false
 				m.autoDelegate = false
 				m.delegationReason = ""
+				m.delegationVersion = 0
 				m.offlineSince = time.Time{}
 				r.members[session] = m
 			}
