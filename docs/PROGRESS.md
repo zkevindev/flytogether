@@ -11,12 +11,12 @@
 | --- | --- | --- | --- |
 | M1：Realtime 语音接入 | [#1](https://github.com/zkevindev/flytogether/issues/1) | 已验证 Bearer 鉴权、合成中文语音查询、掷骰和实际选子起飞 | 直接提交 main，未创建 PR |
 | M2：家庭飞行棋玩法 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 点击玩法和三种棋盘已同步到 main；实际浏览器演示通过 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
-| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | HTTPS 与真实麦克风演示已完成；真实亲子与实体手机已由用户确认完成；比赛资料与专项稳定性继续跟踪 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
+| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | 真实亲子与实体手机由用户确认完成；专项稳定性和比赛演示/发布资料继续跟踪 | 每项单独分支与关联 PR；本轮手册见 [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 | 自定义语音唤醒（历史） | [#4](https://github.com/zkevindev/flytogether/issues/4) | 历史验收已完成，当前交互由 #14 直接对话替代 | [a85e63b](https://github.com/zkevindev/flytogether/commit/a85e63b)、[87a0d09](https://github.com/zkevindev/flytogether/commit/87a0d09)，直接 main |
 | 棋盘重做 | [#5](https://github.com/zkevindev/flytogether/issues/5) | 四角机场、连续彩色航线、中央骰子、放大和手机布局已实现并演示 | 直接 main，提交回链见 Issue |
 | 家庭道具 | [#6](https://github.com/zkevindev/flytogether/issues/6) | 三种道具、库存、AI 与语音用卡已实现 | [37b1a7c](https://github.com/zkevindev/flytogether/commit/37b1a7c)，界面提交见 Issue |
 
-当前按要求只推送 main；Issue 持续记录提交、验证和待办。如有相关 PR，在对应 Issue 中回链。
+每个可验收切片使用独立分支和关联 PR；合并后在对应 Issue 中记录提交、验证和待办，不直接推送 main，不把多个 Issue 合并成一次 PR。
 
 ## 完成情况
 
@@ -34,17 +34,18 @@
 | 直接语音对话 | 已实现并联调 | 开局自动连接，直接下指令；旧唤醒交互已按最新反馈移除 |
 | 传统棋盘布局与缩放 | 已重做并浏览器演示 | 1280×800、375×812、812×375 下检查；页面无横向溢出，放大仅在棋盘内滚动 |
 | 起飞卡、加速卡、幸运骰 | 规则和真实语音已验证 | 语音用起飞卡后实际掷 1 点并起飞；幸运骰 4/3 取 4；加速卡按真实点数 +2 生成合法走法 |
-| 真实家庭试玩与比赛演示 | 待完成 | 需要灵矽联调和试玩记录 |
+| 真实家庭试玩与实体手机 | 已由用户确认完成 | 用户 2026-10-24 明确确认，详见 #3/#17 |
+| 专项稳定性与三分钟比赛交付 | 继续跟踪 | 切网/后台/噪声/回声/长监听现场记录仍待采集；演示及回滚手册见 [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 
 ## 当前下一步
 
 1. 显示/键盘首版已交付，继续收集规则和道具配比反馈，按需选择下一种玩法。
 2. #3 跟踪长时间、切网与噪声专项及比赛交付资料；真实亲子和实体手机已由用户确认完成。
-3. 每个可验收改动直接提交 main 并回链 Issue，部署与截图同步维护。
+3. 每个可验收改动单独开分支和 PR；合并后更新 Issue，部署与截图同步维护。
 
 灵矽密钥不能进入仓库、浏览器构建产物或聊天记录。服务器地址、SSH 凭据和真实部署域名均保存在仓库外的本机配置中。
 
-当前源码位于 [main](https://github.com/zkevindev/flytogether/tree/main)。本轮按要求直接提交 main，没有创建 PR。本机 `.env` 与服务器 `/etc/flytogether.env` 已配置语音所需变量；真实值不提交到 Git。
+当前源码以 [main](https://github.com/zkevindev/flytogether/tree/main) 为基线。新改动按单 Issue、小 PR 流程提交；本机 `.env` 与服务器 `/etc/flytogether.env` 配置语音变量，真实值不提交到 Git。
 
 ## 设计决策
 

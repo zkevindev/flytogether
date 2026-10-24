@@ -11,13 +11,14 @@
 ## 提交
 
 - 使用清楚的提交说明，例如 docs: define MVP architecture、feat: add authoritative dice action、fix: deduplicate voice commands。
-- 提交说明可以引用 Issue 编号。
+- 每个可验收切片使用独立 `codex/` 分支和对应 Issue 的 PR；PR 描述引用 Issue。一个 PR 只解决一个切片，避免把互不相关的 Issue 打包提交。
+- PR 检查通过并由维护者合并后，再在 Issue 记录合并提交、验证结果和剩余事项；不要直接推送 `main`，不要自行合并 PR。
 - 使用开源代码和素材时，在引入提交中记录来源及许可证。
 - 不提交真实凭据、音频录制、儿童个人信息或带认证参数的调试日志。
 
 ## 记录进展
 
-在 [PROGRESS.md](docs/PROGRESS.md) 中追加日期、实际变更、验证证据和下一步。
+在 [PROGRESS.md](docs/PROGRESS.md) 中追加日期、实际变更、验证证据、PR 与下一步。
 
 只有实际验收通过的任务才标为完成。接口文档、示意图和模拟演示不代表真实平台联调通过。Issue 完成时补充验证结果；存在未解决事项时明确列出。
 

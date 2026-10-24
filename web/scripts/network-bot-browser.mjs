@@ -66,7 +66,9 @@ try {
   }
   r = await session(h); assert.equal(r.state.current, 2);
   const forbidden = await h.request.post(`/api/rooms/${id}/commands`, { data: { command_id: crypto.randomUUID(), game_id: r.state.id, expected_version: r.state.version, action: 'roll' } }); assert.equal((await forbidden.json()).code, 'NOT_YOUR_TURN');
-  const deniedVoice = await h.request.get(`/ws/voice?room_id=${id}`); assert.equal(deniedVoice.status(), 403);
+  const deniedVoice = await h.request.get(`/ws/voice?room_id=${id}`);
+  const voiceConfigured = (await (await h.request.get('/api/config')).json()).voice_configured;
+  assert.equal(deniedVoice.status(), voiceConfigured ? 403 : 503, 'off-turn voice must be denied; unconfigured upstream is unavailable before authorization');
   // Pause is allowed even during the bot's turn. Observe longer than two AI ticks.
   await command(h, 'pause'); const paused = await session(h); await new Promise(r => setTimeout(r, 2700)); assert.equal((await session(h)).state.version, paused.state.version);
   const baseline = (await session(h)).state.players[2].stats;
