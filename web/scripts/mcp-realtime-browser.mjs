@@ -45,6 +45,8 @@ try {
           const record = { at: Date.now(), type: message.type };
           if (message.status) record.status = message.status;
           if (message.tool) record.tool = message.tool;
+          if (message.name) record.tool = message.name;
+          if (message.tool_name) record.tool = message.tool_name;
           if (message.text || message.transcript) record.text = message.text || message.transcript;
           if (message.response?.status) record.responseStatus = message.response.status;
           if (message.item?.type) record.itemType = message.item.type;
@@ -122,7 +124,8 @@ try {
   else assert.match(userText, /轮到|谁|幸运骰|规则|飞机|走/);
   assert.ok(assistantText.length > 0, 'Realtime should produce a spoken answer after the MCP query');
   assert.ok(events.some(event => event.type === 'mcp_call_status' && event.status === 'completed'), 'Realtime must complete a real native MCP call, not only answer from context');
-  assert.ok(events.some(event => event.type === 'mcp_call_status' && event.status === 'completed' && event.tool === expectedMCPTool), `Realtime must call ${expectedMCPTool}: ${JSON.stringify(events)}`);
+  const actualMCPTool = events.find(event => event.type === 'mcp_call_status' && event.status === 'completed' && event.tool)?.tool || events.find(event => event.type === 'response.mcp_call_arguments.done' && event.tool)?.tool;
+  assert.equal(actualMCPTool, expectedMCPTool, `Realtime must call ${expectedMCPTool}: ${JSON.stringify(events)}`);
   const after = await snapshot();
   assert.equal(after.state.id, before.state.id);
   assert.equal(after.state.version, before.state.version, 'read-only MCP must not mutate the game');
