@@ -35,7 +35,8 @@
     "test:family:browser": "node scripts/family-browser.mjs",
     "test:roll:voice": "node scripts/roll-voice-browser.mjs",
     "test:experience": "node --test scripts/experience.test.mjs",
-    "test:accessibility:browser": "node scripts/accessibility-browser.mjs"
+    "test:accessibility:browser": "node scripts/accessibility-browser.mjs",
+    "test:unit": "npm run test:board && npm run test:voice && npm run test:presentation && npm run test:scene && npm run test:narration && npm run test:experience"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

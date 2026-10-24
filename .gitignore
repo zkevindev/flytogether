@@ -42,3 +42,6 @@ __pycache__/
 *.db
 *.db-wal
 *.db-shm
+
+# Local test and coverage artifacts
+/test-results/

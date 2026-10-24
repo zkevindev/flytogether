@@ -1,5 +1,8 @@
 # 一起飞 · FlyTogether
 
+[![CI](https://github.com/zkevindev/flytogether/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/zkevindev/flytogether/actions/workflows/ci.yml) [![Go coverage](https://codecov.io/gh/zkevindev/flytogether/branch/main/graph/badge.svg)](https://app.codecov.io/gh/zkevindev/flytogether)
+
+
 **可以同屏，也能邀请朋友各用一台设备玩的语音飞行棋。** 点击或直接说“掷骰子”“让小熊号起飞”，灵矽负责对话和解说，Go 负责随机骰子、真实走棋与胜负。
 
 当前为 **0.1.0 可试玩版本**，更新于 **2026-10-24**。已完成公网部署与多条真实语音链路验证，正在向完整家庭产品迭代；下一阶段见 [产品化路线](docs/ROADMAP.md)。
