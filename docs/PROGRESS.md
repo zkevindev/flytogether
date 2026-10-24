@@ -13,6 +13,7 @@
 | M2：家庭飞行棋玩法 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 点击玩法和三种棋盘已同步到 main；实际浏览器演示通过 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
 | M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | PR #58 已合并；浏览器断网恢复、可见性事件和 30 分钟累计回复队列模拟已完成；真实手机切网/后台/声学与灵矽长连仍待现场 | [PR #58](https://github.com/zkevindev/flytogether/pull/58) · merge `802c893` · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 | 产品化 1.0 | [#17](https://github.com/zkevindev/flytogether/issues/17) | 星河救援合作挑战和首轮试玩平衡流程已合并；跨家庭玩法/道具反馈仍在收集 | [PR #59](https://github.com/zkevindev/flytogether/pull/59) · merge `29e4019` · [PLAYTEST-BALANCE](PLAYTEST-BALANCE.md) |
+| 星际救援与 Realtime MCP | [#62](https://github.com/zkevindev/flytogether/issues/62) | 主题、合作任务卡和只读MCP实现完成；PR开放，CI/Review进行中 | [PR #63](https://github.com/zkevindev/flytogether/pull/63) · `codex/issue-62-theme-tasks` |
 | 自定义语音唤醒（历史） | [#4](https://github.com/zkevindev/flytogether/issues/4) | 历史验收已完成，当前交互由 #14 直接对话替代 | [a85e63b](https://github.com/zkevindev/flytogether/commit/a85e63b)、[87a0d09](https://github.com/zkevindev/flytogether/commit/87a0d09)，直接 main |
 | 棋盘重做 | [#5](https://github.com/zkevindev/flytogether/issues/5) | 四角机场、连续彩色航线、中央骰子、放大和手机布局已实现并演示 | 直接 main，提交回链见 Issue |
 | 家庭道具 | [#6](https://github.com/zkevindev/flytogether/issues/6) | 三种道具、库存、AI 与语音用卡已实现 | [37b1a7c](https://github.com/zkevindev/flytogether/commit/37b1a7c)，界面提交见 Issue |

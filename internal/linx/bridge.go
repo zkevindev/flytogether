@@ -302,13 +302,28 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	// Do not start the microphone stream until the provider confirms the
 	// negotiated session configuration.
 	awaitSession, awaitTools := true, mcpTool != nil
+	setupCtx, setupCancel := context.WithTimeout(ctx, 12*time.Second)
 	for awaitSession || awaitTools {
-		kind, data, e := up.Read(ctx)
+		kind, data, e := up.Read(setupCtx)
 		if e != nil {
 			if ctx.Err() != nil {
+				setupCancel()
 				return nil
 			}
-			return errors.New("灵矽实时会话初始化超时")
+			if awaitSession {
+				setupCancel()
+				return errors.New("灵矽实时会话初始化超时")
+			}
+			// MCP discovery is optional for voice availability. If it stalls after
+			// the audio session is ready, let the user speak and report the MCP
+			// tools as unavailable rather than holding the microphone handshake.
+			awaitTools = false
+			trace(room.DiagnosticEvent{Kind: "mcp", Action: "tool_list", Code: "unavailable"})
+			if e = sendBrowser(map[string]any{"type": "mcp_status", "status": "unavailable"}); e != nil {
+				setupCancel()
+				return e
+			}
+			break
 		}
 		if kind != websocket.MessageText {
 			continue
@@ -344,6 +359,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 		}
 	}
+	setupCancel()
 	if e := sendBrowser(map[string]any{"type": "hello", "audio_params": map[string]any{"format": "pcm", "sample_rate": 24000}}); e != nil {
 		return e
 	}
