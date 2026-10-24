@@ -431,3 +431,29 @@ func TestBridgeRoutesGameFactsToTheMatchingReadonlyMCPTool(t *testing.T) {
 		})
 	}
 }
+
+func TestBridgeReportsMCPToolNameWithProviderLifecycleEvents(t *testing.T) {
+	r := room.New(game.Options{Names: []string{"孩子", "家长"}})
+	h := newProtocolHarness(t, r, false, "quiet", "https://flytogether.example")
+	spectatorRequest(t, h.ctx, h.requests, "session.update") // initial handshake configuration
+	h.send(t, map[string]any{"type": "conversation.item.input_audio_transcription.completed", "item_id": "turn-question", "transcript": "现在轮到谁掷骰子"})
+	readUntil(t, h.ctx, h.browser, "stt")
+	spectatorRequest(t, h.ctx, h.requests, "session.update")
+	spectatorRequest(t, h.ctx, h.requests, "response.create")
+	h.send(t, map[string]any{"type": "response.created", "response": map[string]any{"id": "summary-answer"}})
+	readUntil(t, h.ctx, h.browser, "response.created")
+	h.send(t, map[string]any{"type": "response.output_item.added", "response_id": "summary-answer", "item": map[string]any{"id": "summary-call", "type": "mcp_call", "name": "get_game_summary"}})
+	h.send(t, map[string]any{"type": "response.mcp_call.in_progress", "response_id": "summary-answer", "item_id": "summary-call"})
+	running := readUntil(t, h.ctx, h.browser, "mcp_call_status")
+	if running["status"] != "running" || running["tool"] != "get_game_summary" {
+		t.Fatalf("MCP running status should identify the selected read tool: %#v", running)
+	}
+	h.send(t, map[string]any{"type": "response.mcp_call.completed", "response_id": "summary-answer", "item_id": "summary-call"})
+	completed := readUntil(t, h.ctx, h.browser, "mcp_call_status")
+	if completed["status"] != "completed" || completed["tool"] != "get_game_summary" {
+		t.Fatalf("MCP completion should identify the selected read tool: %#v", completed)
+	}
+	if state := protocolState(t, r); state.Version != 1 {
+		t.Fatalf("read-only query changed game version: %d", state.Version)
+	}
+}

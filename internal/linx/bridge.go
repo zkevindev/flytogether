@@ -416,6 +416,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	grants := map[string]string{}
 	calls := map[string][]functionCall{}
 	pendingMCP := map[string]map[string]bool{}
+	mcpCallNames := map[string]string{}
 	seenMCP := map[string]bool{}
 	deferredMCPDone := map[string]bool{}
 	failedMCP := map[string]bool{}
@@ -928,9 +929,25 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				delete(pendingMCP[responseID], event.ItemID)
 			}
 			trace(room.DiagnosticEvent{Kind: "mcp", InputID: responseInputs[responseID], Ref: event.ItemID, Action: "readonly_call", Code: code})
-			_ = sendBrowser(map[string]any{"type": "mcp_call_status", "status": code, "tool": realtimeMCPToolName(event.Raw)})
+			toolName := realtimeMCPToolName(event.Raw)
+			if toolName == "" {
+				toolName = mcpCallNames[event.ItemID]
+			}
+			_ = sendBrowser(map[string]any{"type": "mcp_call_status", "status": code, "tool": toolName})
 			if e := continueMCPResponse(responseID); e != nil {
 				return e
+			}
+			continue
+		case "response.output_item.added":
+			var body struct {
+				Item struct {
+					ID   string `json:"id"`
+					Type string `json:"type"`
+					Name string `json:"name"`
+				} `json:"item"`
+			}
+			if json.Unmarshal(event.Raw, &body) == nil && body.Item.Type == "mcp_call" && body.Item.ID != "" {
+				mcpCallNames[body.Item.ID] = body.Item.Name
 			}
 			continue
 		case "response.output_item.done", "conversation.item.done":
