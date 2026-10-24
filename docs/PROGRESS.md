@@ -311,3 +311,7 @@ Go race 与构建通过。本地实际 Chrome 两真人＋挑战机器人自然�
 - `9b63aca` 最后补齐真实浏览器错误回调配置依赖：旧构建Chrome权限拒绝仅显示错误未上报已复现；修复后同一真实getUserMedia拒绝经网页回调写入后台，游戏不变。原40项前端测试/构建、指南/结束/幸运骰再通过，应用补丁发布。界面无可见改变，14张截图继续明确保留2f1bb79来源。
 
 - 公网9b63aca实际麦克风权限拒绝上报通过，后台可查且游戏不变，发布文件/8资源再次匹配；[CI 40079151189](https://github.com/zkevindev/flytogether/actions/runs/40079151189)通过。没有用直接写测试日志替代真实浏览器回调验证。
+
+## 房间管理交付（#35，2026-10-24）
+
+[f7b1e7d](https://github.com/zkevindev/flytogether/commit/f7b1e7d)、[83115c1](https://github.com/zkevindev/flytogether/commit/83115c1)直接main，主动转让与离线宽限后确认接任已发布。Go race/vet、40个前端测试、同屏引导/幸运骰、联机自然结算及加载预算回归通过；本地与公网真实Chrome房主交接通过，公网实际等待60秒，无棋局状态注入。详见QA-NETWORK。覆盖率专项#34按用户指示暂缓，当前推进#36道具/特效与#37 MCP核对。

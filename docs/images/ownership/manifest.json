@@ -1,0 +1,22 @@
+{
+  "source_commit": "83115c1",
+  "source": "Deployed app, actual Chrome independent contexts; 390px is desktop viewport, not physical phone; no state/dice injection or microphone capture",
+  "images": [
+    {
+      "file": "handover-confirm.png",
+      "sha256": "d43bae73af734ce2ba05d0331c0a90991c64cf48a4bca40ba6b191d44d5b54cc"
+    },
+    {
+      "file": "host-grace.png",
+      "sha256": "1c0f38356138e24d0aa90d9563a67eb978aae7b687b86d06c962ecf6a248958e"
+    },
+    {
+      "file": "host-reclaim-confirm.png",
+      "sha256": "60bfe6bd133f6e7d29416ab56a1c20aaa56900b38bb7d10226fc73e589cd22e6"
+    },
+    {
+      "file": "handover-mobile.png",
+      "sha256": "84ac58a392e2230726e16826b4318be7d28890622f3bd16113222141144f43fa"
+    }
+  ]
+}

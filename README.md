@@ -249,3 +249,5 @@ python3 -m venv .venv-deploy
 - [架构与协议](docs/ARCHITECTURE.md) · [开发进展与提交证据](docs/PROGRESS.md)
 - [贡献与文档维护](CONTRIBUTING.md) · [灵矽官方文档](https://linx.qiniu.com/docs/)
 - 当前按要求直接提交 **main**；每个可验收切片回链 Issue，未创建其他分支或 PR。
+
+联网房间支持主动转让房主、离线60秒后由在线成员确认接任；原玩家保留席位。见[联网验收](docs/QA-NETWORK.md)与[房间管理截图](docs/images/ownership/manifest.json)。
