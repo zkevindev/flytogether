@@ -1,0 +1,31 @@
+{
+  "captured_at": "2026-10-24",
+  "app_commit": "f9d4e48",
+  "scope": "Actual Chrome app UI, settled canvases and layouts. Natural random dice and formal commands for presets. Companion uses controlled protocol and a synthetic Chrome microphone. Load failure aborts only the board chunk. No physical recordings or server addresses.",
+  "captures": [
+    {
+      "file": "board-load-retry.png",
+      "sha256": "e78e402d9fe186f15ac7d6ef7bff4602eb7046b2f688e5187eb622694c18fcf7"
+    },
+    {
+      "file": "classic-mobile.png",
+      "sha256": "8b98ada824bf3dd049c1179cefd7c51e9b5c90c638c369f48255fac5333b2932"
+    },
+    {
+      "file": "companion-preferences.png",
+      "sha256": "b2b896238abb340a4a782a36cd09f99e21461a2522505d07be767b7c1f7ffe17"
+    },
+    {
+      "file": "gentle-board.png",
+      "sha256": "6e10a2fb4240dfe4a9a76f1486b6f220a9707bbf1d81c5a9eef2284cac032986"
+    },
+    {
+      "file": "gentle-props.png",
+      "sha256": "3f29aa1ab32944e76c68e4d720d6d2a0fa118ba46716755faf4e61a24f2ecf6b"
+    },
+    {
+      "file": "preset-setup.png",
+      "sha256": "2050bfe1b026d5b5687e7d3f63b9a2f1fd6ffd88b622c572acc0ca7cac5d4c45"
+    }
+  ]
+}
