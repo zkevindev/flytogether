@@ -21,6 +21,7 @@ var ErrSpeechBusy = errors.New("播报正在准备，请稍后重试")
 // game tools. A small bounded cache avoids regenerating repeated turn names.
 type Speaker struct {
 	Config      Config
+	Reserve     func(context.Context) error
 	mu          sync.Mutex
 	busy        bool
 	pendingText string
@@ -83,6 +84,11 @@ func (s *Speaker) Say(ctx context.Context, text string) ([]byte, error) {
 	defer func() { s.mu.Lock(); s.busy = false; s.pendingText = ""; close(done); s.mu.Unlock() }()
 	ctx, cancel := context.WithTimeout(ctx, 14*time.Second)
 	defer cancel()
+	if s.Reserve != nil {
+		if err := s.Reserve(ctx); err != nil {
+			return nil, err
+		}
+	}
 	endpoint, err := realtimeURL(s.Config.URL, s.Config.Model)
 	if err != nil {
 		return nil, errors.New("灵矽播报配置无效")

@@ -42,6 +42,18 @@ func main() {
 		slog.Error("invalid configuration", "error", err)
 		os.Exit(1)
 	}
+	limits := map[string]int{}
+	for key, spec := range map[string][3]int{
+		"LINGXI_MAX_CONNECTIONS": {4, 1, 32}, "LINGXI_SESSION_SECONDS": {900, 30, 3600},
+		"LINGXI_REALTIME_DAILY_LIMIT": {2000, 1, 100000}, "LINGXI_TTS_DAILY_LIMIT": {1000, 1, 100000},
+	} {
+		value, e := positiveEnv(key, spec[0], spec[1], spec[2])
+		if e != nil {
+			slog.Error("invalid configuration", "error", e)
+			os.Exit(1)
+		}
+		limits[key] = value
+	}
 	savedStore, err := room.OpenStore(env("SAVE_PATH", "data/games.db"), time.Duration(retention)*time.Hour)
 	if err != nil {
 		slog.Error("cannot open game saves", "error", err)
@@ -51,14 +63,21 @@ func main() {
 	s := &server{store: savedStore, bridge: &linx.Bridge{Config: linx.Config{
 		URL:    env("LINGXI_REALTIME_URL", "wss://xrobo-io.qiniuapi.com/v1/realtime"),
 		APIKey: os.Getenv("LINGXI_REALTIME_API_KEY"), Model: os.Getenv("LINGXI_REALTIME_MODEL")}}, publicHost: public.Host, secureCookie: public.Scheme == "https"}
-	s.speaker = &linx.Speaker{Config: s.bridge.Config}
+	s.bridge.MaxConnections = limits["LINGXI_MAX_CONNECTIONS"]
+	s.bridge.SessionTimeout = time.Duration(limits["LINGXI_SESSION_SECONDS"]) * time.Second
+	s.bridge.Reserve = func(ctx context.Context) error {
+		return savedStore.ReserveVoice(ctx, "realtime", limits["LINGXI_REALTIME_DAILY_LIMIT"])
+	}
+	s.speaker = &linx.Speaker{Config: s.bridge.Config, Reserve: func(ctx context.Context) error {
+		return savedStore.ReserveVoice(ctx, "tts", limits["LINGXI_TTS_DAILY_LIMIT"])
+	}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"status": "ok"}) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"status": "ok", "voice_configured": s.bridge.Config.Enabled(), "storage": "sqlite"})
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "persistence_enabled": true, "boards": game.Boards()})
+		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "boards": game.Boards()})
 	})
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("POST /api/rooms", s.create)

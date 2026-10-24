@@ -25,22 +25,43 @@ func (c Config) Enabled() bool {
 }
 
 type Bridge struct {
-	Config Config
-	mu     sync.Mutex
-	active int
+	Config         Config
+	MaxConnections int
+	SessionTimeout time.Duration
+	Reserve        func(context.Context) error
+	mu             sync.Mutex
+	active         int
 }
 
-func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.GameSession) error {
+func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.GameSession) (result error) {
+	limit := b.MaxConnections
+	if limit <= 0 {
+		limit = 4
+	}
+	duration := b.SessionTimeout
+	if duration <= 0 {
+		duration = 15 * time.Minute
+	}
 	b.mu.Lock()
-	if b.active >= 4 {
+	if b.active >= limit {
 		b.mu.Unlock()
 		return errors.New("另一间房正在使用语音，请稍后再试")
 	}
 	b.active++
 	b.mu.Unlock()
 	defer func() { b.mu.Lock(); b.active--; b.mu.Unlock(); r.VoiceState("disconnected") }()
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
+	defer func() {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			result = errors.New("本次语音已到时限，请点击重新连接；仍可点击棋盘继续游戏")
+		}
+	}()
+	if b.Reserve != nil {
+		if err := b.Reserve(ctx); err != nil {
+			return err
+		}
+	}
 
 	endpoint, err := realtimeURL(b.Config.URL, b.Config.Model)
 	if err != nil {

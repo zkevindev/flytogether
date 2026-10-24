@@ -184,6 +184,7 @@ func OpenStore(path string, retention time.Duration) (*Store, error) {
 		"CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE)",
 		"CREATE TABLE IF NOT EXISTS commands (room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(room_id,id))",
 		"CREATE TABLE IF NOT EXISTS quarantine (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL, payload BLOB NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL)",
+		"CREATE TABLE IF NOT EXISTS voice_usage (day TEXT NOT NULL, kind TEXT NOT NULL, used INTEGER NOT NULL CHECK(used > 0), PRIMARY KEY(day,kind))",
 		"PRAGMA user_version=1",
 	} {
 		if _, err = tx.Exec(query); err != nil {

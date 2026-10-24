@@ -37,6 +37,8 @@ values.update({
 })
 values.setdefault('SAVE_PATH','/var/lib/flytogether/games.db')
 values.setdefault('SAVE_RETENTION_HOURS','168')
+for key,value in {'LINGXI_MAX_CONNECTIONS':'4','LINGXI_SESSION_SECONDS':'900','LINGXI_REALTIME_DAILY_LIMIT':'2000','LINGXI_TTS_DAILY_LIMIT':'1000'}.items():
+    values.setdefault(key,value)
 values.setdefault('LINGXI_REALTIME_URL','wss://xrobo-io.qiniuapi.com/v1/realtime')
 for key in ['LINGXI_REALTIME_MODEL','LINGXI_REALTIME_API_KEY']:
     values.setdefault(key,'')
