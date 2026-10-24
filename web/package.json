@@ -42,7 +42,8 @@
     "test:admin:client-error": "node scripts/admin-client-error-browser.mjs",
     "test:ownership:browser": "node scripts/ownership-browser.mjs",
     "test:props:browser": "node scripts/props-browser.mjs",
-    "test:props:voice": "node scripts/props-voice-browser.mjs"
+    "test:props:voice": "node scripts/props-voice-browser.mjs",
+    "test:delegation:browser": "node scripts/delegation-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

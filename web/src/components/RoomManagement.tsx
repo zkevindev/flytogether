@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Room } from "../lib/types";
+import {DelegationControls} from "./DelegationControls";
 import { api } from "../lib/types";
 export function RoomManagement({
   room,
@@ -93,6 +94,7 @@ export function RoomManagement({
   };
   return (
     <div className="room-management">
+ <DelegationControls room={room} connected={connected} busy={busy} onBusy={onBusy} onRoom={onRoom}/>
       <p className="modal-description">
         当前房主：<strong>{host?.name || "等待同步"}</strong> ·{" "}
         {lobby.host_online ? "在线" : "暂时离线"}
@@ -225,7 +227,7 @@ export function RoomManagement({
           <p>
             {confirm === "transfer_host"
               ? "交接后，对方可以开始、暂停、结束游戏，你会保留原来的玩家席位。"
-              : "接任后，你可以暂停、结束或组织再玩。离线玩家的飞机仍由其本人回来操作。"}
+              : "接任后，你可以暂停、结束或组织再玩。离线玩家的飞机只按其本人事先选择的托管规则代玩。"}
             骰子、道具和当前回合都会保留。
           </p>
           <div>
@@ -259,7 +261,7 @@ export function RoomManagement({
         </p>
       )}
       <p className="rule-note">
-        离线接任需要服务器确认持续离线并经过等待期，不会自动转让，也不会替离线玩家走棋。
+        离线接任需要服务器确认持续离线并经过等待期，不会自动转让，也不会因为交接本身替离线玩家走棋，代玩需要该玩家本人选择托管。
       </p>
     </div>
   );

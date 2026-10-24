@@ -67,7 +67,7 @@ const kindName: Record<string, string> = {
 };
 const actionName: Record<string, string> = {
   roll: "掷骰子",
-  transfer_host:"转让房主",claim_host:"离线接任房主",
+  delegate:"暂离托管",reclaim:"回来接管",auto_delegate_on:"允许断线托管",auto_delegate_off:"关闭断线托管",transfer_host:"转让房主",claim_host:"离线接任房主",
   move: "移动飞机",
   prop: "使用道具",
   start: "开始",
