@@ -572,6 +572,11 @@ html[data-motion="reduce"] .confetti-rain {display:none;}
 .chat-compose{min-width:0}.chat-compose input{min-width:0;width:100%}.audience-chat select{max-width:100%}.cheer-row button{border:1px solid #d9d5c7;border-radius:10px;background:#fffdf8;padding:8px 10px;color:#334b40;font:inherit}.audience-chat input,.audience-chat select{border:1px solid #d9d5c7;border-radius:10px;padding:9px;font:inherit;background:#fffdf8;color:#334b40}
 .watch-shell .voice-panel{position:relative;top:auto}
 .audience-chat .chat-compose .primary-button{width:auto;flex:0 0 auto;padding-inline:16px}
+.key-move-narration{margin:0 0 14px;padding:12px 16px;border:1px solid #d9e2cf;border-left:5px solid #8ba378;border-radius:12px;background:#f5f8ef;color:#42563d}
+.key-move-narration>span{display:block;margin-bottom:4px;color:#738568;font-size:11px;font-weight:700;letter-spacing:.04em}
+.key-move-narration p{margin:0;font-size:15px;line-height:1.6;font-weight:600;overflow-wrap:anywhere}
+.watch-shell .key-move-narration{margin:12px 0}
+@media(max-width:700px){.key-move-narration{padding:10px 12px;margin-bottom:10px}.key-move-narration p{font-size:14px}}
 .pass-device-prompt{display:flex;align-items:center;gap:14px;margin:0 0 14px;padding:14px 18px;border:1px solid #b8d0bd;border-left:6px solid #328760;border-radius:14px;background:linear-gradient(105deg,#eef7e9,#fbf8e9);color:#234734;}
 .pass-device-prompt>svg:first-child{flex:none;color:#328760}
 .pass-device-prompt span{min-width:0;display:flex;flex-direction:column;gap:3px}

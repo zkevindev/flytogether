@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { AirplaneTilt, ArrowClockwise, House, Microphone, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
 import { BoardLoader } from './BoardLoader';
+import { KeyMoveNarration } from './KeyMoveNarration';
+import { latestKeyMove } from '../lib/key-move';
 import { DiceRollModal } from './DiceRollModal';
 import { AudienceChat } from './Audience';
 import { useExperience } from '../lib/experience';
@@ -134,7 +136,8 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
   const state = presentation.game || room.state;
   const current = state.players[state.current];
   const winner = state.players.find(player => player.id === state.winner);
-  const steps = state.history.slice(-6);
+  const latestNarrated = latestKeyMove(state);
+  const steps = state.history.slice(-6).filter(step => step.id !== latestNarrated?.id);
   return <div className="app-shell play-shell watch-shell">
     <a className="skip-link" href="#watch-main">跳到棋盘</a>
     <header className="site-header"><button className="brand brand-button" onClick={() => void leave()}><span className="brand-mark"><AirplaneTilt size={26} weight="fill" /></span><span className="brand-name">一起飞<span>观赛</span></span></button>
@@ -145,6 +148,7 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
         {(room.status === 'waiting' || room.status === 'paused') && <div className="game-status-overlay"><strong>{room.status === 'waiting' ? '等待开局' : '比赛暂停'}</strong><p>{room.status === 'waiting' ? '选手入座后由房主开始，你可以先观看准备情况。' : '棋盘保留在原地，继续后会从这里同步。'}</p><button className="outline-button" onClick={() => void leave()}><House />返回首页</button></div>}
         {(winner || room.status === 'ended') && <p className="watch-result" role="status">{winner ? `${winner.name}获胜。` : '房主结束了这一局。'}可以查看棋盘和最近棋步，观众不能再开一局。</p>}
         {!connected && !closed && <p role="status" className="connection-hint">正在重新连接观赛，比赛本身不受影响。</p>}
+        <KeyMoveNarration game={state} />
         {closed && <p role="alert" className="connection-hint">{closed} <button className="text-button" onClick={() => void leave()}><House />返回首页</button></p>}
         <div className="board-stage">{impact && <Suspense fallback={null}><PropEffects key={impact.id} event={impact} game={state} light={preferences.board === 'flat'} reducedMotion={reducedMotion} /></Suspense>}<BoardLoader light={preferences.board === 'flat'} reducedMotion={reducedMotion} game={state} disabled onPiece={() => {}} onRoll={() => {}} /></div>
         <ol className="watch-steps" aria-label="最近棋步">{steps.map(step => <li key={step.id}>{step.text}</li>)}</ol>
