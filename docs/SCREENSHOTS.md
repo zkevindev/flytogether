@@ -40,3 +40,8 @@ npm --prefix web run capture:docs
 2. 逐张查看图片，确认有实际渲染、内容可辨认、弹窗和手机布局完整；截图文件存在不表示验收成功。
 3. README 描述已经实现的行为；未来能力写入 [产品化路线](ROADMAP.md)。
 4. 更新 [开发进展](PROGRESS.md) 与对应 Issue，回链应用提交、文档提交和验证范围。
+
+
+## 邀请房间与结算
+
+新增 [`images/network/manifest.json`](images/network/manifest.json) 独立记录本次应用 293d3b2 的四张联网截图：桌面/手机准备区、桌面/手机自然获胜结算。由 `test:network:browser` 使用独立 Cookie、实际随机骰子与合法走法采集；关闭麦克风及播报，不记录邀请链接或身份凭据。脚本没有注入棋盘位置。复跑时用 `QA_OUTPUT_DIR` 指定临时目录，挑选有效截图后更新对应哈希清单。

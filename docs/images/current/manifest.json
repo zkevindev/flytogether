@@ -1,6 +1,6 @@
 {
-  "captured_at": "2026-10-24T00:39:27.720Z",
-  "app_commit": "903b786",
+  "captured_at": "2026-10-24T01:04:05.312Z",
+  "app_commit": "293d3b2b4edf1ee9648c812113047abee3b83143",
   "browser": "155.0.8059.85",
   "scope": "Actual app UI: home, create, board, five props, random dice, coaching preview and takeoff; two human seats; voice switched off; no mocked state or microphone",
   "captures": [
@@ -18,7 +18,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "1e618c8cfd437d55c004b567289bb26ee66ee511ac85eb91f6384c22245480c0"
+      "sha256": "b48d7234dab49a94e05c89df8fffd4669711f156dedcf4da36910225c04ac983"
     },
     {
       "file": "play-desktop.png",
@@ -58,7 +58,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "c184b59994f5256937af10529cf336eeaabbc73113770eab67c388bc98818ec1"
+      "sha256": "d057d39598bbbbaff50c39831b5e25bf580a3d07d73e9a83674f5d79bfd9b111"
     },
     {
       "file": "coach-desktop.png",
@@ -66,7 +66,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "57da51cdeb460515d403ab1a353f6309b6f4ee5be9d803c83513159967f259bc"
+      "sha256": "9883212405fe48b4abb4dafc859a9585a03a132c12342eda58694f7d97d7d0d9"
     },
     {
       "file": "coach-mobile.png",
@@ -74,7 +74,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "11f8bcef85abc48e415eb27ad67ec582cfe08e15b10849eb17240bbafc5463b8"
+      "sha256": "357cca104e7f77be5cf34a340b14da39e985094aed082bcf790dd9acf72ebb6f"
     },
     {
       "file": "play-mobile.png",
@@ -82,7 +82,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "77cc25c21110459a3846bd5e0f4b8d72caef61ebb73b1e1260447341739c37c9"
+      "sha256": "9097d0649aeda6ea653861917ce416924daa2db776859c85a196c55b6d8e567c"
     }
   ],
   "console_errors": 0,
