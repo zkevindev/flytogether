@@ -1,7 +1,7 @@
 # 一起飞 · 项目进展
 
-- 更新日期：2026-10-23（Asia/Shanghai）
-- 当前阶段：大棋盘、五道具、直接语音、主动播报与新手引导/落点预览已实现；产品化路线已建立，家庭和多设备验收继续
+- 更新日期：2026-10-24（Asia/Shanghai）
+- 当前阶段：存档恢复、独立声音设置与语音资源边界已部署；用户确认真实亲子与实体手机验收完成；陪玩风格/规则预设/家庭档案继续迭代
 - 比赛安排：三天两晚，一人开发
 - 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
 
@@ -11,7 +11,7 @@
 | --- | --- | --- | --- |
 | M1：Realtime 语音接入 | [#1](https://github.com/zkevindev/flytogether/issues/1) | 已验证 Bearer 鉴权、合成中文语音查询、掷骰和实际选子起飞 | 直接提交 main，未创建 PR |
 | M2：家庭飞行棋玩法 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 点击玩法和三种棋盘已同步到 main；实际浏览器演示通过 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
-| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | HTTPS 与真实麦克风演示已完成；家庭环境、多设备与比赛交付待完成 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
+| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | HTTPS 与真实麦克风演示已完成；真实亲子与实体手机已由用户确认完成；比赛资料与专项稳定性继续跟踪 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
 | 自定义语音唤醒（历史） | [#4](https://github.com/zkevindev/flytogether/issues/4) | 历史验收已完成，当前交互由 #14 直接对话替代 | [a85e63b](https://github.com/zkevindev/flytogether/commit/a85e63b)、[87a0d09](https://github.com/zkevindev/flytogether/commit/87a0d09)，直接 main |
 | 棋盘重做 | [#5](https://github.com/zkevindev/flytogether/issues/5) | 四角机场、连续彩色航线、中央骰子、放大和手机布局已实现并演示 | 直接 main，提交回链见 Issue |
 | 家庭道具 | [#6](https://github.com/zkevindev/flytogether/issues/6) | 三种道具、库存、AI 与语音用卡已实现 | [37b1a7c](https://github.com/zkevindev/flytogether/commit/37b1a7c)，界面提交见 Issue |
@@ -242,3 +242,15 @@ Go race 与构建通过。本地实际 Chrome 两真人＋挑战机器人自然�
 
 
 公网自然局同样由挑战机器人获胜，随机样本统计 rolls=18、takeoffs=3、arrivals=1、captures=1、props_used=5，结算与再玩正确。首轮长局一次读取超时，健康正常；脚本对只读使用有界重试，对写命令沿用原操作编号。部署服务 active，运行二进制和两份静态资源哈希匹配、凭据权限600；没有把真实地址或 Cookie 写入仓库。
+
+## 2026-10-24：存档续玩与独立声音（#24 / #25）
+
+- `ed80d75` SQLite 事务存档，动作/席位/邀请/点击命令去重确认前落盘；失败回滚，重启暂停，清理旧语音授权与建议。
+- `6c937a6` 可配置实时并发和会话时长；实时连接/TTS 分开的持久化 UTC 日额度，缓存不重复占额度，点击降级。
+- `b485e95` 首页保存时间/恢复/删除，原页面处理服务实例切换；音效/播报/对讲独立偏好，总静音与恢复。
+- Go race、14 语音生命周期、6 展示序列、4 播报/音效用例及浏览器回归通过。真实 SIGTERM/SIGKILL、SQLite 中止写入、混合席位与机器人暂停、在线 WAL 备份恢复和删除通过。
+- 公网已部署，实际重启后两真人＋机器人房间原席位恢复，骰子/起飞卡与重复命令一致，继续后飞机实际起飞；真实灵矽输出式 TTS 返回 101084 字节 24kHz PCM，没有申请麦克风。服务、二进制与两个网页资源核对一致，数据目录独立，权限600。
+- 10张当前界面重新采集，新增5张保存/声音证据，来源与哈希见各目录manifest；详情见 [QA-RELIABILITY](QA-RELIABILITY.md) 与 [SAVES](SAVES.md)。
+- 用户于2026-10-24确认真实亲子与实体手机验收完成，在 #3/#17 标记为用户实机反馈，不混入合成自动化统计。#3 仍跟踪切网/长监听专项、更多时延样本与比赛演示资料；#17 保留陪玩风格、规则预设、家庭档案等未交付项。
+
+仅 main 分批提交，无其他分支或 PR。

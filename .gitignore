@@ -37,3 +37,8 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+
+# SQLite saves and credential-bearing backups
+*.db
+*.db-wal
+*.db-shm

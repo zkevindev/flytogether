@@ -44,15 +44,21 @@
 | --- | --- |
 | ![机器人自动准备的混合房间](docs/images/network-bot/mixed-lobby-desktop.png) | ![真人与机器人本局战绩](docs/images/network-bot/mixed-result.png) |
 
+| 重启后续玩 | 独立声音设置 |
+| --- | --- |
+| ![已恢复的存档](docs/images/reliability/saved-home.png) | ![声音偏好与总静音](docs/images/reliability/audio-settings.png) |
+
 [查看手机对局页](docs/images/current/play-mobile.png) · [终点撒花](docs/images/finish-confetti.png) · [截图版本与复跑方式](docs/SCREENSHOTS.md)
 
-主图及上表为 2026-10-24 从运行中的应用重新截取，非设计稿。截图时关闭语音采集与自动播报，不申请麦克风；语音实测单独记录在 [QA-VOICE](docs/QA-VOICE.md)。
+主图及上表为 2026-10-24 从运行中的应用重新截取，非设计稿。常规界面截图关闭语音采集与自动播报；声音设置图来自受控 PCM 与 Chrome 合成麦克风回归，未使用实体录音。语音实测单独记录在 [QA-VOICE](docs/QA-VOICE.md)。
 
 ## 已有能力
 
 | 能力 | 当前实现 |
 | --- | --- |
 | 联网邀请房间 | 免注册邀请、2～4 个总席位、可加一位机器人；真人准备/在线状态、房主控制、原浏览器掉线重连 |
+| 存档续玩 | SQLite 自动保存，重启暂停，原浏览器恢复骰子/道具/席位；首页续玩与删除 |
+| 声音控制 | 音效、回合播报、自动对讲分别保存偏好；总静音立即停播和关麦 |
 | 结算再玩 | 动作级累计五项真实统计、刷新不重复、同配置再玩；联网保留席位 |
 | 机器人陪玩 | 同屏或联网添加一位机器人，占最后一席；Go 规则策略自动行动，轻松/普通/挑战三档 |
 | 三种棋盘 | 经典十字 52 格、长航线 84 格、环形航线 52 格；Three.js 棋盘、飞机编号、2D 降级 |
@@ -128,11 +134,13 @@ LINGXI_REALTIME_API_KEY=你的服务端API密钥
 ## 当前限制与下一步
 
 - 联网支持 **真人＋一个机器人**，总席位 2～4；机器人自动行动，掉线真人不会自动变成机器人。仍没有账号/好友、房主转让、自动托管或跨浏览器身份找回。
-- **棋局保存在服务内存中**。同一浏览器刷新可继续，服务重启会失效；无监听且空闲约 4 小时的房间会清理。持久化存档是后续可靠性任务。
-- 已有本局结算与同配置再玩，跨局历史战绩仍待持久化支持。
-- 真实平台、自动浏览器及有限真人操作/打断已验证；手机宽度截图属于响应式检查，真实 Android/iOS、噪声、回声和亲子完整局继续在 [M3](https://github.com/zkevindev/flytogether/issues/3) 验收。
+- **SQLite 自动存档与续玩**：已确认动作落盘，重启恢复为暂停，保留骰子、道具和联网席位；用原浏览器继续，默认闲置 7 天清理。首页可查看保存时间、由房主删除；[配置与备份恢复](docs/SAVES.md)。
+- 已有本局结算与同配置再玩，跨局历史战绩与家庭档案尚未实现。
+- 真实平台、自动浏览器及有限真人操作/打断已验证；手机宽度截图属于响应式检查，真实亲子与实体手机验收已于 2026-10-24 由用户确认完成，记录在 [M3](https://github.com/zkevindev/flytogether/issues/3)。
 
-[1.0 路线与逐项验收标准](docs/ROADMAP.md)记录当前新手引导切片，以及后续结算再玩、存档续玩、声音与恢复、家庭实测，再推进灵矽陪玩、玩法平衡和联机扩展。
+音效、回合播报、对讲麦克风可独立设置，顶部总静音立即停止全部音频和录音，刷新保留偏好。语音时长、并发与 UTC 日额度可通过环境变量配置，详见[存档与声音验收](docs/QA-RELIABILITY.md)。
+
+[1.0 路线与逐项验收标准](docs/ROADMAP.md)保留尚未完成的陪玩风格、规则平衡与家庭档案。
 
 ## 验证与演示
 
@@ -174,6 +182,7 @@ python3 -m venv .venv-deploy
 ## 文档与跟踪
 
 - [产品化路线](docs/ROADMAP.md) · [产品化 Issue #17](https://github.com/zkevindev/flytogether/issues/17)
+- [存档与备份恢复](docs/SAVES.md) · [存档/声音回归](docs/QA-RELIABILITY.md)
 - [架构与协议](docs/ARCHITECTURE.md) · [开发进展与提交证据](docs/PROGRESS.md)
 - [贡献与文档维护](CONTRIBUTING.md) · [灵矽官方文档](https://linx.qiniu.com/docs/)
 - 当前按要求直接提交 **main**；每个可验收切片回链 Issue，未创建其他分支或 PR。

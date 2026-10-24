@@ -50,3 +50,8 @@ npm --prefix web run capture:docs
 ## 真人＋机器人（#23）
 
 当前同屏/创建界面 10 张与纯真人联机 4 张已更新到 f4b1ac0，新增 [`images/network-bot/`](images/network-bot/) 的混合房间配置、桌面/手机自动准备、自然结算四张，来源、视口与 SHA-256 见各目录 manifest。混合局通过正式邀请、真实随机投掷和服务端机器人调度推进，无注入状态；图中机器人有独立标记且不需要第三台设备。创建弹窗截图滚动到机器人配置区，以展示席位组成与语音助手说明。
+
+
+## 存档与独立声音（#24 / #25）
+
+`images/current/` 10 张已从 b485e95 运行应用重新采集，主图、手机和教练图包含当前声音设置入口。新增 [reliability/manifest.json](images/reliability/manifest.json) 记录5张：重启后首页、骰子选择阶段恢复、SQLite写入失败、混合席位恢复和声音设置。前四张来自真实进程重启/受控磁盘写入失败；声音设置图使用受控 PCM 和 Chrome 合成麦克风，未使用实体录音。已检查棋盘、弹窗、手机内容及保存提示可见。历史 network/network-bot 图的版本保留在原清单中。

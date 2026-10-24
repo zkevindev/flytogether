@@ -1,6 +1,6 @@
 {
-  "captured_at": "2026-10-24T01:19:08.538Z",
-  "app_commit": "f4b1ac0efcb55284d0b08b523b420039a2affc30",
+  "captured_at": "2026-10-24T02:23:45.939Z",
+  "app_commit": "b485e95",
   "browser": "155.0.8059.85",
   "scope": "Actual app UI: home, create, board, five props, random dice, coaching preview and takeoff; two human seats; voice switched off; no mocked state or microphone",
   "captures": [
@@ -26,7 +26,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "e75f4767ac13ceb2b37f6286802246eeac1f7fc73003af5c93bb42823dca740b"
+      "sha256": "03f386f66d86ed61ae27f0dab9dc40bf34eaaaa0391f995f11495f3fd542e284"
     },
     {
       "file": "onboarding.png",
@@ -50,7 +50,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "afb1d8202cce27087d1524b63b1983bfd1e464537dc5fd931e47462f90913544"
+      "sha256": "96fe31647418a91bff6004c3a0836cb5a87531d759928b6ea375b88a63f67cd7"
     },
     {
       "file": "move-preview.png",
@@ -58,7 +58,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "cb8cf6255a4b7e82152fb19c3a0068d417a470216fac986f75af95d6d1e5c30d"
+      "sha256": "d45df90e21a2521938b86c143f65773f6ae0d2e140c32c82ca1ac241b22a8ac8"
     },
     {
       "file": "coach-desktop.png",
@@ -66,7 +66,7 @@
         "width": 1440,
         "height": 1120
       },
-      "sha256": "310837e3468e9596a77f3e9965228619dd46ddaf8692bd19444e392712271b74"
+      "sha256": "ca197ab19f4c4d843f3c524d9714465c1cf87cbd69fd0fd1743186bd8eaa252a"
     },
     {
       "file": "coach-mobile.png",
@@ -74,7 +74,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "402f76a10217607f625f8a1e6038c14e2f2f52bf33764aefd8f84ec6bc093c18"
+      "sha256": "57cb810209f42b0a9e80944911e2a670d328d45940b80167f5fe03f6fd6a0c21"
     },
     {
       "file": "play-mobile.png",
@@ -82,7 +82,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "ead5867c1dc2a01c113ccd9a34739332c64155a404022e0d54467809806f74b6"
+      "sha256": "13d412e16d70f25d731b12438d8bd39cc7bbeb825772ba86ca47e632ab3415b6"
     }
   ],
   "console_errors": 0,

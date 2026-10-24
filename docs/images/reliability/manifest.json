@@ -1,0 +1,27 @@
+{
+  "captured_at": "2026-10-24",
+  "app_commit": "b485e95",
+  "scope": "Real Chrome UI; Go process SIGTERM/SIGKILL restart and SQLite abort trigger. Audio settings uses controlled PCM and synthetic microphone. No physical microphone or real server address in captures.",
+  "captures": [
+    {
+      "file": "audio-settings.png",
+      "sha256": "ee3ece62c2c3b9fab457327c3d6ebb0e6f9f4110bd9dc3f86f219e129b76ded2"
+    },
+    {
+      "file": "restored-dice-phase.png",
+      "sha256": "37f329871460f0e330a3ed68389c3035181c950b2267355dd2dce70e24ecec4f"
+    },
+    {
+      "file": "restored-mixed-room.png",
+      "sha256": "14ca7cfee71ce3df0f96df708a969f99ab1e4538036972c93da7401ab79299fc"
+    },
+    {
+      "file": "save-failure.png",
+      "sha256": "adde7581a43399904b4f9119f5e27e110aed167c6bfb4d1aecb87247537abc29"
+    },
+    {
+      "file": "saved-home.png",
+      "sha256": "0d23b628119fffb4535cb219e04eb26c48705e0cad38383ada248b6a4b08e819"
+    }
+  ]
+}
