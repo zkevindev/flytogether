@@ -27,7 +27,8 @@
     "test:coach:browser": "node scripts/coach-browser.mjs",
     "test:saves:browser": "node scripts/saves-browser.mjs",
     "test:audio:browser": "node scripts/audio-settings-browser.mjs",
-    "test:saves:deployed": "node scripts/saves-deployed-browser.mjs"
+    "test:saves:deployed": "node scripts/saves-deployed-browser.mjs",
+    "test:companion:browser": "node scripts/companion-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",

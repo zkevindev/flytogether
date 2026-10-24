@@ -430,6 +430,11 @@ func (s *server) voiceSocket(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 503, map[string]string{"message": "灵矽尚未配置，点击玩法可以继续"})
 		return
 	}
+	preferences, err := (linx.CompanionPreferences{Style: r.URL.Query().Get("style"), Frequency: r.URL.Query().Get("frequency")}).Normalized()
+	if err != nil {
+		failure(w, err)
+		return
+	}
 	sessionRoom, err := v.VoiceFor(cookie(r))
 	if err != nil {
 		failure(w, err)
@@ -441,7 +446,7 @@ func (s *server) voiceSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer c.CloseNow()
-	if e = s.bridge.Serve(r.Context(), c, sessionRoom); e != nil {
+	if e = s.bridge.Serve(r.Context(), c, sessionRoom, preferences); e != nil {
 		b, _ := json.Marshal(map[string]string{"type": "error", "message": e.Error()})
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()

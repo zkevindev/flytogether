@@ -160,3 +160,11 @@ test('interruption drops unscheduled PCM as well as late chunks of the old reply
  ws.emit({type:'stt',text:'掷骰子'});ws.emit({type:'response.created',response:{id:'new'}});ws.emit(audio('old-long'));ws.emit(audio('new'));
  assert.ok(playback.slice(0,oldCount).every(node=>node.stopped));assert.equal(playback.length,oldCount+1);client.disconnect();
 });
+
+
+test('changing preferences cancels a created host response without muting the next requested reply',async()=>{
+ const {client,ws}=await connected();ws.emit({type:'host_cue',text:'旧主持'});ws.emit({type:'response.created',response:{id:'host'}});ws.emit(audio('host'));
+ client.setCompanion({style:'coach',frequency:'quiet'});assert.equal(ws.sent.at(-1).type,'companion_preferences');assert.equal(sockets.length,1);
+ ws.emit({type:'host_cancel'});assert.equal(playback[0].stopped,true);ws.emit(audio('host'));assert.equal(playback.length,1);
+ ws.emit({type:'stt',text:'现在轮到谁'});ws.emit({type:'response.created',response:{id:'answer'}});ws.emit(audio('answer'));assert.equal(playback.length,2);client.disconnect();
+});

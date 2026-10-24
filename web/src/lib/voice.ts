@@ -1,4 +1,5 @@
 import { socketURL } from './types';
+import type { CompanionPreferences } from './types';
 
 type RealtimeMessage = { type: string; [key: string]: any };
 
@@ -28,7 +29,12 @@ export class VoiceClient {
   private hostResponses = new Set<string>();
   private activeSources = new Set<AudioBufferSourceNode>();
 
-  constructor(private roomID: string, private onState: (s: string) => void, private onText: (s: string, who: string) => void, private onError: (s: string) => void) {}
+  constructor(private roomID: string, private onState: (s: string) => void, private onText: (s: string, who: string) => void, private onError: (s: string) => void, private companion: CompanionPreferences = {style:'warm',frequency:'normal'}) {}
+
+  setCompanion(value: CompanionPreferences) {
+    this.companion = value;
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({type:'companion_preferences',...value}));
+  }
 
   async connect() {
     if (!window.isSecureContext) throw new Error('麦克风需要 HTTPS 地址，或在本机 localhost 打开');
@@ -67,7 +73,7 @@ export class VoiceClient {
       this.source.connect(this.capture);
       this.capture.connect(this.audio.destination);
 
-      const ws = new WebSocket(socketURL('/ws/voice?room_id=' + encodeURIComponent(this.roomID)));
+      const ws = new WebSocket(socketURL('/ws/voice?room_id=' + encodeURIComponent(this.roomID) + '&style=' + this.companion.style + '&frequency=' + this.companion.frequency));
       this.ws = ws;
       ws.binaryType = 'arraybuffer';
       await new Promise<void>((resolve, reject) => {
@@ -98,7 +104,8 @@ export class VoiceClient {
             this.expectHost = false; this.hostLive = false; this.hostResponses.clear();
             this.clearPlayback(); this.generationDone = true;
           } else if (message.type === 'host_cancel') {
-            this.expectHost = false; this.dropHost = true; this.hostLive = false;
+            this.dropHost = this.expectHost && !this.hostLive;
+            this.expectHost = false; this.hostLive = false;
             this.clearPlayback(); this.generationDone = true;
             if (this.responseID) this.mutedResponses.add(this.responseID);
             if (this.recording) this.onState(this.waitingForWake ? 'standby' : 'ready');

@@ -4,12 +4,13 @@ import { Tutorial, tutorialPreference } from './components/Tutorial';
 import { MovePreview } from './components/MovePreview';
 import { Celebration } from './components/Celebration';
 import { HostNarration } from './components/HostNarration';
+import { loadCompanion } from './lib/companion';
 import { Narrator } from './lib/narration';
 import { Board } from './components/Board';
 import { DiceRollModal } from './components/DiceRollModal';
 import { PropTray } from './components/PropTray';
 import { api, APIError, palette, socketURL } from './lib/types';
-import type { Config, Options, Piece, Player, Room } from './lib/types';
+import type { CompanionPreferences, Config, Options, Piece, Player, Room } from './lib/types';
 import { cuesFor, Sfx } from './lib/sfx';
 import { VoiceClient } from './lib/voice';
 import { initialPresentation, presentationReducer } from './lib/presentation';
@@ -63,13 +64,15 @@ export default function App() {
   const [previewSelection, setPreviewSelection] = useState<{ gameID: string; version: number; pieceID: string }>();
   const [impact, setImpact] = useState<{ text: string; shield: boolean; crash: boolean }>();
   const [celebration, setCelebration] = useState<{ id: string; text: string; won: boolean }>();
+  const [companion, setCompanion] = useState(loadCompanion);
+  const companionRef = useRef(companion); companionRef.current = companion;
   const [hostVoice, setHostVoice] = useState(() => localStorage.getItem('fly-host-voice') !== 'off');
   const narrator = useRef(new Narrator());
   const onAnnouncement = useCallback((text: string) => setSpeech({ text, who: 'linx' }), []);
   const [presentation, present] = useReducer(presentationReducer, initialPresentation);
   const [boardZoom, setBoardZoom] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [modal, setModal] = useState<'setup' | 'rules' | 'end' | 'props' | 'invite' | 'discard' | 'audio' | null>(null);
+  const [modal, setModal] = useState<'setup' | 'rules' | 'end' | 'props' | 'invite' | 'discard' | 'audio' | 'companion' | null>(null);
   const [setupNew, setSetupNew] = useState(false);
   const [options, setOptions] = useState<Options>(defaults);
   const [voiceState, setVoiceState] = useState('disconnected');
@@ -292,7 +295,7 @@ export default function App() {
     voice.current?.disconnect();
     const client = new VoiceClient(r.id, setVoiceState, (text, who) => setSpeech({ text, who }), message => {
       setAutoVoiceError(message); setToast(message);
-    });
+    }, companionRef.current);
     voice.current = client;
     try { await client.connect(); } catch (error) {
       if (voice.current !== client) return;
@@ -300,6 +303,10 @@ export default function App() {
       setAutoVoiceError(message); setToast(message);
     }
   }, []);
+  const changeCompanion = (next: CompanionPreferences) => {
+    localStorage.setItem('fly-companion', JSON.stringify(next));
+    narrator.current.stop(); voice.current?.setCompanion(next); setCompanion(next);
+  };
   const changeMasterMute = (muted: boolean) => {
     localStorage.setItem('fly-master-muted', muted ? 'on' : 'off');
     if (muted) { voiceAllowedRef.current = false; voice.current?.disconnect(); narrator.current.stop(); sfx.current.enabled = false; sfx.current.stop(); }
@@ -436,7 +443,7 @@ export default function App() {
             <section className="voice-panel">
               <div className="voice-heading"><span className="voice-icon"><Waveform size={24} /></span><div><h2>灵矽，陪你一起飞</h2><p>语音主持与助手 · 不占玩家席位</p></div><span className="voice-spark"><Sparkle size={22} weight="duotone" /></span></div>
               <label className="auto-voice-setting"><input type="checkbox" checked={hostVoice} onChange={e => { changeHostVoice(e.target.checked); }} />关闭麦克风时也播报回合</label>
-              <HostNarration roomID={room.id} game={presentation.game || state} enabled={screen === 'play' && lifecycle === 'playing' && tutorialSeen && !tutorialOpen && hostVoice && !masterMuted && !!config?.voice_configured && voiceState === 'disconnected' && (network && !myTurn || !autoVoice || !!autoVoiceError || !!winner) && !presentation.active && !presentation.queue.length} narrator={narrator.current} onText={onAnnouncement} />
+              <HostNarration companion={companion} roomID={room.id} game={presentation.game || state} enabled={screen === 'play' && lifecycle === 'playing' && tutorialSeen && !tutorialOpen && hostVoice && !masterMuted && !!config?.voice_configured && voiceState === 'disconnected' && (network && !myTurn || !autoVoice || !!autoVoiceError || !!winner) && !presentation.active && !presentation.queue.length} narrator={narrator.current} onText={onAnnouncement} />
               <label className="auto-voice-setting"><input type="checkbox" checked={autoVoice} onChange={e => changeAutoVoice(e.target.checked)} />自动连接语音，直接说话</label>
               <div className="voice-bubble" aria-live="polite">{speech.text ? <><span className="speech-label">{speech.who === 'you' ? '你刚刚说' : '灵矽'}</span>{speech.text}</> : <><span className="bubble-quote">“</span>直接说「掷骰子」或<br />「让小熊号起飞」，我来帮你。</>}</div>
               <div className="voice-status"><span className={'status-dot ' + (voiceState === 'ready' ? 'online' : '')} />{network && !myTurn ? '当前玩家的回合，轮到你时可开口操作' : config?.voice_configured ? voiceLabels[effectiveVoice] || '等待连接' : '语音待配置 · 点击玩法已就绪'}</div>
@@ -444,7 +451,7 @@ export default function App() {
                 <button className={'voice-button ' + (effectiveVoice === 'listening' ? 'listening' : '')} onClick={() => changeAutoVoice(false)}><Microphone size={21} />关闭对讲麦克风</button>}
               {autoVoiceError && <p className="voice-connection-error" role="alert">{autoVoiceError}</p>}
               {effectiveVoice === 'speaking' && <button className="stop-speech" onClick={() => voice.current?.stopPlayback()}>停止播报</button>}
-              <button className="text-button" onClick={() => setModal('audio')}>声音设置</button>{masterMuted && <p role="status">总静音中，麦克风已关闭；恢复声音后沿用原来的设置。</p>}<div className="voice-examples"><strong>试着跟我说</strong><span>“掷骰子”</span><span>“使用起飞卡”</span><span>“让小熊号起飞”</span><span>“现在轮到谁”</span></div><p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : `${autoVoice ? '开始游戏后自动连接' : '开启语音后'}，直接说话即可。首次需允许麦克风；开启期间音频会发送给灵矽识别，可随时关闭。`}</p>
+              <button className="text-button" onClick={() => setModal('audio')}>声音设置</button><button className="text-button" onClick={() => setModal('companion')}>陪玩偏好</button>{masterMuted && <p role="status">总静音中，麦克风已关闭；恢复声音后沿用原来的设置。</p>}<div className="voice-examples"><strong>试着跟我说</strong><span>“掷骰子”</span><span>“使用起飞卡”</span><span>“让小熊号起飞”</span><span>“现在轮到谁”</span></div><p className="voice-footnote">{!config?.voice_configured ? '语音连接完成后，就能开口操作和询问规则。' : `${autoVoice ? '开始游戏后自动连接' : '开启语音后'}，直接说话即可。首次需允许麦克风；开启期间音频会发送给灵矽识别，可随时关闭。`}</p>
             </section>
           </aside>
         </div>
@@ -455,6 +462,7 @@ export default function App() {
       {modal === 'props' && <Modal title={`${current.name}的道具口袋`} onClose={() => setModal(null)}><PropTray key={state.id + ':' + state.version} game={state} status={lifecycle} disabled={!canAct} onUse={(id, target) => { setModal(null); void command('prop', id, target); }} /></Modal>}
       {modal === 'rules' && <Modal title="一起飞，怎么玩？" onClose={() => setModal(null)}><p className="modal-description">这是一起飞的家庭规则。快速模式先送达一架飞机获胜；完整模式需要送达全部飞机。</p><div className="rules-list">{rules.map(([title, text], i) => <div key={title}><span>{String(i + 1).padStart(2, '0')}</span><section><h3>{title}</h3><p>{text}</p></section></div>)}</div><p className="rule-note">机库、起飞位和自己的终点航道不参与撞机。相同位置可以叠放；不使用三连六惩罚或终点反弹。</p><button className="primary-button" onClick={() => setModal(null)}>懂啦，一起出发 <Check /></button></Modal>}
       {modal === 'end' && <Modal title="结束这一局？" onClose={() => setModal(null)}><p className="modal-description">结束后停止当前对局并返回首页，可以创建新游戏。</p><button className="primary-button" disabled={busy} onClick={() => { setModal(null); void command('end'); }}>结束游戏 <Stop weight="fill" /></button></Modal>}
+      {modal === 'companion' && <Modal title="灵矽陪玩偏好" onClose={() => setModal(null)}><p className="modal-description">选择适合家人的陪伴方式。只影响当前浏览器，不改变棋局或其他玩家的偏好。</p><label className="field-label" htmlFor="companion-style">陪玩风格</label><select id="companion-style" className="room-name-input" value={companion.style} onChange={e => changeCompanion({...companion, style:e.target.value as CompanionPreferences['style']})}><option value="warm">温暖陪伴 · 简短鼓励，不催促</option><option value="coach">耐心教练 · 适时补一条规则提示</option><option value="concise">简洁主持 · 只说结果与下一步</option></select><label className="field-label" htmlFor="companion-frequency">主动解说频率</label><select id="companion-frequency" className="room-name-input" value={companion.frequency} onChange={e => changeCompanion({...companion, frequency:e.target.value as CompanionPreferences['frequency']})}><option value="normal">每回合 · 提醒轮次与操作</option><option value="highlights">关键时刻 · 开局、跳跃、撞机与抵达</option><option value="quiet">只问才答 · 不主动插话</option></select><p className="rule-note">只问才答时，仍可开口掷骰、询问规则或请求建议。随时停止解说，也可以在声音设置中单独关麦或总静音。</p><button className="primary-button" onClick={() => setModal(null)}>完成偏好设置</button></Modal>}
       {modal === 'audio' && <Modal title="声音设置" onClose={() => setModal(null)}><p className="modal-description">分别控制游戏音效、回合播报和对讲麦克风。总静音会立即关闭全部声音和麦克风，保留你的偏好。</p><div className="audio-settings"><label><input type="checkbox" checked={sound} onChange={e => { setSound(e.target.checked); localStorage.setItem('fly-sound', e.target.checked ? 'on' : 'off'); }} />游戏音效（掷骰、起飞、撞机、抵达）</label><label><input type="checkbox" checked={hostVoice} onChange={e => changeHostVoice(e.target.checked)} />关闭麦克风时也播报回合</label><label><input type="checkbox" checked={autoVoice} onChange={e => changeAutoVoice(e.target.checked)} />自动连接语音，直接说话</label><label><input type="checkbox" checked={masterMuted} onChange={e => changeMasterMute(e.target.checked)} />总静音（包含麦克风）</label></div><p className="rule-note">回合播报独立于音效；对讲连接时，灵矽的回复随麦克风一起开启。引导期间保持安静。</p><button className="primary-button" onClick={() => setModal(null)}>完成设置</button></Modal>}
       {modal === 'discard' && <Modal title="删除这份存档？" onClose={() => setModal(null)}><p className="modal-description">删除后这局无法继续。{network ? '房间和所有玩家的席位也会一并关闭。' : '可以从首页创建新游戏。'}</p><button className="primary-button" disabled={busy} onClick={() => void discard()}>确认删除存档</button></Modal>}
       {modal === 'invite'  && room.network && <Modal title="邀请朋友入座" onClose={() => setModal(null)}><p>复制下面的链接发给朋友，每位朋友用自己的设备打开。</p><input aria-label="邀请链接" className="room-name-input" readOnly onFocus={e => e.target.select()} value={location.origin + '/#join=' + room.id + '.' + room.network.invite} /></Modal>}

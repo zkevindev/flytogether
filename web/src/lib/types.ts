@@ -16,6 +16,7 @@ export type Game = {
   players: Player[]; legal_moves: Move[]; history: GameEvent[]; last_move?: Move;
   props_enabled: boolean; active_prop?: string; dice_rolls: number[];
 };
+export type CompanionPreferences = { style: 'warm' | 'coach' | 'concise'; frequency: 'normal' | 'highlights' | 'quiet' };
 export type VoiceSettings = { wake_enabled: boolean; wake_word: string };
 export type Coach = { id: string; game_id: string; version: number; player_id: string; move: Move; reason: string; risk: string; threats: number };
 export type Room = { instance_id?: string; saved_at?: string; restored?: boolean; save_error?: boolean; id: string; name: string; status: 'waiting' | 'playing' | 'paused' | 'ended'; seq: number; state: Game; voice: string; voice_settings: VoiceSettings; coach?: Coach; coach_expired?: boolean; network?: { invite: string; seats: { player_id: string; occupied: boolean; ready: boolean; online: boolean; robot?: boolean }[] }; me?: { player_id: string; host: boolean } };

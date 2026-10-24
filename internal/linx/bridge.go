@@ -33,7 +33,16 @@ type Bridge struct {
 	active         int
 }
 
-func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.GameSession) (result error) {
+func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.GameSession, preferences ...CompanionPreferences) (result error) {
+	companion := CompanionPreferences{}
+	if len(preferences) > 0 {
+		companion = preferences[0]
+	}
+	var prefErr error
+	companion, prefErr = companion.Normalized()
+	if prefErr != nil {
+		return prefErr
+	}
 	limit := b.MaxConnections
 	if limit <= 0 {
 		limit = 4
@@ -103,6 +112,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 
 	errCh := make(chan error, 2)
 	controls := make(chan string, 4)
+	preferencesChanged := make(chan CompanionPreferences, 4)
 	gate := wakeGate{settings: r.VoiceSettings()}
 	sendWake := func() error {
 		return sendBrowser(map[string]any{"type": "wake_state", "awake": gate.awake(time.Now()), "wake_enabled": gate.settings.WakeEnabled, "wake_word": gate.settings.WakeWord, "window_seconds": int(wakeWindow.Seconds())})
@@ -128,10 +138,24 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			var control struct {
 				Type string `json:"type"`
+				CompanionPreferences
 			}
 			if json.Unmarshal(data, &control) != nil {
 				errCh <- errors.New("语音控制消息无效")
 				return
+			}
+			if control.Type == "companion_preferences" {
+				p, e := control.CompanionPreferences.Normalized()
+				if e != nil {
+					errCh <- e
+					return
+				}
+				select {
+				case preferencesChanged <- p:
+				case <-ctx.Done():
+					return
+				}
+				continue
 			}
 			if control.Type == "abort" || control.Type == "sleep" {
 				select {
@@ -267,7 +291,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 		r.VoiceState("speaking")
 		return sendUp(map[string]any{"type": "response.create", "response": map[string]any{
 			"tool_choice":  "none",
-			"instructions": "你是家庭飞行棋主持人。只把下面这句话说出来，可以稍微说顺，不要增加事实，不要调用工具：" + script,
+			"instructions": "你是家庭飞行棋主持人。只把下面这句话说出来，不要增加事实，不要调用工具：" + script + "。" + companion.Instructions(),
 		}})
 	}
 	idle := func() {
@@ -289,7 +313,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	}
 	if state, status, ok := roomGame(r); ok && status == "playing" {
 		seenEvent = lastEventID(state)
-		if e := speakHost(hostCue(state)); e != nil {
+		if e := speakHost(companion.Opening(state)); e != nil {
 			return e
 		}
 	}
@@ -303,6 +327,19 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				return nil
 			}
 			return errors.New("灵矽实时会话已断开")
+		case preference := <-preferencesChanged:
+			companion = preference
+			cancelHost()
+			if state, _, ok := roomGame(r); ok {
+				seenEvent = lastEventID(state)
+			}
+			if !inFlight {
+				idle()
+			}
+			if e := sendBrowser(map[string]any{"type": "companion_updated", "style": companion.Style, "frequency": companion.Frequency}); e != nil {
+				return e
+			}
+			continue
 		case control := <-controls:
 			if control == "sleep" {
 				if e := sleep(); e != nil {
@@ -338,7 +375,10 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			if !inFlight && !hostActive() {
 				voice := r.Snapshot().Voice
 				if state, status, ok := roomGame(r); ok && status == "playing" && voice != "listening" && voice != "thinking" {
-					script, mark := nextHostLine(state, seenEvent)
+					script, mark := companion.Next(state, seenEvent)
+					if script == "" {
+						seenEvent = mark
+					}
 					if script != "" {
 						if note := cheered.take(state); note != "" {
 							script = note + script
@@ -426,6 +466,8 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			response := map[string]any{"type": "response.create"}
 			sessionInstructions := realtimeSessionUpdate(b.Config.Model)
+			session := sessionInstructions["session"].(map[string]any)
+			session["instructions"] = session["instructions"].(string) + companion.Instructions()
 			if action, handled := planVoiceAction(r, gate.commandText(body.Transcript)); handled {
 				before := ""
 				if state, _, ok := roomGame(r); ok {
@@ -490,6 +532,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 					}
 					instructions += narrationFacts(state, before)
 				}
+				instructions += companion.Instructions()
 				// Keep the current facts in conversation context as well as response
 				// instructions; the provider can otherwise repeat an earlier host cue.
 				if narrationContext != "" {

@@ -16,10 +16,16 @@ func (s *server) announcement(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var input struct {
-		GameID string `json:"game_id"`
-		Key    string `json:"key"`
+		GameID    string                    `json:"game_id"`
+		Key       string                    `json:"key"`
+		Companion linx.CompanionPreferences `json:"companion"`
 	}
 	if err := decode(w, req, &input); err != nil {
+		failure(w, err)
+		return
+	}
+	preferences, err := input.Companion.Normalized()
+	if err != nil {
 		failure(w, err)
 		return
 	}
@@ -33,17 +39,26 @@ func (s *server) announcement(w http.ResponseWriter, req *http.Request) {
 		if json.Unmarshal(view.State, &state) != nil || state.ID != input.GameID {
 			return false
 		}
-		key, text = linx.TurnAnnouncement(state)
-		return key != "" && key == input.Key
+		key, _ = linx.TurnAnnouncement(state)
+		if key == "" || key != input.Key {
+			return false
+		}
+		_, text = preferences.Announcement(state)
+		return true
 	}
 	if !current() {
 		writeJSON(w, 409, map[string]string{"message": "播报所属回合已经变化"})
+		return
+	}
+	if text == "" {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if s.speaker == nil || !s.speaker.Config.Enabled() {
 		writeJSON(w, 503, map[string]string{"message": "灵矽播报尚未配置"})
 		return
 	}
+	requestedText := text
 	audio, err := s.speaker.Say(req.Context(), text)
 	if err != nil {
 		status := 503
@@ -54,7 +69,7 @@ func (s *server) announcement(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	// Discard a slow synthesis result after a roll, pause, or new match.
-	if !current() {
+	if !current() || text != requestedText {
 		writeJSON(w, 409, map[string]string{"message": "播报所属回合已经变化"})
 		return
 	}
