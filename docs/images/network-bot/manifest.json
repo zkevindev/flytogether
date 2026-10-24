@@ -1,0 +1,42 @@
+{
+  "captured_at": "2026-10-24T01:23:15.100111+00:00",
+  "app_commit": "f4b1ac0",
+  "browser": "155.0.8059.85",
+  "scope": "Actual deployed UI with independent browser Cookies; real random game and server AI scheduler; no fixed dice or injected state; microphone and narration disabled",
+  "captures": [
+    {
+      "file": "mixed-lobby-desktop.png",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "sha256": "cb2e736dde52af5e6fb42ed87ca7da62489bd623ef73224ba663a6a07c27efbd"
+    },
+    {
+      "file": "mixed-lobby-mobile.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "2feefaf098368ce69ff7bb6b500ff9f4d31358fe66c1ee9d80f13531f12b9e0b"
+    },
+    {
+      "file": "mixed-result.png",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "sha256": "b15c85999d551b93adc7b84ed1d7b990834c8a2ca84f19709d2e2acad740c1ea"
+    },
+    {
+      "file": "mixed-setup.png",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      },
+      "sha256": "e7924f75714d9f80b6d7de56c86ce49180e4bfb8115aab9ba30137a399bd906b"
+    }
+  ],
+  "console_errors": 0,
+  "microphone_requests": 0
+}

@@ -45,3 +45,8 @@ npm --prefix web run capture:docs
 ## 邀请房间与结算
 
 新增 [`images/network/manifest.json`](images/network/manifest.json) 独立记录本次应用 293d3b2 的四张联网截图：桌面/手机准备区、桌面/手机自然获胜结算。由 `test:network:browser` 使用独立 Cookie、实际随机骰子与合法走法采集；关闭麦克风及播报，不记录邀请链接或身份凭据。脚本没有注入棋盘位置。复跑时用 `QA_OUTPUT_DIR` 指定临时目录，挑选有效截图后更新对应哈希清单。
+
+
+## 真人＋机器人（#23）
+
+当前同屏/创建界面 10 张与纯真人联机 4 张已更新到 f4b1ac0，新增 [`images/network-bot/`](images/network-bot/) 的混合房间配置、桌面/手机自动准备、自然结算四张，来源、视口与 SHA-256 见各目录 manifest。混合局通过正式邀请、真实随机投掷和服务端机器人调度推进，无注入状态；图中机器人有独立标记且不需要第三台设备。创建弹窗截图滚动到机器人配置区，以展示席位组成与语音助手说明。

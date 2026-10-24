@@ -1,6 +1,6 @@
 {
-  "captured_at": "2026-10-24T01:04:53.066326+00:00",
-  "app_commit": "293d3b2",
+  "captured_at": "2026-10-24T01:19:45.447007+00:00",
+  "app_commit": "f4b1ac0",
   "scope": "Actual Chrome; separate Cookie sessions, real random game and natural win; no board or dice injection; no microphone",
   "captures": [
     {
@@ -9,7 +9,7 @@
         "width": 1360,
         "height": 1000
       },
-      "sha256": "729e28227953e5cb195efa178002dfb28f66568135f1707360f985848ca73753"
+      "sha256": "4ef719796adb417edd9fc23bd0f385c9510b481e790e39f2372babc4cfb9e130"
     },
     {
       "file": "lobby-mobile.png",
@@ -25,7 +25,7 @@
         "width": 1360,
         "height": 1000
       },
-      "sha256": "1e3e3cf0eae74aa47e7b6c76200ccc00822daffb653522a53062de9e2d97bd69"
+      "sha256": "d08c202b8586b4bb3f2c0c73c0af753320281ff0f2fb06e0a7d8dc2fa58eac8c"
     },
     {
       "file": "settlement-mobile.png",
@@ -33,7 +33,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "229cef1ec103c600af16e85e1d3432535b899c3422bebb3bc8e09c02f17c34c1"
+      "sha256": "f85a664664f74a7c5c27abefaa9ecaa118d0920814b35bebe2c4cbf68947cc8f"
     }
   ],
   "console_errors": 0,

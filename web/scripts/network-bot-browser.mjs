@@ -7,7 +7,16 @@ const base = process.env.QA_BASE_URL, out = process.env.QA_OUTPUT_DIR || 'test-r
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: process.platform === 'darwin' ? ['--use-angle=metal'] : [] });
 const errors = [], contexts = [], results = [];
-const session = async c => (await (await c.request.get('/api/session')).json()).room;
+const transportRetry = async (request, retryAllowed = true) => {
+  for (let attempt=0; attempt<3; attempt++) {
+    try {return await request();}
+    catch (error) {
+      if (!retryAllowed || attempt===2 || !/ETIMEDOUT|ECONNRESET|EAI_AGAIN|socket hang up|Timeout|timed out/.test(String(error))) throw new Error('Browser QA transport failed: ' + (retryAllowed ? 'bounded same-request retries exhausted' : 'request was not retried'));
+      await new Promise(resolve=>setTimeout(resolve,250));
+    }
+  }
+};
+const session = async c => { const response=await transportRetry(()=>c.request.get('/api/session',{timeout:12000}));assert.equal(response.status(),200);return (await response.json()).room; };
 const wait = async (predicate, message, timeout = 20000) => {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) { if (await predicate()) return; await new Promise(r => setTimeout(r, 150)); }
@@ -22,7 +31,7 @@ const context = async (mobile = false) => {
   return c;
 };
 const page = async c => { const p = await c.newPage(); p.on('pageerror', e => errors.push(e.message)); p.on('console', e => { if(e.type() === 'error' && !e.text().includes('403') && !e.text().includes('400')) errors.push(e.text()); }); return p; };
-const post = async (c, path, data) => { const r = await c.request.post(path, { data }); const body = await r.json(); assert.equal(r.status(), 200, JSON.stringify(body)); return body; };
+const post = async (c, path, data) => { const r = await transportRetry(()=>c.request.post(path, { data, timeout:12000 }),!!data.command_id); const body = await r.json(); assert.equal(r.status(), 200, JSON.stringify(body)); return body; };
 const command = async (c, action, extra = {}) => { const r = await session(c); return post(c, `/api/rooms/${r.id}/commands`, { command_id: crypto.randomUUID(), game_id: r.state.id, expected_version: r.state.version, action, ...extra }); };
 const closeDice = async p => { const button = p.getByRole('button', { name: '继续飞行', exact: true }); if (await button.isVisible()) await button.click({ timeout: 2000 }).catch(() => {}); };
 try {
