@@ -27,18 +27,18 @@ func (c Config) Enabled() bool {
 type Bridge struct {
 	Config Config
 	mu     sync.Mutex
-	active bool
+	active int
 }
 
-func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r *room.Room) error {
+func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.GameSession) error {
 	b.mu.Lock()
-	if b.active {
+	if b.active >= 4 {
 		b.mu.Unlock()
 		return errors.New("另一间房正在使用语音，请稍后再试")
 	}
-	b.active = true
+	b.active++
 	b.mu.Unlock()
-	defer func() { b.mu.Lock(); b.active = false; b.mu.Unlock(); r.VoiceState("disconnected") }()
+	defer func() { b.mu.Lock(); b.active--; b.mu.Unlock(); r.VoiceState("disconnected") }()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -657,7 +657,7 @@ func realtimeTools() []map[string]any {
 	}
 }
 
-func roomGame(r *room.Room) (game.State, string, bool) {
+func roomGame(r room.GameSession) (game.State, string, bool) {
 	view := r.Snapshot()
 	var state game.State
 	if json.Unmarshal(view.State, &state) != nil {
@@ -666,7 +666,7 @@ func roomGame(r *room.Room) (game.State, string, bool) {
 	return state, view.Status, true
 }
 
-func (b *Bridge) executeTool(r *room.Room, call functionCall) string {
+func (b *Bridge) executeTool(r room.GameSession, call functionCall) string {
 	args := map[string]string{}
 	if call.Arguments != "" && json.Unmarshal([]byte(call.Arguments), &args) != nil {
 		return `{"error":"工具参数无效"}`

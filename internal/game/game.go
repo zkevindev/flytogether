@@ -55,7 +55,17 @@ type Piece struct {
 	Progress int    `json:"progress"` // -1 hangar, 0 launch pad, 1..ring ring, ring+1..finish home lane.
 }
 
+// MatchStats is accumulated at the authoritative mutation, never from the bounded feed.
+type MatchStats struct {
+	Rolls     int `json:"rolls"`
+	Takeoffs  int `json:"takeoffs"`
+	Arrivals  int `json:"arrivals"`
+	Captures  int `json:"captures"`
+	PropsUsed int `json:"props_used"`
+}
+
 type Player struct {
+	Stats  MatchStats     `json:"stats"`
 	ID     string         `json:"id"`
 	Name   string         `json:"name"`
 	Color  string         `json:"color"`
@@ -119,6 +129,7 @@ type Options struct {
 	AI         bool     `json:"ai"`
 	Demo       bool     `json:"demo"`
 	Props      bool     `json:"props"`
+	Network    bool     `json:"network,omitempty"`
 }
 
 func ID() string {
@@ -304,6 +315,7 @@ func (s *State) RollValues(values ...int) error {
 			die = value
 		}
 	}
+	s.Players[s.Current].Stats.Rolls++
 	s.DiceRolls = append([]int(nil), values...)
 	s.Dice, s.LastMove = die, nil
 	if count == 2 {
@@ -340,6 +352,13 @@ func (s *State) Move(id string) error {
 
 func (s *State) apply(m Move) {
 	p := &s.Players[s.Current]
+	if m.Launch {
+		p.Stats.Takeoffs++
+	}
+	if m.Finish {
+		p.Stats.Arrivals++
+	}
+	p.Stats.Captures += len(m.Captured)
 	for i := range p.Pieces {
 		if p.Pieces[i].ID == m.PieceID {
 			p.Pieces[i].Progress = m.To

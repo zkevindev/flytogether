@@ -51,6 +51,9 @@ func main() {
 	mux.HandleFunc("POST /api/rooms", s.create)
 	mux.HandleFunc("POST /api/rooms/new", s.create)
 	mux.HandleFunc("POST /api/rooms/{id}/matches", s.restart)
+	mux.HandleFunc("POST /api/rooms/{id}/join", s.join)
+	mux.HandleFunc("POST /api/rooms/{id}/ready", s.ready)
+	mux.HandleFunc("POST /api/rooms/{id}/leave", s.leave)
 	mux.HandleFunc("POST /api/rooms/{id}/commands", s.command)
 	mux.HandleFunc("POST /api/rooms/{id}/voice-settings", s.voiceSettings)
 	mux.HandleFunc("POST /api/rooms/{id}/announcement", s.announcement)
@@ -161,6 +164,9 @@ func failure(w http.ResponseWriter, err error) {
 	var re *room.Error
 	if errors.As(err, &re) {
 		code, message = re.Code, re.Message
+		if code == "HOST_ONLY" || code == "NOT_YOUR_TURN" || code == "NOT_AUTHORIZED" {
+			status = 403
+		}
 		if code == "STALE_STATE" || code == "VOICE_BUSY" || code == "COMMAND_CONFLICT" {
 			status = 409
 		}
@@ -196,6 +202,12 @@ func options(w http.ResponseWriter, r *http.Request) (game.Options, error) {
 	}
 	if len(o.Names) < 2 || len(o.Names) > 4 {
 		return o, errors.New("请选择 2 到 4 个席位")
+	}
+	if o.Network {
+		o.Waiting = true
+		if o.AI {
+			return o, errors.New("联网首版请使用真人席位，语音助手仍可使用")
+		}
 	}
 	o.RoomName = strings.TrimSpace(o.RoomName)
 	if utf8.RuneCountInString(o.RoomName) > 20 {
@@ -248,7 +260,7 @@ func (s *server) session(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"room": nil})
 		return
 	}
-	writeJSON(w, 200, map[string]any{"room": v.Snapshot()})
+	writeJSON(w, 200, map[string]any{"room": v.SnapshotFor(cookie(r))})
 }
 func (s *server) create(w http.ResponseWriter, r *http.Request) {
 	o, e := options(w, r)
@@ -271,7 +283,7 @@ func (s *server) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: "flytogether", Value: key, Path: "/", HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteStrictMode, MaxAge: 86400})
-	writeJSON(w, 201, v.Snapshot())
+	writeJSON(w, 201, v.SnapshotFor(key))
 }
 func (s *server) restart(w http.ResponseWriter, r *http.Request) {
 	v := s.owned(w, r, r.PathValue("id"))
@@ -283,7 +295,7 @@ func (s *server) restart(w http.ResponseWriter, r *http.Request) {
 		failure(w, e)
 		return
 	}
-	result, e := v.Restart(o)
+	result, e := v.RestartAs(o, cookie(r))
 	if e != nil {
 		failure(w, e)
 		return
@@ -300,7 +312,7 @@ func (s *server) command(w http.ResponseWriter, r *http.Request) {
 		failure(w, e)
 		return
 	}
-	result, e := v.Do(c, false)
+	result, e := v.DoAs(c, cookie(r))
 	if e != nil {
 		failure(w, e)
 		return
@@ -318,13 +330,25 @@ func (s *server) gameSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.CloseNow()
 	ctx := c.CloseRead(r.Context())
-	ch, unsubscribe := v.Subscribe()
+	ch, unsubscribe := v.SubscribeFor(cookie(r))
 	defer unsubscribe()
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-heartbeat.C:
+			pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			err := c.Ping(pingCtx)
+			cancel()
+			if err != nil {
+				return
+			}
 		case b := <-ch:
+			if !v.HasMember(cookie(r)) {
+				return
+			}
 			writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			e = c.Write(writeCtx, websocket.MessageText, b)
 			cancel()
@@ -342,6 +366,10 @@ func (s *server) voiceSettings(w http.ResponseWriter, r *http.Request) {
 	var settings room.VoiceSettings
 	if e := decode(w, r, &settings); e != nil {
 		failure(w, e)
+		return
+	}
+	if v.Snapshot().Network != nil {
+		writeJSON(w, 403, map[string]string{"message": "联网房间使用直接对话，无需设置唤醒词"})
 		return
 	}
 	result, e := v.SetVoiceSettings(settings)
@@ -364,12 +392,18 @@ func (s *server) voiceSocket(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 503, map[string]string{"message": "灵矽尚未配置，点击玩法可以继续"})
 		return
 	}
+	sessionRoom, err := v.VoiceFor(cookie(r))
+	if err != nil {
+		failure(w, err)
+		return
+	}
+	defer sessionRoom.Close()
 	c, e := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if e != nil {
 		return
 	}
 	defer c.CloseNow()
-	if e = s.bridge.Serve(r.Context(), c, v); e != nil {
+	if e = s.bridge.Serve(r.Context(), c, sessionRoom); e != nil {
 		b, _ := json.Marshal(map[string]string{"type": "error", "message": e.Error()})
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()

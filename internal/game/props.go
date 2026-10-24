@@ -69,8 +69,10 @@ func (s *State) UsePropOn(id, pieceID string) error {
 			effect += "的护盾被炸弹抵消，飞机留在原地"
 		} else {
 			target.Progress = -1
+			p.Stats.Captures++
 			effect += "被送回机场"
 		}
+		p.Stats.PropsUsed++
 		p.Props[id]--
 		s.ActiveProp = id
 		s.Version++
@@ -80,6 +82,7 @@ func (s *State) UsePropOn(id, pieceID string) error {
 	if pieceID != "" {
 		return fmt.Errorf("这张道具无需指定飞机")
 	}
+	p.Stats.PropsUsed++
 	p.Props[id]--
 	s.ActiveProp = id
 	s.Version++

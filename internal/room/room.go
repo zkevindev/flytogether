@@ -13,6 +13,8 @@ import (
 )
 
 type View struct {
+	Network       *Lobby          `json:"network,omitempty"`
+	Me            *Me             `json:"me,omitempty"`
 	ID            string          `json:"id"`
 	Name          string          `json:"name"`
 	Status        string          `json:"status"`
@@ -34,6 +36,7 @@ func DefaultVoiceSettings() VoiceSettings {
 }
 
 type Command struct {
+	Actor   string `json:"-"`
 	ID      string `json:"command_id"`
 	GameID  string `json:"game_id"`
 	Version int    `json:"expected_version"`
@@ -59,6 +62,14 @@ type cached struct {
 }
 
 type Room struct {
+	owner         string
+	invite        string
+	members       map[string]member
+	names         map[string]string
+	voiceActor    string
+	voiceLease    string
+	grantActor    string
+	options       game.Options
 	mu            sync.Mutex
 	ID            string
 	name          string
@@ -73,7 +84,7 @@ type Room struct {
 	grantGame     string
 	used          bool
 	cache         map[string]cached
-	listeners     map[chan []byte]bool
+	listeners     map[chan []byte]string
 	updated       time.Time
 	coach         *Coach
 	coachPrevious string
@@ -89,13 +100,13 @@ func New(o game.Options) *Room {
 	if name == "" {
 		name = "家庭机场"
 	}
-	return &Room{name: name, status: status, ID: game.ID(), state: game.New(o), voice: "disconnected", voiceSettings: DefaultVoiceSettings(), cache: map[string]cached{},
-		listeners: map[chan []byte]bool{}, updated: time.Now()}
+	return &Room{options: o, name: name, status: status, ID: game.ID(), state: game.New(o), voice: "disconnected", voiceSettings: DefaultVoiceSettings(), cache: map[string]cached{},
+		listeners: map[chan []byte]string{}, updated: time.Now()}
 }
 
 func (r *Room) view() View {
 	b, _ := json.Marshal(r.state)
-	return View{ID: r.ID, Name: r.name, Status: r.status, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings, Coach: r.coach, CoachExpired: r.coachExpired}
+	return View{ID: r.ID, Name: r.name, Status: r.status, Seq: r.seq, State: b, Voice: r.voice, VoiceSettings: r.voiceSettings, Coach: r.coach, CoachExpired: r.coachExpired, Network: r.lobbyView()}
 }
 
 func (r *Room) VoiceSettings() VoiceSettings {
@@ -126,8 +137,8 @@ func (r *Room) Snapshot() View { r.mu.Lock(); defer r.mu.Unlock(); return r.view
 func (r *Room) publish() {
 	r.seq++
 	r.updated = time.Now()
-	b, _ := json.Marshal(map[string]any{"type": "state", "room": r.view()})
-	for ch := range r.listeners {
+	for ch, session := range r.listeners {
+		b, _ := json.Marshal(map[string]any{"type": "state", "room": r.personalized(session)})
 		select {
 		case ch <- b:
 		default:
@@ -142,23 +153,31 @@ func (r *Room) publish() {
 		}
 	}
 }
-func (r *Room) Subscribe() (chan []byte, func()) {
+func (r *Room) Subscribe() (chan []byte, func()) { return r.SubscribeFor("") }
+func (r *Room) SubscribeFor(session string) (chan []byte, func()) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	ch := make(chan []byte, 1)
-	r.listeners[ch] = true
-	b, _ := json.Marshal(map[string]any{"type": "state", "room": r.view()})
-	ch <- b
-	return ch, func() { r.mu.Lock(); delete(r.listeners, ch); r.mu.Unlock() }
+	r.listeners[ch] = session
+	r.publish()
+	return ch, func() { r.mu.Lock(); delete(r.listeners, ch); r.publish(); r.mu.Unlock() }
 }
 
-func (r *Room) Restart(o game.Options) (View, error) {
+func (r *Room) Restart(o game.Options) (View, error) { return r.RestartAs(o, "") }
+func (r *Room) RestartAs(o game.Options, actor string) (View, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if err := r.actorOK(actor, true); err != nil {
+		return View{}, err
+	}
+	if r.invite != "" {
+		return View{}, fail("NETWORK_SETTINGS", "联网房间请使用同配置再玩，调整设置请创建新房间")
+	}
 	if r.busy {
 		return View{}, fail("VOICE_BUSY", "请等这次语音操作结束，再开始新游戏")
 	}
 	r.invalidateCoach()
+	r.options = o
 	r.state = game.New(o)
 	r.status = "playing"
 	if o.Waiting {
@@ -175,14 +194,29 @@ func (r *Room) Restart(o game.Options) (View, error) {
 	return r.view(), nil
 }
 
+func (r *Room) DoAs(c Command, actor string) (View, error) { c.Actor = actor; return r.Do(c, false) }
 func (r *Room) Do(c Command, voice bool) (View, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.invite != "" {
+		host := c.Action == "start" || c.Action == "pause" || c.Action == "resume" || c.Action == "end" || c.Action == "replay"
+		// Retried commands remain bound to the original actor, even after the turn advanced.
+		if !r.isMember(c.Actor) {
+			return View{}, fail("NOT_AUTHORIZED", "请先入座")
+		}
+		if host && c.Actor != r.owner {
+			return View{}, fail("HOST_ONLY", "这个操作需要房主来完成")
+		}
+	}
 	if old, ok := r.cache[c.ID]; ok {
 		if old.Input != c {
 			return View{}, fail("COMMAND_CONFLICT", "同一个操作编号不能重复用于不同动作")
 		}
-		return old.Output, nil
+		v := old.Output
+		if r.invite != "" {
+			v = r.personalized(c.Actor)
+		}
+		return v, nil
 	}
 	if c.ID == "" || len(c.ID) > 160 {
 		return View{}, fail("INVALID_COMMAND", "操作编号无效")
@@ -190,18 +224,55 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 	if c.GameID != r.state.ID || (c.Version != r.state.Version && c.Action != "pause" && c.Action != "end") {
 		return View{}, fail("STALE_STATE", "棋局已经更新，请重新选择")
 	}
+	if c.Action == "replay" {
+		if voice || r.status == "playing" && r.state.Phase != "finished" {
+			return View{}, fail("INVALID_TRANSITION", "请结束当前对局后再玩")
+		}
+		o := r.options
+		o.Demo = false
+		o.Waiting = r.invite != ""
+		r.state = game.New(o)
+		if r.invite != "" {
+			for session, m := range r.members {
+				r.state.Players[m.index].Name = r.names[session]
+				m.ready = session == r.owner
+				r.members[session] = m
+			}
+			r.status = "waiting"
+		} else {
+			r.status = "playing"
+		}
+		r.invalidateCoach()
+		r.grant = ""
+		r.busy = false
+		r.voice = "disconnected"
+		r.voiceLease = ""
+		r.voiceActor = ""
+		r.publish()
+		v := r.personalized(c.Actor)
+		r.cache = map[string]cached{c.ID: {c, v}}
+		return v, nil
+	}
 	if c.Action == "start" || c.Action == "pause" || c.Action == "resume" || c.Action == "end" {
 		if voice {
 			return View{}, fail("INVALID_ACTION", "请通过房间按钮控制游戏")
+		}
+		if c.Action == "start" {
+			if err := r.readyToStart(); err != nil {
+				return View{}, err
+			}
 		}
 		if err := r.control(c.Action); err != nil {
 			return View{}, err
 		}
 		r.invalidateCoach()
 		r.publish()
-		v := r.view()
+		v := r.personalized(c.Actor)
 		r.cache[c.ID] = cached{c, v}
 		return v, nil
+	}
+	if err := r.actorOK(c.Actor, false); err != nil {
+		return View{}, err
 	}
 	if r.status != "playing" {
 		return View{}, fail("GAME_NOT_ACTIVE", "请先开始或继续游戏，当前不能操作棋局")
@@ -215,7 +286,7 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 	if !voice && r.busy {
 		return View{}, fail("VOICE_BUSY", "正在处理这次语音，请稍等")
 	}
-	if voice && (c.Token == "" || c.Token != r.grant || r.used || r.grantGame != r.state.ID || r.grantVersion != r.state.Version) {
+	if voice && (c.Token == "" || c.Token != r.grant || r.used || r.grantGame != r.state.ID || r.grantVersion != r.state.Version || r.grantActor != c.Actor) {
 		return View{}, fail("STALE_ACTION", "请重新查看棋局，再说一次操作")
 	}
 	if len(r.cache) >= 4096 {
@@ -247,6 +318,13 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 	if err != nil {
 		return View{}, fail("ILLEGAL_MOVE", err.Error())
 	}
+	if r.invite != "" && r.members[c.Actor].index != r.state.Current {
+		r.voiceLease = ""
+		r.voiceActor = ""
+		r.busy = false
+		r.grant = ""
+		r.voice = "disconnected"
+	}
 	if c.Action != "coach" {
 		r.invalidateCoach()
 		r.coachExpired = false
@@ -255,7 +333,7 @@ func (r *Room) Do(c Command, voice bool) (View, error) {
 		r.used = true
 	}
 	r.publish()
-	v := r.view()
+	v := r.personalized(c.Actor)
 	r.cache[c.ID] = cached{c, v}
 	return v, nil
 }
@@ -287,9 +365,16 @@ func (r *Room) AI() {
 	r.publish()
 }
 
-func (r *Room) BeginSpeech() error {
+func (r *Room) BeginSpeech() error { return r.beginSpeech("", "") }
+func (r *Room) beginSpeech(actor, lease string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if err := r.actorOK(actor, false); err != nil {
+		return err
+	}
+	if lease != "" && r.voiceLease != lease {
+		return fail("STALE_ACTION", "语音连接已过期")
+	}
 	if r.status != "playing" || r.state.Phase == "finished" {
 		return fail("GAME_NOT_ACTIVE", "请先开始或继续游戏，再开启语音")
 	}
@@ -299,6 +384,7 @@ func (r *Room) BeginSpeech() error {
 	r.busy = true
 	r.voice = "listening"
 	r.grant = game.ID()
+	r.grantActor = actor
 	r.used = false
 	r.grantGame = r.state.ID
 	r.grantVersion = r.state.Version
@@ -318,6 +404,9 @@ func (r *Room) CurrentActionToken() string {
 func (r *Room) VoiceState(state string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.voiceState(state)
+}
+func (r *Room) voiceState(state string) {
 	if r.status != "playing" {
 		state = "disconnected"
 	}
@@ -332,12 +421,13 @@ func (r *Room) VoiceState(state string) {
 	r.publish()
 }
 
-func (r *Room) Tool(name string, args map[string]string) (any, error) {
+func (r *Room) Tool(name string, args map[string]string) (any, error) { return r.tool(name, args, "") }
+func (r *Room) tool(name string, args map[string]string, actor string) (any, error) {
 	if name == "get_game_state" || name == "get_legal_moves" {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		token := ""
-		if r.status == "playing" && r.busy && !r.used && r.grantGame == r.state.ID && r.grantVersion == r.state.Version {
+		if r.status == "playing" && r.busy && !r.used && r.grantActor == actor && r.grantGame == r.state.ID && r.grantVersion == r.state.Version {
 			token = r.grant
 		}
 		suggested, target := r.state.SuggestedPropTarget()
@@ -352,7 +442,7 @@ func (r *Room) Tool(name string, args map[string]string) (any, error) {
 	token := args["action_token"]
 	r.mu.Lock()
 	// Derive identity/version from the grant; a model cannot select another room or game.
-	c := Command{ID: "voice:" + token, GameID: r.grantGame, Version: r.grantVersion, Token: token, Action: "roll"}
+	c := Command{Actor: actor, ID: "voice:" + token, GameID: r.grantGame, Version: r.grantVersion, Token: token, Action: "roll"}
 	if name == "coach_move" {
 		c.Action, c.Choice = "coach", args["choice"]
 	}
@@ -389,13 +479,14 @@ func NewStore() *Store { return &Store{rooms: map[string]*Room{}, sessions: map[
 func (s *Store) Create(session string, o game.Options) (*Room, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if old := s.sessions[session]; old != "" {
-		return s.rooms[old], nil
+	if old := s.rooms[s.sessions[session]]; old != nil && old.HasMember(session) {
+		return old, nil
 	}
 	if len(s.rooms) >= 256 {
 		return nil, fmt.Errorf("房间已满，请稍后再试")
 	}
 	r := New(o)
+	r.initOwner(session, o.Network)
 	s.rooms[r.ID] = r
 	s.sessions[session] = r.ID
 	return r, nil
@@ -406,11 +497,14 @@ func (s *Store) Get(session, id string) *Room {
 	if session == "" {
 		return nil
 	}
-	owned := s.sessions[session]
-	if id != "" && id != owned {
+	if id == "" {
+		id = s.sessions[session]
+	}
+	r := s.rooms[id]
+	if r == nil || !r.HasMember(session) {
 		return nil
 	}
-	return s.rooms[owned]
+	return r
 }
 func (s *Store) Run(ctxDone <-chan struct{}) {
 	t := time.NewTicker(1200 * time.Millisecond)
@@ -462,6 +556,8 @@ func (r *Room) control(action string) error {
 	}
 	r.invalidateCoach()
 	r.status, r.grant, r.busy, r.voice = next, "", false, "disconnected"
+	r.voiceLease = ""
+	r.voiceActor = ""
 	r.used = false
 	r.state.Version++
 	r.state.History = append(r.state.History, game.Event{ID: game.ID(), Kind: action, Text: text})
@@ -477,10 +573,10 @@ func (s *Store) CreateNew(session string, o game.Options) (*Room, error) {
 	defer s.mu.Unlock()
 	settings := DefaultVoiceSettings()
 	old := s.rooms[s.sessions[session]]
-	if old == nil && len(s.rooms) >= 256 {
+	if (old == nil || old.invite != "") && len(s.rooms) >= 256 {
 		return nil, fmt.Errorf("房间已满，请稍后再试")
 	}
-	if old != nil {
+	if old != nil && old.invite == "" {
 		old.mu.Lock()
 		settings = old.voiceSettings
 		if old.status != "ended" {
@@ -492,6 +588,7 @@ func (s *Store) CreateNew(session string, o game.Options) (*Room, error) {
 	}
 	o.Waiting = true
 	r := New(o)
+	r.initOwner(session, o.Network)
 	r.voiceSettings = settings
 	s.rooms[r.ID] = r
 	s.sessions[session] = r.ID

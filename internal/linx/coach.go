@@ -10,7 +10,7 @@ import (
 
 // Follow-up selection is resolved against the server proposal, never model
 // memory. Pronouns without a current proposal cannot fall through to a roll.
-func planCoachAction(r *room.Room, text string) (voiceAction, bool) {
+func planCoachAction(r room.GameSession, text string) (voiceAction, bool) {
 	question := strings.HasSuffix(normalizeWake(text), "呢") || strings.ContainsAny(text, "?？") || strings.Contains(text, "吗") || strings.Contains(text, "能否") || strings.Contains(text, "能不能") || strings.Contains(text, "是不是")
 	text = spoken(text)
 	view := r.Snapshot()

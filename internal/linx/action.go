@@ -27,7 +27,7 @@ type Cheer struct {
 
 // Resolve explicit game commands before narration so success always follows a
 // committed game action. Questions and ambiguous selections never choose a piece.
-func planVoiceAction(r *room.Room, text string) (voiceAction, bool) {
+func planVoiceAction(r room.GameSession, text string) (voiceAction, bool) {
 	if action, handled := planCoachAction(r, text); handled {
 		return action, true
 	}
@@ -632,7 +632,7 @@ func (g *wakeGate) commandText(text string) string {
 	return text
 }
 
-func actionOutput(r *room.Room, notice string) string {
+func actionOutput(r room.GameSession, notice string) string {
 	value, _ := r.Tool("get_game_state", nil)
 	if state, ok := value.(map[string]any); ok {
 		delete(state, "action_token")
