@@ -5,6 +5,33 @@ import (
 	"testing"
 )
 
+func TestCoopEndsOnlyWhenEveryPlayerHasArrived(t *testing.T) {
+	s := New(Options{Names: []string{"甲", "乙", "丙"}, Mode: "coop", Board: "cross"})
+	if s.Mode != "coop" || s.RuleInfo.ID != "coop" || len(s.Players[0].Pieces) != 2 {
+		t.Fatalf("unexpected co-op setup: mode=%s rules=%+v pieces=%d", s.Mode, s.RuleInfo, len(s.Players[0].Pieces))
+	}
+	for i := range s.Players {
+		s.Players[i].Pieces[0].Progress = s.Board.Finish - 1
+	}
+	for i := range s.Players {
+		player := s.Players[s.Current]
+		s.apply(Move{PieceID: player.Pieces[0].ID, Label: player.Pieces[0].Label, To: s.Board.Finish, Finish: true})
+		if i < len(s.Players)-1 && (s.Phase == "finished" || s.Winner != "") {
+			t.Fatalf("team finished before player %d arrived", i+1)
+		}
+	}
+	if s.Phase != "finished" || s.Winner != "team" {
+		t.Fatalf("last arrival did not complete the team: phase=%s winner=%q", s.Phase, s.Winner)
+	}
+	if err := s.Validate(); err != nil {
+		t.Fatalf("valid team victory rejected: %v", err)
+	}
+	s.Players[1].Pieces[0].Progress = -1
+	if err := s.Validate(); err == nil {
+		t.Fatal("team victory accepted when a player had no plane at the finish")
+	}
+}
+
 func TestFamilyRules(t *testing.T) {
 	tests := []struct {
 		name              string

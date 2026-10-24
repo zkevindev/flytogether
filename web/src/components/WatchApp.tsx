@@ -149,14 +149,14 @@ export function WatchApp({ code, onExit, displayOnly = false }: { code: string; 
 
   const state = displayOnly ? room.state : presentation.game || room.state;
   const current = state.players[state.current];
-  const winner = state.players.find(player => player.id === state.winner);
+  const winner = state.winner === 'team' ? { id: 'team', name: '全队' } : state.players.find(player => player.id === state.winner);
   const latestNarrated = latestKeyMove(state);
   const steps = state.history.slice(-6).filter(step => step.id !== latestNarrated?.id);
   const lastRoll = [...state.history].reverse().find(event => event.kind === 'rolled' && event.dice_rolls?.length);
   if (displayOnly) return <main className="living-room-screen" aria-label="家庭大屏棋盘">
     <header className="living-screen-header"><strong>一起飞 <span>家庭大屏</span></strong><span className={connected ? 'screen-live' : 'screen-offline'}>{connected ? '实时同步中' : '正在连接'}</span></header>
     <section className="living-screen-board" aria-label="只读棋盘">
-      <div className="living-screen-status"><div className="living-screen-turn"><PlayerMarker index={state.current} /><strong>{winner ? `${winner.name}获胜` : `${current.name}的回合`}</strong></div><div className="living-screen-meta"><span>{state.board.name}</span><span>{state.phase === 'move' ? `掷出 ${state.dice} 点` : state.phase === 'finished' ? '本局结束' : lastRoll ? `刚才掷出 ${lastRoll.dice_rolls!.join('、')} 点` : '等待掷骰'}</span><span>{room.status === 'paused' ? '比赛暂停' : room.status === 'waiting' ? '等待开局' : '比赛进行中'}</span></div></div>
+      <div className="living-screen-status"><div className="living-screen-turn"><PlayerMarker index={state.current} /><strong>{state.winner === 'team' ? '星河救援成功' : winner ? `${winner.name}获胜` : `${current.name}的回合`}</strong></div><div className="living-screen-meta"><span>{state.board.name}</span><span>{state.phase === 'move' ? `掷出 ${state.dice} 点` : state.phase === 'finished' ? '本局结束' : lastRoll ? `刚才掷出 ${lastRoll.dice_rolls!.join('、')} 点` : '等待掷骰'}</span><span>{room.status === 'paused' ? '比赛暂停' : room.status === 'waiting' ? '等待开局' : '比赛进行中'}</span></div></div>
       <KeyMoveNarration game={state} />
       <div className="living-screen-canvas"><BoardLoader light={preferences.board === 'flat'} reducedMotion={reducedMotion} game={state} disabled onPiece={() => {}} onRoll={() => {}} /></div>
       <ol className="living-screen-steps" aria-label="最近棋步">{steps.slice(-4).map(step => <li key={step.id}>{step.text}</li>)}</ol>
@@ -170,9 +170,9 @@ export function WatchApp({ code, onExit, displayOnly = false }: { code: string; 
       <div className="header-actions"><strong className="watch-badge">观赛中</strong><button className="icon-button" aria-label={muted ? '恢复声音' : '静音'} onClick={() => { const next = !muted; setMuted(next); localStorage.setItem('fly-master-muted', next ? 'on' : 'off'); if (next) voice.current?.disconnect(); }}>{muted ? <SpeakerSlash /> : <SpeakerHigh />}</button><button className="text-button" onClick={() => change({ ...preferences, board: preferences.board === 'flat' ? 'auto' : 'flat' })}>{preferences.board === 'flat' ? '立体棋盘' : '轻量棋盘'}</button><button className="text-button" onClick={() => change({ ...preferences, motion: reducedMotion ? 'system' : 'reduced' })}>{reducedMotion ? '恢复动画' : '减少动画'}</button></div>
     </header>
     <main id="watch-main" tabIndex={-1} className="play-main"><div className="play-layout">
-      <section className="board-panel" aria-label="观赛棋盘"><div className="board-turnbar"><span style={{ color: palette[current.color] }}><PlayerMarker index={state.current} />{winner ? `${winner.name}获胜` : `${current.name}的回合`}</span><strong>{state.board.name}{state.phase === 'move' ? ` · ${state.dice} 点` : ''} · {room.audience.online} 人正在看</strong></div>
+      <section className="board-panel" aria-label="观赛棋盘"><div className="board-turnbar"><span style={{ color: palette[current.color] }}><PlayerMarker index={state.current} />{state.winner === 'team' ? '星河救援成功' : winner ? `${winner.name}获胜` : `${current.name}的回合`}</span><strong>{state.board.name}{state.phase === 'move' ? ` · ${state.dice} 点` : ''} · {room.audience.online} 人正在看</strong></div>
         {(room.status === 'waiting' || room.status === 'paused') && <div className="game-status-overlay"><strong>{room.status === 'waiting' ? '等待开局' : '比赛暂停'}</strong><p>{room.status === 'waiting' ? '选手入座后由房主开始，你可以先观看准备情况。' : '棋盘保留在原地，继续后会从这里同步。'}</p><button className="outline-button" onClick={() => void leave()}><House />返回首页</button></div>}
-        {(winner || room.status === 'ended') && <p className="watch-result" role="status">{winner ? `${winner.name}获胜。` : '房主结束了这一局。'}可以查看棋盘和最近棋步，观众不能再开一局。</p>}
+        {(winner || room.status === 'ended') && <p className="watch-result" role="status">{state.winner === 'team' ? '星河救援成功，全队共同获胜。' : winner ? `${winner.name}获胜。` : '房主结束了这一局。'}可以查看棋盘和最近棋步，观众不能再开一局。</p>}
         {!connected && !closed && <p role="status" className="connection-hint">正在重新连接观赛，比赛本身不受影响。</p>}
         <KeyMoveNarration game={state} />
         {closed && <p role="alert" className="connection-hint">{closed} <button className="text-button" onClick={() => void leave()}><House />返回首页</button></p>}

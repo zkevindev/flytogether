@@ -358,3 +358,11 @@ Go race/vet、前端单测/构建及Chrome实际道具流程通过；11项道具
 ## 产品介绍页重构（#51，2026-10-24）
 
 `e81b049`优化用户新增的/product：暖白绿色版式、真实FlatBoard组件的明确玩法示意，点击看起飞/护盾/幸运骰，切换两种节奏；同屏/联网/观赛、八种道具、FAQ与实际创建入口。产品页独立加载，访问时无游戏API、麦克风、WebGL。四种Chrome视口（1440/820/390/320）、预览/FAQ/创建/返回/刷新通过；前端43项单测/构建和Go路由检查通过。产品页应用6dba4f2已部署，公网四档Chrome/键盘/减少动画/创建入口和无游戏API/麦克风/WebGL检查通过，页面错误0；17份网页资源与运行二进制核对一致，升级前在线备份、schema7和配置/数据库权限600保留。CI与Codecov通过，截图已换成公网版本。详见QA-PRODUCT。
+
+## 星河救援合作挑战（#17，待 PR 合并）
+
+独立分支 `codex/issue-17-cooperative-mode` · [PR #59](https://github.com/zkevindev/flytogether/pull/59)。新增2～4人合作目标：各自送达一架飞机后全队获胜；同屏、邀请房间、机器人、服务端状态校验、家庭战绩、观赛、回顾卡与灵矽播报均识别团队结算。没有改动随机骰子和现有道具数量。
+
+通过：`go test -race ./...`、`npm run test:unit`、`npm run build`；本地 Chrome 使用真实随机骰子/合法走法完成整局，刷新显示团队胜利与回顾卡，家庭历史记录全员获胜；同配置重玩保留玩法；两台隔离浏览器通过合作房间邀请、入座和房主开局。详细规则及持续反馈/配平门槛见 [PLAYTEST-BALANCE](PLAYTEST-BALANCE.md)。
+
+道具平衡继续按多个家庭、自然结束对局和主观反馈收集样本；本轮没有依据不足的任意调参。PR #59 已回链 [Issue #17](https://github.com/zkevindev/flytogether/issues/17)。

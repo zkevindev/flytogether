@@ -31,6 +31,9 @@ func (s *State) Rules() RuleSpec {
 	case "classic":
 		return RuleSpec{"classic", "经典飞行", "6点起飞并可再掷；每人4架，全部抵达获胜；无道具，终点需要恰好点数。", []int{6}}
 	default:
+		if s.Mode == "coop" {
+			return RuleSpec{"coop", "星河救援", "全员合作：每人2架飞机，每位飞行员先送达1架；全员各有1架抵达终点时共同获胜。6点起飞并可再掷。道具按本局库存正常使用。", []int{6}}
+		}
 		summary := "6点起飞并可再掷；每人2架，先到1架获胜。"
 		if s.Mode == "classic" {
 			summary = "6点起飞并可再掷；每人4架，全部抵达获胜。"

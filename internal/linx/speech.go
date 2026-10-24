@@ -35,6 +35,9 @@ func TurnAnnouncement(state game.State) (string, string) {
 		return "", ""
 	}
 	if state.Phase == "finished" {
+		if state.Winner == "team" {
+			return state.ID + ":winner", "星河救援成功！每位飞行员都送达了一架飞机，大家一起完成任务，撒花！"
+		}
 		for _, player := range state.Players {
 			if player.ID == state.Winner {
 				return state.ID + ":winner", "恭喜" + player.Name + "获得胜利，大家一起为他撒花！"

@@ -27,6 +27,9 @@ func spectatorNarration(text, fresh string) (string, bool) {
 	}
 	if strings.Contains(text, "轮到谁") || strings.Contains(text, "谁的回合") {
 		if s.Winner != "" {
+			if s.Winner == "team" {
+				return "星河救援已经成功，全队每位飞行员都送达了一架飞机。", true
+			}
 			for _, p := range s.Players {
 				if p.ID == s.Winner {
 					return p.Name + "已经获胜，这一局比赛结束了。", true

@@ -122,6 +122,34 @@ func TestFamilyResultAtomicImmutableIdempotentAndClear(t *testing.T) {
 		t.Fatal("cleared history resurrected")
 	}
 }
+
+func TestCoopFamilyHistoryMarksEveryPlayerAsWinner(t *testing.T) {
+	s := openTestSaves(t, filepath.Join(t.TempDir(), "coop.db"))
+	defer s.Close()
+	r, err := s.Create("home", game.Options{Names: []string{"孩子", "爸爸", "妈妈"}, Mode: "coop", Props: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	r.state.Phase, r.state.Winner = "finished", "team"
+	for i := range r.state.Players {
+		r.state.Players[i].Pieces[0].Progress = r.state.Board.Finish
+	}
+	if _, err = r.finish(nil, saveChange{}); err != nil {
+		r.mu.Unlock()
+		t.Fatal(err)
+	}
+	r.mu.Unlock()
+	f := familyRead(t, s, "home")
+	if len(f.Matches) != 1 || f.Matches[0].Mode != "coop" || len(f.Matches[0].Players) != 3 {
+		t.Fatalf("co-op result missing: %+v", f)
+	}
+	for _, p := range f.Matches[0].Players {
+		if !p.Won {
+			t.Fatalf("cooperative winner not recorded for %s", p.Name)
+		}
+	}
+}
 func TestFamilyNetworkOwnershipSnapshotsAndExclusions(t *testing.T) {
 	s := openTestSaves(t, filepath.Join(t.TempDir(), "games.db"))
 	a := familyProfile(t, s, "host", "房主", "bear")

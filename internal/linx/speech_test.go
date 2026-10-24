@@ -39,6 +39,11 @@ func TestTurnAnnouncementNamesCurrentPlayerAndBonusTurn(t *testing.T) {
 	if key, line = TurnAnnouncement(*state); key != state.ID+":winner" || !strings.Contains(line, "爸爸") {
 		t.Fatal("winner announcement used the wrong player")
 	}
+	coop := game.New(game.Options{Names: []string{"孩子", "爸爸"}, Mode: "coop"})
+	coop.Phase, coop.Winner = "finished", "team"
+	if key, line = TurnAnnouncement(*coop); key != coop.ID+":winner" || !strings.Contains(line, "星河救援成功") {
+		t.Fatalf("co-op result was not narrated: %q", line)
+	}
 }
 
 func TestSpeakerProducesAudioWithoutMicrophoneOrGameToolsAndCachesIt(t *testing.T) {

@@ -516,6 +516,9 @@ func hostCue(state game.State) string {
 		return "棋局还在准备。"
 	}
 	if state.Phase == "finished" {
+		if state.Winner == "team" {
+			return "星河救援成功，全队共同获胜。想再飞，就重新开一局。"
+		}
 		name := "有人"
 		for _, player := range state.Players {
 			if player.ID == state.Winner {

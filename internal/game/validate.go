@@ -21,7 +21,7 @@ func (s *State) Validate() error {
 	if !ok || board != s.Board {
 		return fmt.Errorf("unsupported board")
 	}
-	if s.Mode != "quick" && s.Mode != "classic" {
+	if s.Mode != "quick" && s.Mode != "classic" && s.Mode != "coop" {
 		return fmt.Errorf("unsupported mode")
 	}
 	count := 2
@@ -53,6 +53,24 @@ func (s *State) Validate() error {
 		if s.Winner == "" {
 			return fmt.Errorf("missing winner")
 		}
+		if s.Winner == "team" {
+			if s.Mode != "coop" {
+				return fmt.Errorf("invalid winner")
+			}
+			for _, p := range s.Players {
+				arrived := 0
+				for _, piece := range p.Pieces {
+					if piece.Progress == s.Board.Finish {
+						arrived++
+					}
+				}
+				if arrived == 0 {
+					return fmt.Errorf("invalid team winner")
+				}
+			}
+			s.Legal = []Move{}
+			return nil
+		}
 		found := false
 		for _, p := range s.Players {
 			if p.ID == s.Winner {
@@ -63,7 +81,7 @@ func (s *State) Validate() error {
 					}
 				}
 				target := count
-				if s.Mode == "quick" {
+				if s.Mode == "quick" || s.Mode == "coop" {
 					target = 1
 				}
 				found = n >= target
