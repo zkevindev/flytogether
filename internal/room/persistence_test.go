@@ -89,6 +89,39 @@ func TestPersistentPropDiceCoachAndIdempotencyAcrossRestart(t *testing.T) {
 		t.Fatal("second restart auto resumed")
 	}
 }
+
+func TestCoopMissionPersistsAndSameConfigReplayResetsProgress(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missions.db")
+	s := openTestSaves(t, path)
+	r, err := s.Create("owner", game.Options{Names: []string{"孩子", "家长"}, Mode: "coop", Props: true, ThemeID: "star-rescue", MissionID: "launch-formation"})
+	if err != nil { t.Fatal(err) }
+	state := current(r)
+	command := Command{ID: "mission-launch", GameID: state.ID, Version: state.Version, Action: "prop", PropID: "launch", PieceID: "p0-0"}
+	first, err := r.DoAs(command, "owner")
+	if err != nil { t.Fatal(err) }
+	if _, err = r.DoAs(command, "owner"); err != nil { t.Fatalf("idempotent retry failed: %v", err) }
+	var played game.State
+	if err = json.Unmarshal(first.State, &played); err != nil { t.Fatal(err) }
+	if played.Mission.Progress != 1 || played.Mission.Status != "active" || played.ThemeID != "star-rescue" { t.Fatalf("committed mission state: %+v", played.Mission) }
+	roomID := r.ID
+	s.Close()
+	s = openTestSaves(t, path)
+	restored := s.Get("owner", roomID)
+	if restored == nil { t.Fatal("saved room not restored") }
+	var loaded game.State
+	if err = json.Unmarshal(restored.Snapshot().State, &loaded); err != nil { t.Fatal(err) }
+	if loaded.ThemeID != "star-rescue" || loaded.Mission == nil || loaded.Mission.Progress != 1 || loaded.Mission.Contributors[0] != "player-0" { t.Fatalf("persisted mission/theme missing: %+v", loaded.Mission) }
+	ended, err := restored.Do(Command{ID:"end-mission", GameID:loaded.ID, Version:loaded.Version, Action:"end"}, false)
+	if err != nil { t.Fatal(err) }
+	var afterEnd game.State
+	_ = json.Unmarshal(ended.State, &afterEnd)
+	if afterEnd.Mission.Status != "incomplete" { t.Fatalf("end should mark mission incomplete: %+v", afterEnd.Mission) }
+	replay, err := restored.Do(Command{ID:"replay-mission", GameID:afterEnd.ID, Version:afterEnd.Version, Action:"replay"}, false)
+	if err != nil { t.Fatal(err) }
+	var replayed game.State
+	_ = json.Unmarshal(replay.State, &replayed)
+	if replayed.ThemeID != "star-rescue" || replayed.Mission == nil || replayed.Mission.ID != "launch-formation" || replayed.Mission.Progress != 0 || replayed.Mission.Status != "active" { t.Fatalf("same-config replay lost or carried mission progress: %+v", replayed.Mission) }
+}
 func TestPersistentFailureRollsBackAndDoesNotBroadcast(t *testing.T) {
 	s := openTestSaves(t, filepath.Join(t.TempDir(), "games.db"))
 	r, _ := s.Create("browser", game.Options{Names: []string{"甲", "乙"}, Props: true})

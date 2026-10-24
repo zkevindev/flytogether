@@ -21,7 +21,7 @@ export function PropTray({ game, status = 'playing', disabled, onUse }: { game: 
   const targets = (id: string) => game.players.flatMap((owner, i) => owner.pieces.filter(p =>
     id === 'launch' ? i === game.current && p.progress === -1 : p.progress > 0 && p.progress <= game.board.ring_length && (['bomb','boomerang'].includes(id) ? i !== game.current : i === game.current && (id === 'rescue' || !p.shield))
   ).map(piece => ({ owner, piece })));
-  return <section id="prop-pocket" className="prop-tray" aria-label="本回合道具">
+  return <section id="prop-pocket" className={'prop-tray ' + (game.theme_id === 'star-rescue' ? 'theme-star-rescue' : '')} aria-label="本回合道具">
     <div className="prop-heading"><strong>{player.name}的道具口袋</strong><span>{status !== 'playing' ? (status === 'paused' ? '游戏暂停 · 库存与效果保留' : status === 'ended' ? '本局道具记录' : '开始游戏后可使用') : active ? `${active.name}${['bomb', 'shield', 'boomerang', 'rescue', 'escort'].includes(active.id) ? (game.phase === 'move' ? '已生效 · 请选择飞机' : '已生效 · 请掷骰子') : game.phase === 'move' ? '生效中 · 请选择飞机' : '已就绪 · 请掷骰子'}` : game.active_prop === 'launch_used' ? '起飞卡已用 · 请掷骰子继续' : '掷骰前选一张 · 每次掷骰限一张'}</span></div>
     <div className="prop-cards">{propCards.map(({ id, name, effect, Icon, color }) => {
       const count = player.props?.[id] || 0;

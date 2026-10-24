@@ -13,6 +13,7 @@ export type BoardSpec = {
 };
 export type Game = {
   id: string; preset?: 'custom' | 'gentle' | 'classic'; rules?: {id:string;name:string;summary:string;launch_dice:number[]}; ruleset: string; difficulty: 'easy' | 'normal' | 'hard'; board: BoardSpec; mode: string; demo: boolean; version: number; turn: number;
+  theme_id?: string; mission?: {id:string;title:string;description:string;progress:number;target:number;contributors:string[];status:'available'|'active'|'completed'|'incomplete'};
   current: number; phase: 'roll' | 'move' | 'finished'; dice: number; winner?: string;
   players: Player[]; legal_moves: Move[]; history: GameEvent[]; last_move?: Move;
   props_enabled: boolean; active_prop?: string; dice_rolls: number[];
@@ -23,8 +24,9 @@ export type Coach = { id: string; game_id: string; version: number; player_id: s
 export type ChatMessage = { id: string; at: string; from_id: string; name: string; role: 'player' | 'host' | 'spectator'; kind: 'emoji' | 'text'; emoji?: string; text?: string; target_player_id?: string };
 export type Audience = { enabled: boolean; token?: string; count: number; online: number; capacity: number; chat_enabled: boolean; me?: { id: string; name: string; role: 'spectator' }; messages?: ChatMessage[] };
 export type Room = { host_change?: {id:string;from:string;to:string;reason:string;at:string}; profile_ids?: string[]; instance_id?: string; saved_at?: string; restored?: boolean; save_error?: boolean; id: string; name: string; status: 'waiting' | 'playing' | 'paused' | 'ended'; seq: number; state: Game; voice: string; voice_settings: VoiceSettings; coach?: Coach; coach_expired?: boolean; audience?: Audience; network?: { invite: string; host_player_id?:string;host_online?:boolean;host_claim_at?:string;host_claim_wait_seconds?:number;can_claim_host?:boolean; delegation_seconds?:number; seats: { delegated?:boolean;auto_delegate?:boolean;delegation_reason?:string;delegate_wait_seconds?:number; host?:boolean; player_id: string; occupied: boolean; ready: boolean; online: boolean; robot?: boolean }[] }; me?: { player_id: string; host: boolean } };
-export type Options = { profile_ids?: string[]; avatars?: string[]; preset?: 'custom' | 'gentle' | 'classic'; network?: boolean; room_name: string; difficulty: 'easy' | 'normal' | 'hard'; waiting: boolean; names: string[]; board: string; mode: string; ai: boolean; demo: boolean; props: boolean };
-export type Config = { delegation_seconds?:number; host_reclaim_seconds?:number; diagnostics?: {enabled:boolean;transcripts:boolean;retention_hours:number}; persistence_enabled?: boolean; save_retention_hours?: number; voice_configured: boolean; version: string; ruleset: string; boards: BoardSpec[] };
+export type MissionCard = {id:string;title:string;description:string;status:'available'};
+export type Options = { profile_ids?: string[]; avatars?: string[]; preset?: 'custom' | 'gentle' | 'classic'; network?: boolean; room_name: string; difficulty: 'easy' | 'normal' | 'hard'; waiting: boolean; names: string[]; board: string; mode: string; theme_id?:string; mission_id?:string; ai: boolean; demo: boolean; props: boolean };
+export type Config = { delegation_seconds?:number; host_reclaim_seconds?:number; diagnostics?: {enabled:boolean;transcripts:boolean;retention_hours:number}; persistence_enabled?: boolean; save_retention_hours?: number; voice_configured: boolean; version: string; ruleset: string; boards: BoardSpec[]; missions?:MissionCard[] };
 
 export class APIError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }

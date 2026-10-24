@@ -59,3 +59,11 @@
 ## 与另一条接口的区别
 
 灵矽[设备WebSocket文档](https://linx.qiniu.com/docs/xrobot/platform/websocket)中的 `/v1/ws/` 使用hello及包装的JSON-RPC消息，属于另一种端侧接入；[云端MCP](https://linx.qiniu.com/docs/xrobot/mcp/software-mcp)及[Agent绑定说明](https://linx.qiniu.com/docs/xrobot/guide/mcp-store)描述平台管理入口。它们不能代替本次Realtime session.tools配置，也不需要为了浏览器应用虚构硬件设备。
+
+## 本项目实现（#62）
+
+游戏语音会话现在可收到一个 Realtime 原生 `type: "mcp"` 工具配置。`MCP_PUBLIC_URL` 必须是可被灵矽访问的 HTTPS 源站；未配置时，HTTPS 部署会从 `PUBLIC_URL` 推导，纯本地 HTTP 开发不启用 MCP。灵矽 Realtime API Key 仍只留在 Go 服务端环境中；短时 MCP bearer 只发送给 Realtime 上游，不下发浏览器。
+
+Go MCP 服务只开放四项只读能力：`get_game_summary`、`get_mission_progress`、`get_game_rules`、`get_legal_actions`。授权绑定现有语音会话中的房间与玩家，设有过期时间、调用上限和撤销；房间会话失效时撤销令牌。MCP 查询通过房间快照读取事实，不产生骰子、道具、走棋或房间管理写操作。写动作仍由原 Realtime 游戏工具链调用 Go 规则服务。
+
+初始化会等工具导入完成再向浏览器确认语音握手。MCP 调用按 `item_id` 跟踪；若 Realtime 先发 `response.done`、之后才完成 MCP，则暂存本轮并在工具结果后续答。工具失败时回复明确表示无法确认棋局事实，不拿模型猜测当结果。需要部署时，把 `MCP_PUBLIC_URL` 配为可访问的 HTTPS 源站；不要在 GitHub 或浏览器填写任何 API Key。

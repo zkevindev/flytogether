@@ -42,7 +42,7 @@ export function ProductPage({ onStart, onHome }: { onStart: () => void; onHome: 
         <div className="product-hero-copy">
           <p className="product-eyebrow"><span />给全家人的语音飞行棋</p>
           <h1 id="product-title">说一句「掷骰子」，<br />快乐就<span>起飞。</span></h1>
-          <p className="product-lead">和孩子围坐一张棋盘，和远方家人邀请开局。<br className="product-desktop-break" />灵犀陪你聊棋局、用道具，也陪旁观的家人加油。</p>
+          <p className="product-lead">和孩子围坐一张棋盘，和远方家人邀请开局。<br className="product-desktop-break" />灵矽陪你聊棋局、用道具，也陪旁观的家人加油。</p>
           <div className="product-hero-actions"><button className="product-cta" onClick={onStart}>创建游戏 <ArrowRight size={20} /></button><a className="product-secondary" href="#product-play">先看看怎么玩 <span>↓</span></a></div>
           <ul className="product-trust"><li><Check />免注册</li><li><Check />2–4 人一起玩</li><li><Check />手机、电脑都能打开</li></ul>
           <div className="product-family-note"><span className="product-avatar first"><AirplaneTilt weight="fill" /></span><span className="product-avatar second"><UsersThree weight="fill" /></span><span className="product-avatar third"><Eye weight="fill" /></span><p>上场、陪玩、加油，<br /><strong>每个人都有自己的位置。</strong></p></div>
@@ -60,14 +60,14 @@ export function ProductPage({ onStart, onHome }: { onStart: () => void; onHome: 
       <section className="product-play" id="product-play" aria-labelledby="play-title">
         <div className="product-section-heading"><p className="product-eyebrow">不同的距离，一样的热闹</p><h2 id="play-title">今天，怎么一起玩？</h2><p>围坐在一起，或把邀请链接发给想念的人。</p></div>
         <div className="product-play-grid">
-          <article className="product-couch"><span className="product-section-icon"><UsersThree weight="duotone" /></span><span className="product-small-label">坐在一起</span><h3>一台设备，<br />轮流做小小飞行员。</h3><p>爸爸掷骰子，孩子挑飞机。一边玩，一边聊。点击就能完成整局，灵犀也随时可以帮忙。</p><div className="product-seat-strip"><span>小朋友</span><ArrowRight /><span>爸爸</span><ArrowRight /><span>妈妈</span></div></article>
+          <article className="product-couch"><span className="product-section-icon"><UsersThree weight="duotone" /></span><span className="product-small-label">坐在一起</span><h3>一台设备，<br />轮流做小小飞行员。</h3><p>爸爸掷骰子，孩子挑飞机。一边玩，一边聊。点击就能完成整局，灵矽也随时可以帮忙。</p><div className="product-seat-strip"><span>小朋友</span><ArrowRight /><span>爸爸</span><ArrowRight /><span>妈妈</span></div></article>
           <article className="product-distance"><span className="product-section-icon"><AirplaneTilt weight="duotone" /></span><span className="product-small-label">各自一台</span><h3>相隔很远，<br />也能飞在同一张棋盘。</h3><p>复制邀请链接，填昵称入座。全员准备好，房主就能开局；轮到你时，只操作自己的飞机。</p><ol><li><b>01</b>创建房间</li><li><b>02</b>分享邀请</li><li><b>03</b>一起起飞</li></ol></article>
-          <article className="product-spectate"><span className="product-section-icon"><Eye weight="duotone" /></span><div><span className="product-small-label">想看就来</span><h3>还可以，请家人来加油。</h3><p>独立观赛链接不占席位。送一个鼓掌，发一句加油，或只问自己的灵犀：“现在谁领先？”</p></div><span className="product-private-note"><ChatCircleDots />每位观众都有自己的语音助手</span></article>
+          <article className="product-spectate"><span className="product-section-icon"><Eye weight="duotone" /></span><div><span className="product-small-label">想看就来</span><h3>还可以，请家人来加油。</h3><p>独立观赛链接不占席位。送一个鼓掌，发一句加油，或只问自己的灵矽：“现在谁领先？”</p></div><span className="product-private-note"><ChatCircleDots />每位观众都有自己的语音助手</span></article>
         </div>
       </section>
 
       <section className="product-pace" aria-labelledby="pace-title">
-        <div><p className="product-eyebrow">把节奏交给今天的心情</p><h2 id="pace-title">玩一小会儿，<br />还是认真飞一局？</h2><p>开局前选好节奏。新手可以先选亲子轻松，<br className="product-desktop-break" />也能邀请灵犀机器人，随时凑齐一桌。</p></div>
+        <div><p className="product-eyebrow">把节奏交给今天的心情</p><h2 id="pace-title">玩一小会儿，<br />还是认真飞一局？</h2><p>开局前选好节奏。新手可以先选亲子轻松，<br className="product-desktop-break" />也能邀请灵矽机器人，随时凑齐一桌。</p></div>
         <div className="product-pace-options" role="group" aria-label="了解两种对局节奏">
           <button aria-pressed={!full} onClick={() => setFull(false)}><span className="product-mode-symbol"><AirplaneTilt /></span><span><strong>轻快一局<small>先送达 1 架就赢</small></strong><p>每人 2 架飞机，适合先体验一局。</p></span><span className="product-mode-check">{!full && <Check weight="bold" />}</span></button>
           <button aria-pressed={full} onClick={() => setFull(true)}><span className="product-mode-symbol"><UsersThree /></span><span><strong>完整飞行<small>4 架全部抵达</small></strong><p>多一点策略，多几次反败为胜的机会。</p></span><span className="product-mode-check">{full && <Check weight="bold" />}</span></button>
@@ -82,9 +82,9 @@ export function ProductPage({ onStart, onHome }: { onStart: () => void; onHome: 
 
       <section className="product-faq" id="product-faq" aria-labelledby="faq-title"><div><p className="product-eyebrow">开局之前</p><h2 id="faq-title">你可能还想知道</h2></div><div>
         <details><summary>必须开麦克风才能玩吗？</summary><p>不用。掷骰、走棋、用道具都支持点击。语音对话需要允许麦克风；引导期间保持安静，完成或跳过后才开启。</p></details>
-        <details><summary>灵犀是玩家，还是语音助手？</summary><p>两种都可以。语音助手不占席位，帮你了解棋局或执行合法操作；邀请灵犀机器人后，它会占一个席位参与比赛。</p></details>
+        <details><summary>灵矽是玩家，还是语音助手？</summary><p>两种都可以。语音助手不占席位，帮你了解棋局或执行合法操作；邀请灵矽机器人后，它会占一个席位参与比赛。</p></details>
         <details><summary>玩到一半有事，可以下次继续吗？</summary><p>可以。在原浏览器回到游戏，继续保存的对局。联网时也能明确选择暂离托管，回来后再接管；换设备找回席位尚未支持。</p></details>
-        <details><summary>观众可以替选手操作吗？</summary><p>不可以。观众只看棋局、发送互动，与自己的灵犀私聊。观众的问题和回复不会广播给比赛中的选手。</p></details>
+        <details><summary>观众可以替选手操作吗？</summary><p>不可以。观众只看棋局、发送互动，与自己的灵矽私聊。观众的问题和回复不会广播给比赛中的选手。</p></details>
       </div></section>
       <section className="product-last-call"><AirplaneTilt weight="duotone" /><div><p className="product-eyebrow">棋盘已经准备好了</p><h2>今晚，谁先抵达？</h2><p>叫上家人，把这一局变成共同的小回忆。</p></div><button className="product-cta" onClick={onStart}>创建第一局 <ArrowRight /></button></section>
     </main>

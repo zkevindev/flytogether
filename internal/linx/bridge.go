@@ -27,6 +27,7 @@ func (c Config) Enabled() bool {
 type Bridge struct {
 	Observe          func(room.DiagnosticEvent)
 	Config           Config
+	MCP              *ReadonlyMCP
 	MaxConnections   int
 	SpectatorMax     int
 	SpectatorTimeout time.Duration
@@ -104,6 +105,12 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	if duration <= 0 {
 		duration = 15 * time.Minute
 	}
+	mcpToken, revokeMCP := "", func() {}
+	if b.MCP != nil {
+		mcpToken, revokeMCP = b.MCP.Register(r, duration)
+	}
+	defer revokeMCP()
+	mcpTool := b.MCP.ToolConfig(mcpToken)
 	b.mu.Lock()
 	if spectator {
 		spectatorLimit := b.SpectatorMax
@@ -282,6 +289,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			if spectator {
 				update = realtimeSpectatorSessionUpdate(b.Config.Model)
 			}
+			if mcpTool != nil {
+				addRealtimeMCP(update, mcpTool)
+			}
 			if e = sendUp(update); e != nil {
 				return errors.New("灵矽实时会话初始化失败")
 			}
@@ -291,7 +301,8 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 
 	// Do not start the microphone stream until the provider confirms the
 	// negotiated session configuration.
-	for {
+	awaitSession, awaitTools := true, mcpTool != nil
+	for awaitSession || awaitTools {
 		kind, data, e := up.Read(ctx)
 		if e != nil {
 			if ctx.Err() != nil {
@@ -306,23 +317,43 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 		if json.Unmarshal(data, &event) != nil {
 			continue
 		}
-		if event.Type == "error" {
+		if event.Type == "error" && awaitSession {
 			return errors.New("灵矽没有接受实时音频配置，请确认该模型支持 PCM 和语音工具")
 		}
 		if event.Type == "session.updated" {
-			if e = sendBrowser(map[string]any{"type": "hello", "audio_params": map[string]any{"format": "pcm", "sample_rate": 24000}}); e != nil {
-				return e
-			}
-			if gate.settings.WakeEnabled {
-				r.VoiceState("standby")
-			} else {
-				r.VoiceState("ready")
-			}
-			if e = sendWake(); e != nil {
-				return e
-			}
-			break
+			awaitSession = false
 		}
+		if event.Type == "mcp_list_tools.completed" || event.Type == "mcp_list_tools.failed" {
+			awaitTools = false
+			code := "loaded"
+			if event.Type == "mcp_list_tools.failed" {
+				code = "unavailable"
+			}
+			trace(room.DiagnosticEvent{Kind: "mcp", Action: "tool_list", Code: code})
+			if e = sendBrowser(map[string]any{"type": "mcp_status", "status": code}); e != nil {
+				return e
+			}
+		}
+		if event.Type == "error" && awaitTools {
+			awaitTools = false
+			trace(room.DiagnosticEvent{Kind: "mcp", Action: "tool_list", Code: "unavailable"})
+		}
+		if shouldForward(event.Type) {
+			if e = browser.Write(ctx, websocket.MessageText, event.Raw); e != nil {
+				return e
+			}
+		}
+	}
+	if e := sendBrowser(map[string]any{"type": "hello", "audio_params": map[string]any{"format": "pcm", "sample_rate": 24000}}); e != nil {
+		return e
+	}
+	if gate.settings.WakeEnabled {
+		r.VoiceState("standby")
+	} else {
+		r.VoiceState("ready")
+	}
+	if e := sendWake(); e != nil {
+		return e
 	}
 
 	incoming := make(chan realtimeEvent, 16)
@@ -367,6 +398,10 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	hostIDs := map[string]bool{}
 	grants := map[string]string{}
 	calls := map[string][]functionCall{}
+	pendingMCP := map[string]map[string]bool{}
+	seenMCP := map[string]bool{}
+	deferredMCPDone := map[string]bool{}
+	failedMCP := map[string]bool{}
 	seenInputs := map[string]bool{}
 	hostActive := func() bool { return pendingHost || len(hostIDs) > 0 }
 	cancelHost := func() {
@@ -619,8 +654,11 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			if spectator {
 				sessionInstructions = realtimeSpectatorSessionUpdate(b.Config.Model)
 			}
+			if mcpTool != nil {
+				addRealtimeMCP(sessionInstructions, mcpTool)
+			}
 			session := sessionInstructions["session"].(map[string]any)
-			session["instructions"] = session["instructions"].(string) + companion.Instructions()
+			session["instructions"] = session["instructions"].(string) + "棋局只读问答优先调用原生MCP读取当前状态、任务进度、规则与合法走法；MCP工具只读，不能执行棋局动作。需要操作时只能调用现有游戏工具，并等待服务端真实结果。" + companion.Instructions()
 			voiceText := gate.commandText(body.Transcript)
 			action, handled := planVoiceAction(r, voiceText)
 			if mode, ok := r.(interface{ ReadOnly() bool }); ok && mode.ReadOnly() && handled && action.Name != "get_game_state" {
@@ -796,6 +834,52 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			if inFlight {
 				grants[event.ResponseID] = currentToken
 			}
+		case "mcp_list_tools.in_progress", "mcp_list_tools.completed", "mcp_list_tools.failed":
+			code := "loading"
+			if event.Type == "mcp_list_tools.completed" {
+				code = "loaded"
+			}
+			if event.Type == "mcp_list_tools.failed" {
+				code = "unavailable"
+			}
+			trace(room.DiagnosticEvent{Kind: "mcp", Action: "tool_list", Code: code})
+			if e := sendBrowser(map[string]any{"type": "mcp_status", "status": code}); e != nil {
+				return e
+			}
+			continue
+		case "response.mcp_call.in_progress", "response.mcp_call.completed", "response.mcp_call.failed":
+			if !inFlight || grants[event.ResponseID] != currentToken {
+				continue
+			}
+			seenMCP[event.ResponseID] = true
+			if pendingMCP[event.ResponseID] == nil {
+				pendingMCP[event.ResponseID] = map[string]bool{}
+			}
+			code := "running"
+			switch event.Type {
+			case "response.mcp_call.in_progress":
+				pendingMCP[event.ResponseID][event.ItemID] = true
+			case "response.mcp_call.completed":
+				code = "completed"
+				delete(pendingMCP[event.ResponseID], event.ItemID)
+			case "response.mcp_call.failed":
+				code = "failed"
+				failedMCP[event.ResponseID] = true
+				delete(pendingMCP[event.ResponseID], event.ItemID)
+			}
+			trace(room.DiagnosticEvent{Kind: "mcp", InputID: responseInputs[event.ResponseID], Ref: event.ItemID, Action: "readonly_call", Code: code})
+			if deferredMCPDone[event.ResponseID] && len(pendingMCP[event.ResponseID]) == 0 {
+				delete(deferredMCPDone, event.ResponseID)
+				delete(grants, event.ResponseID)
+				request := map[string]any{"type": "response.create"}
+				if failedMCP[event.ResponseID] {
+					request["response"] = map[string]any{"tool_choice": "none", "instructions": "棋局只读查询工具暂时不可用。请简短说明目前无法读取实时棋局信息，不要猜测棋局状态或任务进度。"}
+				}
+				if e := sendUp(request); e != nil {
+					return errors.New("灵矽无法继续生成MCP查询回复")
+				}
+			}
+			continue
 		case "response.output_item.done":
 			if !inFlight || !allowModelTools || grants[event.ResponseID] != currentToken {
 				continue
@@ -828,7 +912,6 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			pending := calls[event.ResponseID]
 			delete(calls, event.ResponseID)
 			grant := grants[event.ResponseID]
-			delete(grants, event.ResponseID)
 			if !inFlight || grant == "" || grant != currentToken {
 				continue
 			}
@@ -838,7 +921,23 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				} `json:"response"`
 			}
 			_ = json.Unmarshal(event.Raw, &body)
+			if body.Response.Status == "completed" && seenMCP[event.ResponseID] {
+				if len(pendingMCP[event.ResponseID]) > 0 {
+					deferredMCPDone[event.ResponseID] = true
+					continue
+				}
+				delete(grants, event.ResponseID)
+				request := map[string]any{"type": "response.create"}
+				if failedMCP[event.ResponseID] {
+					request["response"] = map[string]any{"tool_choice": "none", "instructions": "棋局只读查询工具暂时不可用。请简短说明目前无法读取实时棋局信息，不要猜测棋局状态或任务进度。"}
+				}
+				if e := sendUp(request); e != nil {
+					return errors.New("灵矽无法继续生成MCP查询回复")
+				}
+				continue
+			}
 			if body.Response.Status == "completed" && len(pending) > 0 {
+				delete(grants, event.ResponseID)
 				for _, call := range pending {
 					output := b.executeTool(r, call)
 					code := "completed"
@@ -856,6 +955,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				}
 				continue
 			}
+			delete(grants, event.ResponseID)
 			currentToken, inFlight = "", false
 			gate.finish(time.Now())
 			idle()
@@ -917,6 +1017,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 type realtimeEvent struct {
 	Type       string          `json:"type"`
 	ResponseID string          `json:"response_id"`
+	ItemID     string          `json:"item_id"`
 	Raw        json.RawMessage `json:"-"`
 }
 
@@ -924,6 +1025,7 @@ func (e *realtimeEvent) UnmarshalJSON(data []byte) error {
 	var header struct {
 		Type       string `json:"type"`
 		ResponseID string `json:"response_id"`
+		ItemID     string `json:"item_id"`
 		Response   struct {
 			ID string `json:"id"`
 		} `json:"response"`
@@ -933,6 +1035,7 @@ func (e *realtimeEvent) UnmarshalJSON(data []byte) error {
 	}
 	e.Type, e.Raw = header.Type, append(e.Raw[:0], data...)
 	e.ResponseID = header.ResponseID
+	e.ItemID = header.ItemID
 	if e.ResponseID == "" {
 		e.ResponseID = header.Response.ID
 	}
@@ -972,6 +1075,16 @@ func realtimeSessionUpdate(model string) map[string]any {
 		},
 		"tools": realtimeTools(), "tool_choice": "auto",
 	}}
+}
+
+func addRealtimeMCP(update map[string]any, tool map[string]any) {
+	session, ok := update["session"].(map[string]any)
+	if !ok || tool == nil {
+		return
+	}
+	tools, _ := session["tools"].([]map[string]any)
+	session["tools"] = append(append([]map[string]any(nil), tools...), tool)
+	session["tool_choice"] = "auto"
 }
 
 func realtimeReadOnlySessionUpdate(model string) map[string]any {
@@ -1043,7 +1156,9 @@ func shouldForward(event string) bool {
 	case "response.audio.delta", "response.audio.done", "response.audio_transcript.delta", "response.audio_transcript.done",
 		"response.output_audio.delta", "response.output_audio.done", "response.output_audio_transcript.delta", "response.output_audio_transcript.done",
 		"response.output_text.delta", "response.output_text.done", "conversation.item.input_audio_transcription.completed",
-		"input_audio_buffer.speech_started", "input_audio_buffer.speech_stopped", "response.created", "response.done":
+		"input_audio_buffer.speech_started", "input_audio_buffer.speech_stopped", "response.created", "response.done",
+		"mcp_list_tools.in_progress", "mcp_list_tools.completed", "mcp_list_tools.failed",
+		"response.mcp_call_arguments.done", "response.mcp_call.in_progress", "response.mcp_call.completed", "response.mcp_call.failed":
 		return true
 	default:
 		return false

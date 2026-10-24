@@ -579,7 +579,7 @@ func (r *Room) chatMessage(session string, in ChatInput) (ChatMessage, error) {
 	}
 	if sp, ok := r.spectators[session]; ok {
 		if !r.chatOn {
-			return ChatMessage{}, fail("CHAT_DISABLED", "房主已关闭观众发言，仍可安静观赛和询问自己的灵犀")
+			return ChatMessage{}, fail("CHAT_DISABLED", "房主已关闭观众发言，仍可安静观赛和询问自己的灵矽")
 		}
 		msg.FromID, msg.Name, msg.Role = sp.PublicID, sp.Name, "spectator"
 		return msg, nil
@@ -659,7 +659,7 @@ func (r *Room) VoiceForSpectator(session string) (*SpectatorVoice, error) {
 		r.spectatorLeases = map[string]string{}
 	}
 	if r.spectatorLeases[session] != "" {
-		return nil, fail("VOICE_BUSY", "这个观众已有灵犀连接，请先关闭原来的提问")
+		return nil, fail("VOICE_BUSY", "这个观众已有灵矽连接，请先关闭原来的提问")
 	}
 	lease := game.ID()
 	r.spectatorLeases[session] = lease

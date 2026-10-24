@@ -100,9 +100,17 @@ npm --prefix web run capture:docs
 
 ## 家人观赛（#39～#44）
 
-`images/audience/` 收录桌面立体、手机轻量、自然获胜和独立灵犀问答五张实际截图（含重启恢复）。来源提交、视口与 SHA-256 见 [manifest](images/audience/manifest.json)，复跑见 [QA-AUDIENCE](QA-AUDIENCE.md)。手机是桌面Chrome视口；语音图来自合成WAV经实际AudioWorklet、Go和真实灵犀，不能当成实体麦克风或真人听感。所有棋步与骰子由正式规则推进，未注入棋盘。截图不含真实部署地址或访问凭据。
+`images/audience/` 收录桌面立体、手机轻量、自然获胜和独立灵矽问答五张实际截图（含重启恢复）。来源提交、视口与 SHA-256 见 [manifest](images/audience/manifest.json)，复跑见 [QA-AUDIENCE](QA-AUDIENCE.md)。手机是桌面Chrome视口；语音图来自合成WAV经实际AudioWorklet、Go和真实灵矽，不能当成实体麦克风或真人听感。所有棋步与骰子由正式规则推进，未注入棋盘。截图不含真实部署地址或访问凭据。
 
 
 ## 产品介绍页（#51）
 
 `images/product/` 保存首屏、完整桌面和手机视口三张页面截图。它们展示的是明确标注的玩法预览，不是正在进行的真实对局。使用项目FlatBoard组件，无图片生成、虚构评价或统计；来源/视口/哈希见 [manifest](images/product/manifest.json)，复跑见 [QA-PRODUCT](QA-PRODUCT.md)。
+
+## 品牌字形更正（2026-10-24）
+
+将产品截图中误写的“灵犀”统一改为“灵矽”后，按实际应用重新拍摄了产品页三张图，以及观赛桌面、手机和结算图。观赛语音回答图通过真实灵矽 Realtime 与合成 WAV 重新采集；观赛重启恢复图通过本地服务重启流程重新采集。图片没有做像素级文字替换，新的截图哈希及来源记录在各自的 [产品清单](images/product/manifest.json) 和 [观赛清单](images/audience/manifest.json)。
+
+## 星际救援主题与观赛任务卡（#62）
+
+[mission/manifest.json](images/mission/manifest.json) 记录同屏桌面合作任务和联网观赛手机页两张真实 Chrome 截图。截图由 Go 创建的救援任务与服务端随机规则局生成，观赛页显示同一任务目标及进度；不是静态设计稿。

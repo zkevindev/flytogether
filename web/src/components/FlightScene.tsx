@@ -139,7 +139,8 @@ export function FlightScene(props: Handlers) {
         mesh.position.copy(toWorld({ x: airport.x + airport.size / 2, y: airport.y + airport.size / 2 }, 0.02));
         mesh.receiveShadow = true;
         table.add(mesh);
-        const name = sprite(`${playerMarker(index).symbol} ${player ? player.name : '等待登机'}`, '#ffffff');
+        const airportName = player ? (game.theme_id === 'star-rescue' ? `${player.name} · 救援基地` : player.name) : '等待登机';
+        const name = sprite(`${playerMarker(index).symbol} ${airportName}`, '#ffffff');
         name.position.copy(toWorld({ x: airport.x + airport.size / 2, y: airport.y + 28 }, 0.28));
         table.add(name);
       });
@@ -148,10 +149,19 @@ export function FlightScene(props: Handlers) {
         mesh.position.copy(toWorld(pad, 0.04));
         table.add(mesh);
       });
-      const center = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.66, 0.05, 40), paint('#ffffff', { roughness: 0.35 }));
+      const center = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.66, 0.05, 40), paint(game.theme_id === 'star-rescue' ? '#f6d98e' : '#ffffff', { roughness: 0.35 }));
       center.position.y = 0.03;
       center.receiveShadow = true;
       table.add(center);
+      if (game.theme_id === 'star-rescue') {
+        const beacon = new THREE.Mesh(new THREE.TorusGeometry(0.43, 0.026, 8, 48), paint('#f6d98e', { metalness:0.55, roughness:0.28 }));
+        beacon.rotation.x = -Math.PI / 2;
+        beacon.position.y = 0.09;
+        table.add(beacon);
+        const star = sprite('✦ 救援信标 ✦', '#fff1bf');
+        star.position.set(0, 0.18, 0);
+        table.add(star);
+      }
       colors.forEach((color, player) => {
         const from = layout.route[(player * layout.route.length / 4 + game.board.fly_from - 1) % layout.route.length];
         const to = layout.route[(player * layout.route.length / 4 + game.board.fly_to - 1) % layout.route.length];
