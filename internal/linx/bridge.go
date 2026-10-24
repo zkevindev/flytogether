@@ -404,6 +404,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				return e
 			}
 			response := map[string]any{"type": "response.create"}
+			sessionInstructions := realtimeSessionUpdate(b.Config.Model)
 			if action, handled := planVoiceAction(r, gate.commandText(body.Transcript)); handled {
 				before := ""
 				if state, _, ok := roomGame(r); ok {
@@ -481,7 +482,13 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				}}); e != nil {
 					return errors.New("游戏播报上下文没有送回灵矽")
 				}
+				// Also replace session-level instructions: the provider can retain a
+				// prior host-only instruction despite a newer response override.
+				sessionInstructions["session"].(map[string]any)["instructions"] = instructions
 				response["response"] = map[string]any{"tool_choice": "none", "instructions": instructions}
+			}
+			if e := sendUp(sessionInstructions); e != nil {
+				return e
 			}
 			if e := sendUp(response); e != nil {
 				return e

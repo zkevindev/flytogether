@@ -20,11 +20,13 @@ var ErrSpeechBusy = errors.New("播报正在准备，请稍后重试")
 // Speaker is an output-only Lingxi session. It has no microphone input and no
 // game tools. A small bounded cache avoids regenerating repeated turn names.
 type Speaker struct {
-	Config Config
-	mu     sync.Mutex
-	busy   bool
-	cache  map[string][]byte
-	order  []string
+	Config      Config
+	mu          sync.Mutex
+	busy        bool
+	pendingText string
+	pendingDone chan struct{}
+	cache       map[string][]byte
+	order       []string
 }
 
 func TurnAnnouncement(state game.State) (string, string) {
@@ -54,12 +56,31 @@ func (s *Speaker) Say(ctx context.Context, text string) ([]byte, error) {
 		return audio, nil
 	}
 	if s.busy {
+		if s.pendingText == text {
+			done := s.pendingDone
+			s.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-done:
+			}
+			s.mu.Lock()
+			audio := s.cache[text]
+			s.mu.Unlock()
+			if len(audio) > 0 {
+				return audio, nil
+			}
+			return nil, ErrSpeechBusy
+		}
 		s.mu.Unlock()
 		return nil, ErrSpeechBusy
 	}
 	s.busy = true
+	s.pendingText = text
+	s.pendingDone = make(chan struct{})
+	done := s.pendingDone
 	s.mu.Unlock()
-	defer func() { s.mu.Lock(); s.busy = false; s.mu.Unlock() }()
+	defer func() { s.mu.Lock(); s.busy = false; s.pendingText = ""; close(done); s.mu.Unlock() }()
 	ctx, cancel := context.WithTimeout(ctx, 14*time.Second)
 	defer cancel()
 	endpoint, err := realtimeURL(s.Config.URL, s.Config.Model)

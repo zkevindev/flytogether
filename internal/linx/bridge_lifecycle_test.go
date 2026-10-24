@@ -29,6 +29,7 @@ func TestBridgeLateToolsStayBoundToTheirOriginalTurn(t *testing.T) {
 					return
 				}
 				defer c.CloseNow()
+				announced := false
 				if writeEvent(ctx, c, map[string]any{"type": "session.created"}) != nil {
 					return
 				}
@@ -45,7 +46,10 @@ func TestBridgeLateToolsStayBoundToTheirOriginalTurn(t *testing.T) {
 						if writeEvent(ctx, c, map[string]any{"type": "session.updated"}) != nil {
 							return
 						}
-						peers <- c
+						if !announced {
+							peers <- c
+							announced = true
+						}
 					} else {
 						select {
 						case requests <- event:

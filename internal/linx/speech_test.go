@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -66,6 +67,7 @@ func TestSpeakerProducesAudioWithoutMicrophoneOrGameToolsAndCachesIt(t *testing.
 		if response["tool_choice"] != "none" || !strings.Contains(response["instructions"].(string), "轮到小朋友") {
 			t.Error("invalid speech-only request")
 		}
+		time.Sleep(100 * time.Millisecond) // allow simultaneous listeners to join the same synthesis
 		_ = writeEvent(ctx, c, map[string]any{"type": "response.output_audio.delta", "delta": base64.StdEncoding.EncodeToString(expected)})
 		_ = writeEvent(ctx, c, map[string]any{"type": "response.done", "response": map[string]any{"status": "completed"}})
 	}))
@@ -74,6 +76,18 @@ func TestSpeakerProducesAudioWithoutMicrophoneOrGameToolsAndCachesIt(t *testing.
 	http.DefaultClient = provider.Client()
 	defer func() { http.DefaultClient = original }()
 	speaker := &Speaker{Config: Config{URL: strings.Replace(provider.URL, "https://", "wss://", 1) + "/v1/realtime", APIKey: "test-only", Model: "test"}}
+	var listeners sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		listeners.Add(1)
+		go func() {
+			defer listeners.Done()
+			audio, err := speaker.Say(ctx, "轮到小朋友掷骰子啦！")
+			if err != nil || string(audio) != string(expected) {
+				t.Errorf("shared synthesis: %v", err)
+			}
+		}()
+	}
+	listeners.Wait()
 	for i := 0; i < 2; i++ {
 		audio, err := speaker.Say(ctx, "轮到小朋友掷骰子啦！")
 		if err != nil || string(audio) != string(expected) {

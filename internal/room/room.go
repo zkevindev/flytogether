@@ -432,7 +432,10 @@ func (r *Room) tool(name string, args map[string]string, actor string) (any, err
 		}
 		suggested, target := r.state.SuggestedPropTarget()
 		reason := "经典规则需六点起飞，启用本回合起飞卡后可用任意点数起飞；加速卡对已离开机库的飞机增加两步；使用幸运骰会立即掷两次取较大值，无需再单独掷骰。每次掷骰前最多用一张已有道具，不能通过语音指定点数。炸弹立即送回对方公共航线上的一架指定飞机，护盾抵挡一次炸弹或撞机，两者都需指定piece_id且不能选机库、起飞位或终点航道；一次掷骰前仍只能用一张。超过终点不能移动，请只选 legal_moves 中的棋子。"
-		return map[string]any{"room": r.view(), "action_token": token, "rules_hint": reason,
+		voiceView := r.view()
+		voiceView.Network = nil
+		voiceView.Me = nil
+		return map[string]any{"room": voiceView, "action_token": token, "rules_hint": reason,
 			"prop_targets": map[string][]string{"bomb": r.state.PropTargets("bomb"), "shield": r.state.PropTargets("shield")}, "suggested_prop": map[string]string{"prop_id": suggested, "piece_id": target},
 			"current_player": r.state.Players[r.state.Current], "legal_moves": r.state.Legal}, nil
 	}
@@ -463,6 +466,8 @@ func (r *Room) tool(name string, args map[string]string, actor string) (any, err
 	if err != nil {
 		return nil, err
 	}
+	v.Network = nil
+	v.Me = nil
 	if name == "coach_move" {
 		return map[string]any{"room": v, "message": "仅更新建议或取消建议，没有走棋、掷骰或扣道具。下一句话明确确认后才可移动。"}, nil
 	}
