@@ -1,6 +1,6 @@
 {
   "captured_on": "2026-10-24",
-  "source_commit": "8772cce",
+  "source_commit": "8772cce2c022bdc5945bb2c5b08ba370e6ff0ee9",
   "browser": "Chrome 155.0.8059.85",
   "scope": "Actual local Chrome game and spectator pages for Issue 62. Co-op mission state comes from Go; real random legal game flow; no injected board or dice.",
   "captures": [

@@ -5,7 +5,7 @@
   "captures": [
     {
       "file": "watch-desktop.png",
-      "source_commit": "8772cce",
+      "source_commit": "8772cce2c022bdc5945bb2c5b08ba370e6ff0ee9",
       "sha256": "0974832e2305d7a70fe48c07d29ffa549e9f2332c94bc50b243855910bb3cd8f",
       "viewport": {
         "width": 1360,
@@ -14,7 +14,7 @@
     },
     {
       "file": "watch-mobile.png",
-      "source_commit": "8772cce",
+      "source_commit": "8772cce2c022bdc5945bb2c5b08ba370e6ff0ee9",
       "sha256": "342fbf68e93fb5bc4209dda81edfea1b253a72ca7ea80857643bfc5408dfaaf5",
       "viewport": {
         "width": 390,
@@ -23,7 +23,7 @@
     },
     {
       "file": "watch-result.png",
-      "source_commit": "8772cce",
+      "source_commit": "8772cce2c022bdc5945bb2c5b08ba370e6ff0ee9",
       "sha256": "7f7d5f0220665b4b56d9c9c5a0a08376b5ec29044a136994bcca5054da3c8381",
       "viewport": {
         "width": 1360,
@@ -32,7 +32,7 @@
     },
     {
       "file": "watch-private-voice.png",
-      "source_commit": "8772cce",
+      "source_commit": "8772cce2c022bdc5945bb2c5b08ba370e6ff0ee9",
       "sha256": "5a5c9ce031a328e707cbb504bf99cb18c73e7ff895998ca01b369033a882385f",
       "viewport": {
         "width": 1360,
@@ -41,7 +41,7 @@
     },
     {
       "file": "watch-restored.png",
-      "source_commit": "8772cce",
+      "source_commit": "8772cce2c022bdc5945bb2c5b08ba370e6ff0ee9",
       "sha256": "7bc60cba7bb47ea9893340b5e690327b40764f606b05633cf66ae50344cdf92c",
       "viewport": {
         "width": 1280,
