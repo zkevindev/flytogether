@@ -17,20 +17,23 @@ import (
 	"github.com/zkevindev/flytogether/internal/room"
 )
 
-func TestIsGameFactQuestion(t *testing.T) {
+func TestGameFactQuestionSelectsTheRelevantReadonlyTool(t *testing.T) {
 	for _, tt := range []struct {
-		text string
-		want bool
+		text, want string
 	}{
-		{"请查一下本局星际救援任务卡的目标和当前进展", true},
-		{"起飞卡是什么", true},
-		{"现在轮到谁掷骰子", true},
-		{"帮我使用起飞卡", false},
-		{"好，掷骰子", false},
-		{"随便聊聊天", false},
+		{"请查一下本局星际救援任务卡的目标和当前进展", "get_mission_progress"},
+		{"我们还差什么", "get_mission_progress"},
+		{"这个主题是什么", "get_game_summary"},
+		{"现在轮到谁掷骰子", "get_game_summary"},
+		{"现在有哪些飞机可以走", "get_legal_actions"},
+		{"起飞卡是什么", "get_game_rules"},
+		{"为什么这步走不了", "get_legal_actions"},
+		{"帮我使用起飞卡", ""},
+		{"好，掷骰子", ""},
+		{"随便聊聊天", ""},
 	} {
-		if got := isGameFactQuestion(tt.text); got != tt.want {
-			t.Errorf("isGameFactQuestion(%q) = %t, want %t", tt.text, got, tt.want)
+		if got := gameFactTool(tt.text); got != tt.want {
+			t.Errorf("gameFactTool(%q) = %q, want %q", tt.text, got, tt.want)
 		}
 	}
 }
@@ -385,5 +388,32 @@ func TestBridgeRoutesFactQuestionsThroughReadonlyMCP(t *testing.T) {
 	readUntil(t, h.ctx, h.browser, "response.done")
 	if state := protocolState(t, r); state.Version != 1 || state.Mission == nil || state.Mission.Progress != 0 {
 		t.Fatalf("fact query changed the game state: %+v", state)
+	}
+}
+
+func TestBridgeRoutesGameFactsToTheMatchingReadonlyMCPTool(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode, question, want string
+	}{
+		{"turn and theme in quick game", "quick", "现在轮到谁掷骰子", "get_game_summary"},
+		{"rules in classic game", "classic", "起飞卡是什么", "get_game_rules"},
+		{"legal actions without rescue mission", "quick", "现在有哪些飞机可以走", "get_legal_actions"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := room.New(game.Options{Mode: tc.mode, Names: []string{"孩子", "家长"}})
+			h := newProtocolHarness(t, r, false, "quiet", "https://flytogether.example")
+			h.send(t, map[string]any{"type": "conversation.item.input_audio_transcription.completed", "item_id": "generic-fact", "transcript": tc.question})
+			readUntil(t, h.ctx, h.browser, "stt")
+			spectatorRequest(t, h.ctx, h.requests, "session.update")
+			request := spectatorRequest(t, h.ctx, h.requests, "response.create")
+			choice := request["response"].(map[string]any)["tool_choice"].(map[string]any)
+			if choice["type"] != "mcp" || choice["server_label"] != gameMCPLabel || choice["name"] != tc.want {
+				t.Fatalf("fact question must call %s, got %#v", tc.want, choice)
+			}
+			state := protocolState(t, r)
+			if state.Version != 1 || state.Phase != "roll" {
+				t.Fatalf("read-only fact query changed the %s game: %+v", tc.mode, state)
+			}
+		})
 	}
 }

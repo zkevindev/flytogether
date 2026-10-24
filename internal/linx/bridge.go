@@ -680,9 +680,10 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			response := map[string]any{"type": "response.create"}
 			allowModelTools = true
-			factQuestion := mcpTool != nil && isGameFactQuestion(body.Transcript)
+			factTool := gameFactTool(body.Transcript)
+			factQuestion := mcpTool != nil && factTool != ""
 			if factQuestion {
-				response["response"] = map[string]any{"tool_choice": map[string]any{"type": "mcp", "server_label": gameMCPLabel, "name": "get_mission_progress"}}
+				response["response"] = map[string]any{"tool_choice": map[string]any{"type": "mcp", "server_label": gameMCPLabel, "name": factTool}}
 			}
 			// A previous read-aloud script must never become the next turn's facts.
 			if narrationContext != "" {
@@ -704,7 +705,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			session := sessionInstructions["session"].(map[string]any)
 			session["instructions"] = session["instructions"].(string) + "棋局只读问答优先调用原生MCP读取当前状态、任务进度、规则与合法走法；MCP工具只读，不能执行棋局动作。需要操作时只能调用现有游戏工具，并等待服务端真实结果。" + companion.Instructions()
 			if factQuestion && mcpTool != nil {
-				session["instructions"] = session["instructions"].(string) + "本轮是棋局事实查询，回答前必须调用原生MCP的get_mission_progress读取任务事实；不得调用掷骰、走棋或道具等游戏操作工具。"
+				session["instructions"] = session["instructions"].(string) + "本轮是棋局事实查询，回答前必须调用原生MCP的" + factTool + "读取当前主题与玩法对应的事实；不得调用掷骰、走棋或道具等游戏操作工具。"
 			}
 			voiceText := gate.commandText(body.Transcript)
 			action, handled := planVoiceAction(r, voiceText)
@@ -1179,16 +1180,34 @@ func addRealtimeMCP(update map[string]any, tool map[string]any) {
 	session["tool_choice"] = "auto"
 }
 
-func isGameFactQuestion(text string) bool {
+func gameFactTool(text string) string {
 	question := false
-	for _, word := range []string{"什么", "多少", "几个", "谁", "哪些", "怎么", "如何", "为什么", "吗", "介绍", "解释", "查一下", "查询", "告诉我", "目前", "现在轮到", "当前进度"} {
+	for _, word := range []string{"什么", "多少", "几个", "谁", "哪些", "哪个", "怎么", "如何", "为什么", "为啥", "吗", "介绍", "解释", "查一下", "查询", "告诉我", "目前", "现在轮到", "当前进度"} {
 		question = question || strings.Contains(text, word)
 	}
 	fact := false
-	for _, word := range []string{"棋局", "任务", "规则", "飞机", "卡", "道具", "玩家", "进度", "房间", "救援", "星际", "轮到", "回合", "掷骰"} {
+	for _, word := range []string{"棋局", "游戏", "玩法", "模式", "棋盘", "任务", "规则", "飞机", "卡", "道具", "玩家", "进度", "房间", "救援", "星际", "轮到", "回合", "掷骰", "主题", "还差", "这步", "炸弹", "护盾", "回旋镖", "幸运骰", "团队护航"} {
 		fact = fact || strings.Contains(text, word)
 	}
-	return question && fact
+	if !question || !fact {
+		return ""
+	}
+	for _, word := range []string{"规则", "怎么玩", "道具是什么", "起飞卡", "幸运骰", "炸弹"} {
+		if strings.Contains(text, word) {
+			return "get_game_rules"
+		}
+	}
+	for _, word := range []string{"合法", "可走", "可以走", "能走", "走法", "落点", "怎么走", "怎么移动", "走不了", "这步", "哪个飞机", "有哪些飞机"} {
+		if strings.Contains(text, word) {
+			return "get_legal_actions"
+		}
+	}
+	for _, word := range []string{"任务", "任务卡", "救援", "全员联络", "补给网络", "编队", "还差什么", "当前进度"} {
+		if strings.Contains(text, word) {
+			return "get_mission_progress"
+		}
+	}
+	return "get_game_summary"
 }
 
 func realtimeReadOnlySessionUpdate(model string) map[string]any {
