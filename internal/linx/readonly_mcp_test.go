@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -45,6 +46,16 @@ func TestReadonlyMCPIsSessionBoundAndOnlyProvidesReadTools(t *testing.T) {
 	unauthorized.Body.Close()
 	if unauthorized.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("unauthorized request status = %d", unauthorized.StatusCode)
+	}
+
+	proxied := httptest.NewRequest(http.MethodPost, "https://flytogether.example/api/mcp/game", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"proxy-test","version":"1"}}}`))
+	proxied.Header.Set("Content-Type", "application/json")
+	proxied.Header.Set("Authorization", "Bearer "+token)
+	proxied = proxied.WithContext(context.WithValue(proxied.Context(), http.LocalAddrContextKey, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8080}))
+	proxiedResponse := httptest.NewRecorder()
+	gateway.ServeHTTP(proxiedResponse, proxied)
+	if proxiedResponse.Code == http.StatusForbidden {
+		t.Fatalf("trusted reverse-proxy Host was rejected: %s", proxiedResponse.Body.String())
 	}
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
@@ -103,5 +114,13 @@ func TestRealtimeMCPConfigIsScopedAndReadOnly(t *testing.T) {
 	}
 	if NewReadonlyMCP("http://localhost:8080").Enabled() {
 		t.Fatal("non-TLS MCP endpoint enabled")
+	}
+}
+
+func TestMCPAuthorizationTokenAcceptsProviderBearerNormalization(t *testing.T) {
+	for _, header := range []string{"short-lived-token", "Bearer short-lived-token", "Bearer Bearer short-lived-token", "bearer BEARER short-lived-token"} {
+		if token := mcpAuthorizationToken(header); token != "short-lived-token" {
+			t.Errorf("mcpAuthorizationToken(%q) = %q", header, token)
+		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -24,6 +25,27 @@ type mcpSession struct {
 	expires time.Time
 	count   int
 }
+
+type mcpStatusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *mcpStatusWriter) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *mcpStatusWriter) Write(data []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(data)
+}
+
+func (w *mcpStatusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 // ReadonlyMCP exposes a small, read-only view of one live voice session. Its
 // random bearer is short-lived, room-bound and deleted when Realtime disconnects.
@@ -71,6 +93,14 @@ func (m *ReadonlyMCP) ToolConfig(token string) map[string]any {
 	return map[string]any{"type": "mcp", "server_label": gameMCPLabel, "server_url": m.URL, "authorization": token, "allowed_tools": []string{"get_game_summary", "get_mission_progress", "get_game_rules", "get_legal_actions"}, "require_approval": "never", "server_description": "Read-only facts for the current Fly Together cooperative rescue game. Never performs game actions."}
 }
 
+func mcpAuthorizationToken(header string) string {
+	token := strings.TrimSpace(header)
+	for len(token) >= len("Bearer ") && strings.EqualFold(token[:len("Bearer ")], "Bearer ") {
+		token = strings.TrimSpace(token[len("Bearer "):])
+	}
+	return token
+}
+
 func (m *ReadonlyMCP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !m.Enabled() {
 		http.NotFound(w, r)
@@ -81,7 +111,7 @@ func (m *ReadonlyMCP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	token := mcpAuthorizationToken(r.Header.Get("Authorization"))
 	hash := sha256.Sum256([]byte(token))
 	m.mu.Lock()
 	session := m.sessions[hash]
@@ -97,13 +127,22 @@ func (m *ReadonlyMCP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	m.mu.Unlock()
+	log.Printf("game MCP request: method=%s authorized=%t", r.Method, session != nil)
 	if session == nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	server := newGameMCPServer(session.game)
-	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
-	handler.ServeHTTP(w, r)
+	// The app binds to loopback behind Caddy, so the MCP SDK sees a loopback
+	// local address and the original public Host forwarded by the trusted proxy.
+	// This endpoint has its own short-lived, room-bound bearer authorization.
+	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, DisableLocalhostProtection: true})
+	tracked := &mcpStatusWriter{ResponseWriter: w}
+	handler.ServeHTTP(tracked, r)
+	if tracked.status == 0 {
+		tracked.status = http.StatusOK
+	}
+	log.Printf("game MCP response: method=%s status=%d content_type=%s", r.Method, tracked.status, w.Header().Get("Content-Type"))
 }
 
 type noArguments struct{}

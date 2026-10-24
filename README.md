@@ -285,7 +285,7 @@ QA_FAMILY_SERVER=/tmp/flytogether-qa-server npm --prefix web run test:family:bro
 
 脚本只启动和重启自己的子进程，使用临时数据库；访问已运行环境可用 `QA_BASE_URL`。详见[家庭档案验收](docs/QA-FAMILY.md)。
 
-浏览器脚本需要已安装 Chrome。真实灵矽合成语音、主动播报、故障模拟、真人反馈与时延口径分别见 [语音验收](docs/QA-VOICE.md)；起飞卡直接起飞见[起飞卡验收](docs/QA-LAUNCH-CARD.md)；联网与结算见 [联机验收](docs/QA-NETWORK.md)；教练建议与确认见 [教练验收](docs/QA-COACH.md)；3D 资源、上下文恢复与降级见 [棋盘验收](docs/QA-3D.md)。截图工具与来源见 [截图说明](docs/SCREENSHOTS.md)。
+浏览器脚本需要已安装 Chrome。真实灵矽合成语音、主动播报、故障模拟、真人反馈与时延口径分别见 [语音验收](docs/QA-VOICE.md)；Realtime MCP 实际工具调用见 [MCP 验收](docs/QA-MCP.md)；起飞卡直接起飞见[起飞卡验收](docs/QA-LAUNCH-CARD.md)；联网与结算见 [联机验收](docs/QA-NETWORK.md)；教练建议与确认见 [教练验收](docs/QA-COACH.md)；3D 资源、上下文恢复与降级见 [棋盘验收](docs/QA-3D.md)。截图工具与来源见 [截图说明](docs/SCREENSHOTS.md)。
 
 ## 部署
 

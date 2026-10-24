@@ -15,6 +15,8 @@ if ! id flytogether >/dev/null 2>&1; then
 fi
 install -d -m 755 "$APP_ROOT/releases/$RELEASE_ID"
 tar -xzf "$RELEASE_ARCHIVE" -C "$APP_ROOT/releases/$RELEASE_ID"
+find "$APP_ROOT/releases/$RELEASE_ID/web" -type d -exec chmod 755 {} +
+find "$APP_ROOT/releases/$RELEASE_ID/web" -type f -exec chmod 644 {} +
 chmod 755 "$APP_ROOT/releases/$RELEASE_ID/server"
 ln -sfn "$APP_ROOT/releases/$RELEASE_ID" "$APP_ROOT/current"
 install -d -o flytogether -g flytogether -m 750 /var/lib/flytogether

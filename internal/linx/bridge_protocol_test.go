@@ -17,6 +17,24 @@ import (
 	"github.com/zkevindev/flytogether/internal/room"
 )
 
+func TestIsGameFactQuestion(t *testing.T) {
+	for _, tt := range []struct {
+		text string
+		want bool
+	}{
+		{"请查一下本局星际救援任务卡的目标和当前进展", true},
+		{"起飞卡是什么", true},
+		{"现在轮到谁掷骰子", true},
+		{"帮我使用起飞卡", false},
+		{"好，掷骰子", false},
+		{"随便聊聊天", false},
+	} {
+		if got := isGameFactQuestion(tt.text); got != tt.want {
+			t.Errorf("isGameFactQuestion(%q) = %t, want %t", tt.text, got, tt.want)
+		}
+	}
+}
+
 // protocolHarness crosses both actual WebSocket boundaries. All handlers are
 // joined before restoring the TLS client, including hijacked HTTP connections.
 type protocolHarness struct {
@@ -331,5 +349,41 @@ func TestBridgeContinuesAfterNativeMCPCallCompletes(t *testing.T) {
 	readUntil(t, h.ctx, h.browser, "response.done")
 	if state := protocolState(t, r); state.Version != 1 || state.Mission == nil || state.Mission.Progress != 0 {
 		t.Fatalf("native MCP question mutated mission/game state: %+v", state)
+	}
+}
+
+func TestBridgeRoutesFactQuestionsThroughReadonlyMCP(t *testing.T) {
+	r := room.New(game.Options{Mode: "coop", Names: []string{"孩子", "家长"}, MissionID: "launch-formation"})
+	h := newProtocolHarness(t, r, false, "quiet", "https://flytogether.example")
+	h.send(t, map[string]any{"type": "conversation.item.input_audio_transcription.completed", "item_id": "mission-question", "transcript": "请查一下本局任务卡的目标和进度"})
+	readUntil(t, h.ctx, h.browser, "stt")
+	spectatorRequest(t, h.ctx, h.requests, "session.update")
+	request := spectatorRequest(t, h.ctx, h.requests, "response.create")
+	choice := request["response"].(map[string]any)["tool_choice"].(map[string]any)
+	if choice["type"] != "mcp" || choice["server_label"] != gameMCPLabel || choice["name"] != "get_mission_progress" {
+		t.Fatalf("fact question was not forced through read-only MCP: %#v", request)
+	}
+	h.send(t, map[string]any{"type": "response.created", "response": map[string]any{"id": "mission-answer"}})
+	readUntil(t, h.ctx, h.browser, "response.created")
+	h.send(t, map[string]any{"type": "response.mcp_call.in_progress", "response_id": "mission-answer", "item_id": "mission-progress"})
+	h.send(t, map[string]any{"type": "response.done", "response": map[string]any{"id": "mission-answer", "status": "completed"}})
+	h.send(t, map[string]any{"type": "response.output_item.done", "item": map[string]any{"id": "mission-progress", "type": "mcp_call", "name": "get_mission_progress", "output": `{"status":"active","progress":0}`}})
+	var status map[string]any
+	for {
+		status = readUntil(t, h.ctx, h.browser, "mcp_call_status")
+		if status["status"] == "completed" {
+			break
+		}
+	}
+	continuation := spectatorRequest(t, h.ctx, h.requests, "response.create")
+	if continuation["response"].(map[string]any)["tool_choice"] != "none" {
+		t.Fatalf("MCP answer must not loop into another tool call: %#v", continuation)
+	}
+	h.send(t, map[string]any{"type": "response.created", "response": map[string]any{"id": "mission-answer-final"}})
+	readUntil(t, h.ctx, h.browser, "response.created")
+	h.send(t, map[string]any{"type": "response.done", "response": map[string]any{"id": "mission-answer-final", "status": "completed"}})
+	readUntil(t, h.ctx, h.browser, "response.done")
+	if state := protocolState(t, r); state.Version != 1 || state.Mission == nil || state.Mission.Progress != 0 {
+		t.Fatalf("fact query changed the game state: %+v", state)
 	}
 }

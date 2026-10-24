@@ -420,15 +420,23 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 	deferredMCPDone := map[string]bool{}
 	failedMCP := map[string]bool{}
 	seenInputs := map[string]bool{}
+	activeGrantResponse := func() string {
+		for responseID, grant := range grants {
+			if grant == currentToken {
+				return responseID
+			}
+		}
+		return ""
+	}
 	continueMCPResponse := func(responseID string) error {
 		if !deferredMCPDone[responseID] || len(pendingMCP[responseID]) > 0 {
 			return nil
 		}
 		delete(deferredMCPDone, responseID)
 		delete(grants, responseID)
-		request := map[string]any{"type": "response.create"}
+		request := map[string]any{"type": "response.create", "response": map[string]any{"tool_choice": "none"}}
 		if failedMCP[responseID] {
-			request["response"] = map[string]any{"tool_choice": "none", "instructions": "棋局只读查询工具暂时不可用。请简短说明目前无法读取实时棋局信息，不要猜测棋局状态或任务进度。"}
+			request["response"].(map[string]any)["instructions"] = "棋局只读查询工具暂时不可用。请简短说明目前无法读取实时棋局信息，不要猜测棋局状态或任务进度。"
 		}
 		if err := sendUp(request); err != nil {
 			return errors.New("灵矽无法继续生成MCP查询回复")
@@ -672,6 +680,10 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			response := map[string]any{"type": "response.create"}
 			allowModelTools = true
+			factQuestion := mcpTool != nil && isGameFactQuestion(body.Transcript)
+			if factQuestion {
+				response["response"] = map[string]any{"tool_choice": map[string]any{"type": "mcp", "server_label": gameMCPLabel, "name": "get_mission_progress"}}
+			}
 			// A previous read-aloud script must never become the next turn's facts.
 			if narrationContext != "" {
 				if e := sendUp(map[string]any{"type": "conversation.item.delete", "item_id": narrationContext}); e != nil {
@@ -691,8 +703,15 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			session := sessionInstructions["session"].(map[string]any)
 			session["instructions"] = session["instructions"].(string) + "棋局只读问答优先调用原生MCP读取当前状态、任务进度、规则与合法走法；MCP工具只读，不能执行棋局动作。需要操作时只能调用现有游戏工具，并等待服务端真实结果。" + companion.Instructions()
+			if factQuestion && mcpTool != nil {
+				session["instructions"] = session["instructions"].(string) + "本轮是棋局事实查询，回答前必须调用原生MCP的get_mission_progress读取任务事实；不得调用掷骰、走棋或道具等游戏操作工具。"
+			}
 			voiceText := gate.commandText(body.Transcript)
 			action, handled := planVoiceAction(r, voiceText)
+			if factQuestion {
+				// A question about the game is not an implicit move or dice command.
+				handled = false
+			}
 			if mode, ok := r.(interface{ ReadOnly() bool }); ok && mode.ReadOnly() && handled && action.Name != "get_game_state" {
 				state, _, stateOK := roomGame(r)
 				if stateOK {
@@ -880,32 +899,41 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 			continue
 		case "response.mcp_call.in_progress", "response.mcp_call.completed", "response.mcp_call.failed":
-			if !inFlight || grants[event.ResponseID] != currentToken {
+			responseID := event.ResponseID
+			if responseID == "" {
+				responseID = activeGrantResponse()
+			}
+			if !inFlight || responseID == "" || grants[responseID] != currentToken {
 				continue
 			}
-			seenMCP[event.ResponseID] = true
-			if pendingMCP[event.ResponseID] == nil {
-				pendingMCP[event.ResponseID] = map[string]bool{}
+			seenMCP[responseID] = true
+			if pendingMCP[responseID] == nil {
+				pendingMCP[responseID] = map[string]bool{}
 			}
 			code := "running"
 			switch event.Type {
 			case "response.mcp_call.in_progress":
-				pendingMCP[event.ResponseID][event.ItemID] = true
+				pendingMCP[responseID][event.ItemID] = true
 			case "response.mcp_call.completed":
 				code = "completed"
-				delete(pendingMCP[event.ResponseID], event.ItemID)
+				delete(pendingMCP[responseID], event.ItemID)
 			case "response.mcp_call.failed":
 				code = "failed"
-				failedMCP[event.ResponseID] = true
-				delete(pendingMCP[event.ResponseID], event.ItemID)
+				failedMCP[responseID] = true
+				delete(pendingMCP[responseID], event.ItemID)
 			}
-			trace(room.DiagnosticEvent{Kind: "mcp", InputID: responseInputs[event.ResponseID], Ref: event.ItemID, Action: "readonly_call", Code: code})
-			if e := continueMCPResponse(event.ResponseID); e != nil {
+			trace(room.DiagnosticEvent{Kind: "mcp", InputID: responseInputs[responseID], Ref: event.ItemID, Action: "readonly_call", Code: code})
+			_ = sendBrowser(map[string]any{"type": "mcp_call_status", "status": code})
+			if e := continueMCPResponse(responseID); e != nil {
 				return e
 			}
 			continue
 		case "response.output_item.done", "conversation.item.done":
-			if !inFlight || !allowModelTools || grants[event.ResponseID] != currentToken {
+			responseID := event.ResponseID
+			if responseID == "" {
+				responseID = activeGrantResponse()
+			}
+			if !inFlight || !allowModelTools || responseID == "" || grants[responseID] != currentToken {
 				continue
 			}
 			var body struct {
@@ -922,17 +950,18 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				body.Item.Grant = grants[event.ResponseID]
 				calls[event.ResponseID] = append(calls[event.ResponseID], body.Item)
 			case "mcp_call":
-				seenMCP[event.ResponseID] = true
-				if pendingMCP[event.ResponseID] == nil {
-					pendingMCP[event.ResponseID] = map[string]bool{}
+				seenMCP[responseID] = true
+				if pendingMCP[responseID] == nil {
+					pendingMCP[responseID] = map[string]bool{}
 				}
 				itemID := event.ItemID
 				if itemID == "" {
 					itemID = body.Item.ID
 				}
-				delete(pendingMCP[event.ResponseID], itemID)
-				trace(room.DiagnosticEvent{Kind: "mcp", InputID: responseInputs[event.ResponseID], Ref: itemID, Action: "readonly_call", Code: "completed"})
-				if e := continueMCPResponse(event.ResponseID); e != nil {
+				delete(pendingMCP[responseID], itemID)
+				trace(room.DiagnosticEvent{Kind: "mcp", InputID: responseInputs[responseID], Ref: itemID, Action: "readonly_call", Code: "completed"})
+				_ = sendBrowser(map[string]any{"type": "mcp_call_status", "status": "completed"})
+				if e := continueMCPResponse(responseID); e != nil {
 					return e
 				}
 			}
@@ -989,9 +1018,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 					continue
 				}
 				delete(grants, event.ResponseID)
-				request := map[string]any{"type": "response.create"}
+				request := map[string]any{"type": "response.create", "response": map[string]any{"tool_choice": "none"}}
 				if failedMCP[event.ResponseID] {
-					request["response"] = map[string]any{"tool_choice": "none", "instructions": "棋局只读查询工具暂时不可用。请简短说明目前无法读取实时棋局信息，不要猜测棋局状态或任务进度。"}
+					request["response"].(map[string]any)["instructions"] = "棋局只读查询工具暂时不可用。请简短说明目前无法读取实时棋局信息，不要猜测棋局状态或任务进度。"
 				}
 				if e := sendUp(request); e != nil {
 					return errors.New("灵矽无法继续生成MCP查询回复")
@@ -1148,6 +1177,18 @@ func addRealtimeMCP(update map[string]any, tool map[string]any) {
 	tools, _ := session["tools"].([]map[string]any)
 	session["tools"] = append(append([]map[string]any(nil), tools...), tool)
 	session["tool_choice"] = "auto"
+}
+
+func isGameFactQuestion(text string) bool {
+	question := false
+	for _, word := range []string{"什么", "多少", "几个", "谁", "哪些", "怎么", "如何", "为什么", "吗", "介绍", "解释", "查一下", "查询", "告诉我", "目前", "现在轮到", "当前进度"} {
+		question = question || strings.Contains(text, word)
+	}
+	fact := false
+	for _, word := range []string{"棋局", "任务", "规则", "飞机", "卡", "道具", "玩家", "进度", "房间", "救援", "星际", "轮到", "回合", "掷骰"} {
+		fact = fact || strings.Contains(text, word)
+	}
+	return question && fact
 }
 
 func realtimeReadOnlySessionUpdate(model string) map[string]any {
