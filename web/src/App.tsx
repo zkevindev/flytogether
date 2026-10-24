@@ -340,7 +340,7 @@ export default function App() {
       const message = error instanceof Error ? error.message : '语音连接失败';
       setAutoVoiceError(message); setToast(message); reportVoiceFailure(message);
     }
-  }, [accept]);
+  }, [accept, config?.diagnostics?.enabled]);
   const changeCompanion = (next: CompanionPreferences) => {
     localStorage.setItem('fly-companion', JSON.stringify(next));
     narrator.current.stop(); voice.current?.setCompanion(next); setCompanion(next);

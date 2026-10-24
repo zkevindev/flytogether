@@ -38,7 +38,8 @@
     "test:accessibility:browser": "node scripts/accessibility-browser.mjs",
     "test:unit": "npm run test:board && npm run test:voice && npm run test:presentation && npm run test:scene && npm run test:narration && npm run test:experience",
     "test:admin:browser": "node scripts/admin-browser.mjs",
-    "test:admin:records": "node scripts/admin-records-browser.mjs"
+    "test:admin:records": "node scripts/admin-records-browser.mjs",
+    "test:admin:client-error": "node scripts/admin-client-error-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",
