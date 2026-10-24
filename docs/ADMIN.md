@@ -57,6 +57,7 @@ go test -race ./...
 npm --prefix web run test:unit
 npm --prefix web run build
 QA_BASE_URL=http://127.0.0.1:8080 QA_ADMIN_KEY_FILE=/path/to/private/admin-key npm --prefix web run test:admin:browser
+QA_BASE_URL=http://127.0.0.1:8080 QA_ADMIN_KEY_FILE=/path/to/private/admin-key npm --prefix web run test:admin:client-error
 ```
 
 真实语音六句联调后，可用相同管理员密钥验证已记录内容与实际页面：
