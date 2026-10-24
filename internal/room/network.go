@@ -324,6 +324,7 @@ func (s *Store) JoinProfile(session, id, invite, name, profileID, avatar string)
 type VoiceRoom struct {
 	r            *Room
 	actor, lease string
+	readOnly     bool
 }
 type GameSession interface {
 	Snapshot() View
@@ -335,6 +336,9 @@ type GameSession interface {
 }
 
 func (r *Room) VoiceFor(session string) (*VoiceRoom, error) {
+	return r.VoiceForMode(session, false)
+}
+func (r *Room) VoiceForMode(session string, readOnly bool) (*VoiceRoom, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.actorOK(session, false); err != nil {
@@ -349,7 +353,7 @@ func (r *Room) VoiceFor(session string) (*VoiceRoom, error) {
 	lease := game.ID()
 	r.voiceLease = lease
 	r.voiceActor = session
-	return &VoiceRoom{r, session, lease}, nil
+	return &VoiceRoom{r: r, actor: session, lease: lease, readOnly: readOnly}, nil
 }
 func (v *VoiceRoom) Close() {
 	v.VoiceState("disconnected")
@@ -362,8 +366,12 @@ func (v *VoiceRoom) Close() {
 }
 func (v *VoiceRoom) Snapshot() View               { return v.r.SnapshotFor(v.actor) }
 func (v *VoiceRoom) VoiceSettings() VoiceSettings { return v.r.VoiceSettings() }
-func (v *VoiceRoom) BeginSpeech() error           { return v.r.beginSpeech(v.actor, v.lease) }
+func (v *VoiceRoom) ReadOnly() bool               { return v.readOnly }
+func (v *VoiceRoom) BeginSpeech() error           { return v.r.beginSpeechMode(v.actor, v.lease, v.readOnly) }
 func (v *VoiceRoom) CurrentActionToken() string {
+	if v.readOnly {
+		return ""
+	}
 	v.r.mu.Lock()
 	defer v.r.mu.Unlock()
 	if v.r.voiceLease != v.lease || v.r.grantActor != v.actor || v.r.used {
@@ -379,6 +387,9 @@ func (v *VoiceRoom) VoiceState(state string) {
 	}
 }
 func (v *VoiceRoom) Tool(name string, args map[string]string) (any, error) {
+	if v.readOnly && name != "get_game_state" && name != "get_legal_moves" {
+		return nil, fail("VOICE_READ_ONLY", "只问不操作已开启，这次语音没有执行棋局操作；你仍可用按钮操作棋局")
+	}
 	return v.r.tool(name, args, v.actor, v.lease)
 }
 

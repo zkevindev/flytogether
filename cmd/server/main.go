@@ -581,7 +581,7 @@ func (s *server) voiceSocket(w http.ResponseWriter, r *http.Request) {
 		failure(w, err)
 		return
 	}
-	sessionRoom, err := v.VoiceFor(cookie(r))
+	sessionRoom, err := v.VoiceForMode(cookie(r), r.URL.Query().Get("mode") == "ask")
 	if err != nil {
 		failure(w, err)
 		return

@@ -276,6 +276,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 		}
 		if event.Type == "session.created" {
 			update := realtimeSessionUpdate(b.Config.Model)
+			if mode, ok := r.(interface{ ReadOnly() bool }); ok && mode.ReadOnly() {
+				update = realtimeReadOnlySessionUpdate(b.Config.Model)
+			}
 			if spectator {
 				update = realtimeSpectatorSessionUpdate(b.Config.Model)
 			}
@@ -610,6 +613,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				narrationContext = ""
 			}
 			sessionInstructions := realtimeSessionUpdate(b.Config.Model)
+			if mode, ok := r.(interface{ ReadOnly() bool }); ok && mode.ReadOnly() {
+				sessionInstructions = realtimeReadOnlySessionUpdate(b.Config.Model)
+			}
 			if spectator {
 				sessionInstructions = realtimeSpectatorSessionUpdate(b.Config.Model)
 			}
@@ -617,6 +623,15 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			session["instructions"] = session["instructions"].(string) + companion.Instructions()
 			voiceText := gate.commandText(body.Transcript)
 			action, handled := planVoiceAction(r, voiceText)
+			if mode, ok := r.(interface{ ReadOnly() bool }); ok && mode.ReadOnly() && handled && action.Name != "get_game_state" {
+				state, _, stateOK := roomGame(r)
+				if stateOK {
+					action = readonlyAction(state, action)
+				} else {
+					action = voiceAction{Name: "get_game_state", Notice: "只问不操作已开启，这次没有执行棋局操作。"}
+				}
+				handled = true
+			}
 			if awaitingLaunchChoice {
 				if choice, ok := pendingLaunchChoice(r, voiceText); ok {
 					action, handled = choice, true
@@ -957,6 +972,14 @@ func realtimeSessionUpdate(model string) map[string]any {
 		},
 		"tools": realtimeTools(), "tool_choice": "auto",
 	}}
+}
+
+func realtimeReadOnlySessionUpdate(model string) map[string]any {
+	update := realtimeSessionUpdate(model)
+	session := update["session"].(map[string]any)
+	session["instructions"] = "你是一起飞的语音陪玩，但当前开启了只问不操作。可以回答棋局、规则、道具和策略问题；绝不掷骰、走棋、用道具、确认建议或暂停结束。用户说了操作指令时，明确告诉他这次没有执行，并提醒可用棋盘按钮操作。只查询实时棋局事实，不编造结果。" + session["instructions"].(string)
+	session["tools"] = []map[string]any{realtimeTools()[0]}
+	return update
 }
 
 func realtimeSpectatorSessionUpdate(model string) map[string]any {

@@ -29,7 +29,7 @@ export class VoiceClient {
   private hostResponses = new Set<string>();
   private activeSources = new Set<AudioBufferSourceNode>();
 
-  constructor(private roomID: string, private onState: (s: string) => void, private onText: (s: string, who: string) => void, private onError: (s: string) => void, private companion: CompanionPreferences = {style:'warm',frequency:'normal'}, private onRoom?: (room: Room) => void, private socketPath = '/ws/voice') {}
+  constructor(private roomID: string, private onState: (s: string) => void, private onText: (s: string, who: string) => void, private onError: (s: string) => void, private companion: CompanionPreferences = {style:'warm',frequency:'normal'}, private onRoom?: (room: Room) => void, private socketPath = '/ws/voice', private readOnly = false) {}
 
   setCompanion(value: CompanionPreferences) {
     this.companion = value;
@@ -73,7 +73,7 @@ export class VoiceClient {
       this.source.connect(this.capture);
       this.capture.connect(this.audio.destination);
 
-      const ws = new WebSocket(socketURL(this.socketPath + '?room_id=' + encodeURIComponent(this.roomID) + '&style=' + this.companion.style + '&frequency=' + this.companion.frequency));
+      const ws = new WebSocket(socketURL(this.socketPath + '?room_id=' + encodeURIComponent(this.roomID) + '&style=' + this.companion.style + '&frequency=' + this.companion.frequency + (this.readOnly && this.socketPath === '/ws/voice' ? '&mode=ask' : '')));
       this.ws = ws;
       ws.binaryType = 'arraybuffer';
       await new Promise<void>((resolve, reject) => {
