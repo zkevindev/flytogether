@@ -42,6 +42,7 @@ type member struct {
 	offlineSince      time.Time
 	index             int
 	ready             bool
+	blocked           []string
 }
 
 // Credentials and the membership map never enter a room snapshot.
@@ -52,6 +53,12 @@ func (r *Room) initOwner(session string, network bool) {
 		r.status = "waiting"
 		r.invite = game.ID()
 		r.members = map[string]member{session: {index: 0, ready: true}}
+		r.spectateOn = true
+		r.chatOn = true
+		r.spectateToken = game.ID()
+		if r.spectators == nil {
+			r.spectators = map[string]spectator{}
+		}
 	}
 }
 func (r *Room) isMember(session string) bool {
@@ -80,6 +87,9 @@ func (r *Room) personalized(session string) View {
 		if m, ok := r.members[session]; ok {
 			v.Me = &Me{PlayerID: r.state.Players[m.index].ID, Host: session == r.owner}
 			v.Network.CanClaimHost = r.hostClaimable && session != r.owner && r.online(session)
+			v.Audience = r.audienceBody(session, false)
+		} else if r.isSpectator(session) {
+			return r.audienceView(session)
 		} else {
 			v.Network = nil
 		}
@@ -218,6 +228,8 @@ func (r *Room) joinProfile(session, invite, name, profileID, avatar string) (res
 	}
 	for i := range r.state.Players {
 		if !used[i] {
+			delete(r.spectators, session)
+			delete(r.spectatorLeases, session)
 			r.members[session] = member{index: i}
 			r.names[session] = name
 			r.state.Players[i].Name = name
@@ -302,6 +314,7 @@ func (s *Store) JoinProfile(session, id, invite, name, profileID, avatar string)
 	if _, e := r.joinProfile(session, invite, name, profileID, avatar); e != nil {
 		return nil, e
 	}
+	delete(s.audiences, session)
 	s.sessions[session] = id
 	return r, nil
 }

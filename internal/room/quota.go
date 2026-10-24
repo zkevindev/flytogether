@@ -12,7 +12,7 @@ var ErrVoiceBudget = errors.New("今天的语音额度已用完，仍可点击�
 // ReserveVoice counts upstream connection attempts, including failed attempts.
 // It persists across restarts and has no audio, transcript or credential data.
 func (s *Store) ReserveVoice(ctx context.Context, kind string, limit int) error {
-	if s.storage == nil || limit < 1 || (kind != "realtime" && kind != "tts") {
+	if s.storage == nil || limit < 1 || (kind != "realtime" && kind != "tts" && kind != "spectator") {
 		return errors.New("语音额度暂时不可用，请使用点击操作")
 	}
 	day := time.Now().UTC().Format("2006-01-02")

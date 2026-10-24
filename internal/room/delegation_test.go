@@ -279,7 +279,7 @@ func TestSchema5UpgradeDefaultsDelegationOff(t *testing.T) {
 	}
 	var version int
 	_ = next.storage.db.QueryRow("PRAGMA user_version").Scan(&version)
-	if version != 6 {
+	if version != databaseSchema {
 		t.Fatal("schema not upgraded")
 	}
 	b, _ := json.Marshal(restored.SnapshotFor("h").Network.Seats)

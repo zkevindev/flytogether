@@ -25,16 +25,27 @@ func (c Config) Enabled() bool {
 }
 
 type Bridge struct {
-	Observe        func(room.DiagnosticEvent)
-	Config         Config
-	MaxConnections int
-	SessionTimeout time.Duration
-	Reserve        func(context.Context) error
-	mu             sync.Mutex
-	active         int
+	Observe          func(room.DiagnosticEvent)
+	Config           Config
+	MaxConnections   int
+	SpectatorMax     int
+	SessionTimeout   time.Duration
+	Reserve          func(context.Context) error
+	ReserveSpectator func(context.Context) error
+	mu               sync.Mutex
+	active           int
+	spectators       int
 }
 
 func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.GameSession, preferences ...CompanionPreferences) (result error) {
+	spectator := false
+	if marker, ok := r.(interface{ SpectatorVoice() bool }); ok {
+		spectator = marker.SpectatorVoice()
+	}
+	voiceSource := "realtime"
+	if spectator {
+		voiceSource = "spectator"
+	}
 	sessionID := game.ID()
 	currentInput := ""
 	inputTimes := map[string]time.Time{}
@@ -50,7 +61,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			e.SessionID = sessionID
 
 			if e.Source == "" {
-				e.Source = "realtime"
+				e.Source = voiceSource
 			}
 			view := r.Snapshot()
 			var state game.State
@@ -87,13 +98,33 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 		duration = 15 * time.Minute
 	}
 	b.mu.Lock()
-	if b.active >= limit {
+	if spectator {
+		spectatorLimit := b.SpectatorMax
+		if spectatorLimit <= 0 {
+			spectatorLimit = 4
+		}
+		if b.spectators >= spectatorLimit {
+			b.mu.Unlock()
+			return errors.New("观赛助手名额已满，仍可安静观看棋局")
+		}
+		b.spectators++
+	} else if b.active >= limit {
 		b.mu.Unlock()
 		return errors.New("另一间房正在使用语音，请稍后再试")
+	} else {
+		b.active++
 	}
-	b.active++
 	b.mu.Unlock()
-	defer func() { b.mu.Lock(); b.active--; b.mu.Unlock(); r.VoiceState("disconnected") }()
+	defer func() {
+		b.mu.Lock()
+		if spectator {
+			b.spectators--
+		} else {
+			b.active--
+		}
+		b.mu.Unlock()
+		r.VoiceState("disconnected")
+	}()
 	ctx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	defer func() {
@@ -101,7 +132,16 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			result = errors.New("本次语音已到时限，请点击重新连接；仍可点击棋盘继续游戏")
 		}
 	}()
-	if b.Reserve != nil {
+	if spectator {
+		if b.ReserveSpectator != nil {
+			if err := b.ReserveSpectator(ctx); err != nil {
+				if errors.Is(err, room.ErrVoiceBudget) {
+					return errors.New("观赛助手今天的额度已用完，仍可安静观看")
+				}
+				return errors.New("观赛助手暂时不可用，仍可安静观看")
+			}
+		}
+	} else if b.Reserve != nil {
 		if err := b.Reserve(ctx); err != nil {
 			return err
 		}
@@ -224,7 +264,11 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			return errors.New("灵矽拒绝了实时会话，请检查模型、API Key 和控制台配置")
 		}
 		if event.Type == "session.created" {
-			if e = sendUp(realtimeSessionUpdate(b.Config.Model)); e != nil {
+			update := realtimeSessionUpdate(b.Config.Model)
+			if spectator {
+				update = realtimeSpectatorSessionUpdate(b.Config.Model)
+			}
+			if e = sendUp(update); e != nil {
 				return errors.New("灵矽实时会话初始化失败")
 			}
 			break
@@ -530,6 +574,9 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				narrationContext = ""
 			}
 			sessionInstructions := realtimeSessionUpdate(b.Config.Model)
+			if spectator {
+				sessionInstructions = realtimeSpectatorSessionUpdate(b.Config.Model)
+			}
 			session := sessionInstructions["session"].(map[string]any)
 			session["instructions"] = session["instructions"].(string) + companion.Instructions()
 			voiceText := gate.commandText(body.Transcript)
@@ -544,6 +591,10 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			if action.Pending {
 				awaitingLaunchChoice = true
 			} else if action.Name == "use_prop" && action.PropID == "launch" {
+				awaitingLaunchChoice = false
+			}
+			if spectator && handled && (action.Name != "get_game_state" || strings.Contains(action.Notice, "掷骰") || strings.Contains(action.Notice, "飞机") || strings.Contains(action.Notice, "操作")) {
+				action = voiceAction{Name: "get_game_state", Notice: "这是只属于你的观赛助手。我不能替选手掷骰、走棋、用卡或控制房间，也不会把这句话转成比赛指令。你可以继续问现在轮到谁、谁更接近终点，或刚才发生了什么。"}
 				awaitingLaunchChoice = false
 			}
 			if handled {
@@ -640,6 +691,11 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				// prior host-only instruction despite a newer response override.
 				sessionInstructions["session"].(map[string]any)["instructions"] = instructions
 				response["response"] = map[string]any{"tool_choice": "none", "instructions": instructions}
+			}
+			if spectator && !handled {
+				fresh := b.executeTool(r, functionCall{Type: "function_call", Name: "get_game_state", CallID: "watch-" + game.ID(), Arguments: "{}"})
+				session := sessionInstructions["session"].(map[string]any)
+				session["instructions"] = session["instructions"].(string) + "本轮已刷新的权威棋局，回答必须以此为准。recent_events 没有记录的过去事件要明确说明不知道，禁止编造点数、胜负，禁止声称已替选手操作：" + fresh
 			}
 			if e := sendUp(sessionInstructions); e != nil {
 				return e
@@ -845,6 +901,19 @@ func realtimeSessionUpdate(model string) map[string]any {
 			"output": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 24000}},
 		},
 		"tools": realtimeTools(), "tool_choice": "auto",
+	}}
+}
+
+func realtimeSpectatorSessionUpdate(model string) map[string]any {
+	return map[string]any{"type": "session.update", "session": map[string]any{
+		"type": "realtime", "model": model, "output_modalities": []string{"audio"},
+		"instructions": "你是一位观众的私人飞行棋讲解员，只和这一位观众对话。用简短中文回答谁领先、轮到谁、刚才发生了什么、规则和道具。每次回答棋局问题都以本轮刷新的工具结果为准，不凭旧对话记忆编造点数或胜负；没有记录的过去事件要直接说明不知道。你不能掷骰、走棋、使用道具、暂停、结束或把观众的话转成选手指令。回复只给这位观众，不提及其他人的私人对话。不要朗读内部ID、授权或技术字段。",
+		"audio": map[string]any{
+			"input": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 16000}, "transcription": map[string]any{},
+				"turn_detection": map[string]any{"type": "server_vad", "create_response": false, "interrupt_response": true}},
+			"output": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 24000}},
+		},
+		"tools": []map[string]any{realtimeTools()[0]}, "tool_choice": "auto",
 	}}
 }
 

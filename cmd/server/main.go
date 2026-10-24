@@ -47,6 +47,8 @@ func main() {
 	for key, spec := range map[string][3]int{
 		"LINGXI_MAX_CONNECTIONS": {4, 1, 32}, "LINGXI_SESSION_SECONDS": {900, 30, 3600},
 		"LINGXI_REALTIME_DAILY_LIMIT": {2000, 1, 100000}, "LINGXI_TTS_DAILY_LIMIT": {1000, 1, 100000},
+		"SPECTATOR_CAPACITY": {8, 1, 32}, "SPECTATOR_JOINS_PER_MINUTE": {20, 1, 120},
+		"SPECTATOR_MAX_CONNECTIONS": {4, 1, 32}, "SPECTATOR_REALTIME_DAILY_LIMIT": {500, 1, 100000},
 	} {
 		value, e := positiveEnv(key, spec[0], spec[1], spec[2])
 		if e != nil {
@@ -96,9 +98,14 @@ func main() {
 		os.Exit(1)
 	}
 	savedStore.SetDelegationDelay(time.Duration(delegationDelay) * time.Second)
+	savedStore.SetAudienceLimits(limits["SPECTATOR_CAPACITY"], limits["SPECTATOR_JOINS_PER_MINUTE"])
 	s.bridge.Observe = savedStore.Diagnostic
 	s.bridge.MaxConnections = limits["LINGXI_MAX_CONNECTIONS"]
+	s.bridge.SpectatorMax = limits["SPECTATOR_MAX_CONNECTIONS"]
 	s.bridge.SessionTimeout = time.Duration(limits["LINGXI_SESSION_SECONDS"]) * time.Second
+	s.bridge.ReserveSpectator = func(ctx context.Context) error {
+		return savedStore.ReserveVoice(ctx, "spectator", limits["SPECTATOR_REALTIME_DAILY_LIMIT"])
+	}
 	s.bridge.Reserve = func(ctx context.Context) error {
 		return savedStore.ReserveVoice(ctx, "realtime", limits["LINGXI_REALTIME_DAILY_LIMIT"])
 	}
@@ -112,7 +119,7 @@ func main() {
 		writeJSON(w, 200, map[string]any{"status": "ok", "voice_configured": s.bridge.Config.Enabled(), "storage": "sqlite"})
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "host_reclaim_seconds": hostDelay, "delegation_seconds": delegationDelay, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "boards": game.Boards(), "diagnostics": savedStore.DiagnosticStatus()})
+		writeJSON(w, 200, map[string]any{"voice_configured": s.bridge.Config.Enabled(), "version": "0.1.0", "ruleset": "family-v1", "save_retention_hours": retention, "host_reclaim_seconds": hostDelay, "delegation_seconds": delegationDelay, "persistence_enabled": true, "voice_session_seconds": limits["LINGXI_SESSION_SECONDS"], "spectator_capacity": limits["SPECTATOR_CAPACITY"], "boards": game.Boards(), "diagnostics": savedStore.DiagnosticStatus()})
 	})
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("GET /api/family", s.family)
@@ -130,8 +137,15 @@ func main() {
 	mux.HandleFunc("POST /api/rooms/{id}/diagnostics", s.clientDiagnostic)
 	mux.HandleFunc("POST /api/rooms/{id}/voice-settings", s.voiceSettings)
 	mux.HandleFunc("POST /api/rooms/{id}/announcement", s.announcement)
+	mux.HandleFunc("POST /api/rooms/{id}/audience", s.configureAudience)
+	mux.HandleFunc("GET /api/rooms/{id}/watch", s.watchSnapshot)
+	mux.HandleFunc("POST /api/rooms/{id}/watch", s.watchJoin)
+	mux.HandleFunc("POST /api/rooms/{id}/watch/leave", s.watchLeave)
+	mux.HandleFunc("POST /api/rooms/{id}/chat", s.postChat)
+	mux.HandleFunc("POST /api/rooms/{id}/chat/block", s.blockChat)
 	mux.HandleFunc("GET /ws/game", s.gameSocket)
 	mux.HandleFunc("GET /ws/voice", s.voiceSocket)
+	mux.HandleFunc("GET /ws/audience-voice", s.audienceVoiceSocket)
 	webDir := env("WEB_DIR", "web/dist")
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" && r.Method != "HEAD" {
@@ -245,11 +259,14 @@ func failure(w http.ResponseWriter, err error) {
 		if code == "SAVE_UNAVAILABLE" {
 			status = 503
 		}
-		if code == "HOST_ONLY" || code == "NOT_YOUR_TURN" || code == "NOT_AUTHORIZED" || code == "SEAT_DELEGATED" {
+		if code == "HOST_ONLY" || code == "NOT_YOUR_TURN" || code == "NOT_AUTHORIZED" || code == "SEAT_DELEGATED" || code == "SPECTATE_CLOSED" || code == "AUDIENCE_FULL" || code == "CHAT_DISABLED" {
 			status = 403
 		}
-		if code == "STALE_STATE" || code == "VOICE_BUSY" || code == "COMMAND_CONFLICT" || code == "HOST_GRACE_PERIOD" || code == "HOST_ONLINE" {
+		if code == "STALE_STATE" || code == "VOICE_BUSY" || code == "COMMAND_CONFLICT" || code == "HOST_GRACE_PERIOD" || code == "HOST_ONLINE" || code == "SEAT_KEPT" {
 			status = 409
+		}
+		if code == "AUDIENCE_RATE" || code == "CHAT_RATE" {
+			status = 429
 		}
 	} else if err != nil {
 		message = err.Error()
@@ -330,11 +347,16 @@ func cookie(r *http.Request) string {
 	return c.Value
 }
 func (s *server) owned(w http.ResponseWriter, r *http.Request, id string) *room.Room {
-	v := s.store.Get(cookie(r), id)
-	if v == nil {
-		writeJSON(w, 401, map[string]string{"code": "NOT_AUTHORIZED", "message": "房间已过期，请重新开始"})
+	key := cookie(r)
+	if v := s.store.Get(key, id); v != nil {
+		return v
 	}
-	return v
+	if id != "" && s.store.AudienceRoom(key, id) != nil {
+		writeJSON(w, 403, map[string]string{"code": "NOT_AUTHORIZED", "message": "观众不能操作棋局或管理房间"})
+		return nil
+	}
+	writeJSON(w, 401, map[string]string{"code": "NOT_AUTHORIZED", "message": "房间已过期，请重新开始"})
+	return nil
 }
 func (s *server) session(w http.ResponseWriter, r *http.Request) {
 	if key := cookie(r); key != "" {
@@ -419,8 +441,14 @@ func (s *server) command(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, result)
 }
 func (s *server) gameSocket(w http.ResponseWriter, r *http.Request) {
-	v := s.owned(w, r, r.URL.Query().Get("room_id"))
+	key := cookie(r)
+	id := r.URL.Query().Get("room_id")
+	v := s.store.Get(key, id)
 	if v == nil {
+		v = s.store.AudienceRoom(key, id)
+	}
+	if v == nil {
+		writeJSON(w, 401, map[string]string{"code": "NOT_AUTHORIZED", "message": "房间已过期，请重新开始"})
 		return
 	}
 	c, e := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
@@ -445,13 +473,17 @@ func (s *server) gameSocket(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case b := <-ch:
-			if !v.HasMember(cookie(r)) {
+			var head struct {
+				Type string `json:"type"`
+			}
+			_ = json.Unmarshal(b, &head)
+			if head.Type != "audience_closed" && !v.HasAccess(cookie(r)) {
 				return
 			}
 			writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			e = c.Write(writeCtx, websocket.MessageText, b)
 			cancel()
-			if e != nil {
+			if e != nil || head.Type == "audience_closed" {
 				return
 			}
 		}

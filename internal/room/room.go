@@ -32,6 +32,7 @@ type View struct {
 	VoiceSettings VoiceSettings   `json:"voice_settings"`
 	Coach         *Coach          `json:"coach,omitempty"`
 	CoachExpired  bool            `json:"coach_expired,omitempty"`
+	Audience      *Audience       `json:"audience,omitempty"`
 }
 
 type VoiceSettings struct {
@@ -109,6 +110,16 @@ type Room struct {
 	coach            *Coach
 	coachPrevious    string
 	coachExpired     bool
+	spectateOn       bool
+	spectateToken    string
+	chatOn           bool
+	spectators       map[string]spectator
+	spectatorLeases  map[string]string
+	chat             []ChatMessage
+	chatAt           map[string][]time.Time
+	joinAt           []time.Time
+	spectatorLimit   int
+	joinRate         int
 }
 
 func New(o game.Options) *Room {
@@ -122,7 +133,7 @@ func New(o game.Options) *Room {
 		name = "家庭机场"
 	}
 	return &Room{hostReclaimDelay: DefaultHostReclaimDelay, instance: game.ID(), options: o, name: name, status: status, ID: game.ID(), state: game.New(o), voice: "disconnected", voiceSettings: DefaultVoiceSettings(), cache: map[string]cached{},
-		listeners: map[chan []byte]string{}, updated: time.Now()}
+		listeners: map[chan []byte]string{}, spectators: map[string]spectator{}, spectatorLeases: map[string]string{}, chatAt: map[string][]time.Time{}, updated: time.Now()}
 }
 
 func (r *Room) view() View {
@@ -168,6 +179,9 @@ func (r *Room) publish() {
 }
 func (r *Room) broadcast() {
 	for ch, session := range r.listeners {
+		if session != "" && !r.isMember(session) && !r.isSpectator(session) {
+			continue
+		}
 		b, _ := json.Marshal(map[string]any{"type": "state", "room": r.personalized(session)})
 		select {
 		case ch <- b:
@@ -306,6 +320,8 @@ func (r *Room) Do(c Command, voice bool) (result View, err error) {
 		r.voiceLease = ""
 		r.voiceActor = ""
 		r.cache = map[string]cached{}
+		r.chat = nil
+		r.spectatorLeases = map[string]string{}
 		return r.finish(&c, saveChange{ResetCommands: true})
 	}
 	if c.Action == "start" || c.Action == "pause" || c.Action == "resume" || c.Action == "end" {
@@ -567,17 +583,20 @@ func (r *Room) tool(name string, args map[string]string, actor string, leases ..
 }
 
 type Store struct {
-	delegationDelay  time.Duration
-	hostReclaimDelay time.Duration
-	storage          *database
-	retention        time.Duration
-	mu               sync.Mutex
-	rooms            map[string]*Room
-	sessions         map[string]string
+	delegationDelay   time.Duration
+	hostReclaimDelay  time.Duration
+	storage           *database
+	retention         time.Duration
+	mu                sync.Mutex
+	rooms             map[string]*Room
+	sessions          map[string]string
+	audiences         map[string]string
+	spectatorCapacity int
+	spectatorJoinRate int
 }
 
 func NewStore() *Store {
-	return &Store{hostReclaimDelay: DefaultHostReclaimDelay, retention: DefaultRetention, rooms: map[string]*Room{}, sessions: map[string]string{}}
+	return &Store{hostReclaimDelay: DefaultHostReclaimDelay, retention: DefaultRetention, rooms: map[string]*Room{}, sessions: map[string]string{}, audiences: map[string]string{}}
 }
 func (s *Store) Create(session string, o game.Options) (*Room, error) {
 	var err error
@@ -598,6 +617,8 @@ func (s *Store) Create(session string, o game.Options) (*Room, error) {
 	r.storage = s.storage
 	r.hostReclaimDelay = s.hostReclaimDelay
 	r.delegationDelay = s.delegationDelay
+	r.spectatorLimit = s.spectatorCapacity
+	r.joinRate = s.spectatorJoinRate
 	if _, err := r.finish(nil, saveChange{Session: session}); err != nil {
 		return nil, err
 	}
@@ -653,6 +674,11 @@ func (s *Store) Run(ctxDone <-chan struct{}) {
 					for key, rid := range s.sessions {
 						if rid == id {
 							delete(s.sessions, key)
+						}
+					}
+					for key, rid := range s.audiences {
+						if rid == id {
+							delete(s.audiences, key)
 						}
 					}
 					continue
@@ -730,6 +756,8 @@ func (s *Store) CreateNew(session string, o game.Options) (*Room, error) {
 	r.storage = s.storage
 	r.hostReclaimDelay = s.hostReclaimDelay
 	r.delegationDelay = s.delegationDelay
+	r.spectatorLimit = s.spectatorCapacity
+	r.joinRate = s.spectatorJoinRate
 	r.voiceSettings = settings
 	if _, err := r.finish(nil, saveChange{Session: session, DeleteRoom: deleteID}); err != nil {
 		return nil, err

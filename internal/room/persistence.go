@@ -20,34 +20,40 @@ import (
 
 const saveSchema = 1
 
-// Version 6 persists delegation consent/control. Older binaries must not ignore seat control state.
-const databaseSchema = 6
+// Version 7 persists spectator membership separately from seats. Older binaries must not drop watch access.
+const databaseSchema = 7
 const DefaultRetention = 7 * 24 * time.Hour
 
 type savedMember struct {
-	Delegated         bool   `json:"delegated,omitempty"`
-	AutoDelegate      bool   `json:"auto_delegate,omitempty"`
-	DelegationReason  string `json:"delegation_reason,omitempty"`
-	DelegationVersion int    `json:"delegation_version,omitempty"`
-	Index             int    `json:"index"`
-	Ready             bool   `json:"ready"`
+	Delegated         bool     `json:"delegated,omitempty"`
+	AutoDelegate      bool     `json:"auto_delegate,omitempty"`
+	DelegationReason  string   `json:"delegation_reason,omitempty"`
+	DelegationVersion int      `json:"delegation_version,omitempty"`
+	Index             int      `json:"index"`
+	Ready             bool     `json:"ready"`
+	Blocked           []string `json:"blocked,omitempty"`
 }
 type roomRecord struct {
-	HostChange    *HostChange            `json:"host_change,omitempty"`
-	Schema        int                    `json:"schema"`
-	ID            string                 `json:"id"`
-	Owner         string                 `json:"owner"`
-	Invite        string                 `json:"invite,omitempty"`
-	Members       map[string]savedMember `json:"members,omitempty"`
-	Names         map[string]string      `json:"names"`
-	Options       game.Options           `json:"options"`
-	Name          string                 `json:"name"`
-	Status        string                 `json:"status"`
-	State         *game.State            `json:"state"`
-	Seq           int                    `json:"seq"`
-	Updated       time.Time              `json:"updated"`
-	SavedAt       time.Time              `json:"saved_at"`
-	VoiceSettings VoiceSettings          `json:"voice_settings"`
+	HostChange      *HostChange               `json:"host_change,omitempty"`
+	Schema          int                       `json:"schema"`
+	ID              string                    `json:"id"`
+	Owner           string                    `json:"owner"`
+	Invite          string                    `json:"invite,omitempty"`
+	Members         map[string]savedMember    `json:"members,omitempty"`
+	Names           map[string]string         `json:"names"`
+	Options         game.Options              `json:"options"`
+	Name            string                    `json:"name"`
+	Status          string                    `json:"status"`
+	State           *game.State               `json:"state"`
+	Seq             int                       `json:"seq"`
+	Updated         time.Time                 `json:"updated"`
+	SavedAt         time.Time                 `json:"saved_at"`
+	VoiceSettings   VoiceSettings             `json:"voice_settings"`
+	SpectateEnabled bool                      `json:"spectate_enabled,omitempty"`
+	SpectateToken   string                    `json:"spectate_token,omitempty"`
+	ChatEnabled     bool                      `json:"chat_enabled,omitempty"`
+	Spectators      map[string]savedSpectator `json:"spectators,omitempty"`
+	Chat            []ChatMessage             `json:"chat,omitempty"`
 }
 type savedCommand struct {
 	Input Command `json:"input"`
@@ -68,9 +74,13 @@ type database struct {
 func (r *Room) record() roomRecord {
 	members := map[string]savedMember{}
 	for key, m := range r.members {
-		members[key] = savedMember{Index: m.index, Ready: m.ready, Delegated: m.delegated, AutoDelegate: m.autoDelegate, DelegationReason: m.delegationReason, DelegationVersion: m.delegationVersion}
+		members[key] = savedMember{Index: m.index, Ready: m.ready, Delegated: m.delegated, AutoDelegate: m.autoDelegate, DelegationReason: m.delegationReason, DelegationVersion: m.delegationVersion, Blocked: append([]string(nil), m.blocked...)}
 	}
-	return roomRecord{HostChange: r.hostChange, Schema: saveSchema, ID: r.ID, Owner: r.owner, Invite: r.invite, Members: members, Names: r.names, Options: r.options, Name: r.name, Status: r.status, State: r.state, Seq: r.seq, Updated: r.updated, SavedAt: r.savedAt, VoiceSettings: r.voiceSettings}
+	watchers := map[string]savedSpectator{}
+	for key, sp := range r.spectators {
+		watchers[key] = savedSpectator{Name: sp.Name, PublicID: sp.PublicID, Joined: sp.Joined, Blocked: append([]string(nil), sp.Blocked...)}
+	}
+	return roomRecord{HostChange: r.hostChange, Schema: saveSchema, ID: r.ID, Owner: r.owner, Invite: r.invite, Members: members, Names: r.names, Options: r.options, Name: r.name, Status: r.status, State: r.state, Seq: r.seq, Updated: r.updated, SavedAt: r.savedAt, VoiceSettings: r.voiceSettings, SpectateEnabled: r.spectateOn, SpectateToken: r.spectateToken, ChatEnabled: r.chatOn, Spectators: watchers, Chat: append([]ChatMessage(nil), r.chat...)}
 }
 func (r *Room) readRecord(p roomRecord) {
 	r.hostChange = p.HostChange
@@ -79,12 +89,24 @@ func (r *Room) readRecord(p roomRecord) {
 	r.voiceSettings = p.VoiceSettings
 	r.members = map[string]member{}
 	for key, m := range p.Members {
-		r.members[key] = member{index: m.Index, ready: m.Ready, delegated: m.Delegated, autoDelegate: m.AutoDelegate, delegationReason: m.DelegationReason, delegationVersion: m.DelegationVersion}
+		r.members[key] = member{index: m.Index, ready: m.Ready, delegated: m.Delegated, autoDelegate: m.AutoDelegate, delegationReason: m.DelegationReason, delegationVersion: m.DelegationVersion, blocked: sanitizeIDs(m.Blocked)}
 		if m.Delegated && m.DelegationVersion == 0 {
 			member := r.members[key]
 			member.delegationVersion = p.State.Version
 			r.members[key] = member
 		}
+	}
+	r.spectateOn, r.spectateToken, r.chatOn = p.SpectateEnabled, p.SpectateToken, p.ChatEnabled
+	r.spectators = map[string]spectator{}
+	for key, sp := range p.Spectators {
+		if key == "" || r.isMember(key) || !validDisplayName(sp.Name) || sp.PublicID == "" {
+			continue
+		}
+		r.spectators[key] = spectator{Name: sp.Name, PublicID: sp.PublicID, Joined: sp.Joined, Blocked: sanitizeIDs(sp.Blocked)}
+	}
+	r.chat = sanitizeChat(p.Chat)
+	if r.chatAt == nil {
+		r.chatAt = map[string][]time.Time{}
 	}
 }
 
@@ -101,6 +123,7 @@ type rollbackPoint struct {
 	hostOfflineSince                                       time.Time
 	hostClaimable                                          bool
 	offlineSince                                           map[string]time.Time
+	spectatorLeases                                        map[string]string
 }
 
 func (r *Room) beforeMutation() *rollbackPoint {
@@ -112,7 +135,7 @@ func (r *Room) beforeMutation() *rollbackPoint {
 	for key, m := range r.members {
 		offline[key] = m.offlineSince
 	}
-	return &rollbackPoint{data, r.cache, r.coach, r.coachPrevious, r.coachExpired, r.voice, r.grant, r.grantGame, r.grantActor, r.voiceActor, r.voiceLease, r.grantVersion, r.busy, r.used, r.restored, r.hostOfflineSince, r.hostClaimable, offline}
+	return &rollbackPoint{data, r.cache, r.coach, r.coachPrevious, r.coachExpired, r.voice, r.grant, r.grantGame, r.grantActor, r.voiceActor, r.voiceLease, r.grantVersion, r.busy, r.used, r.restored, r.hostOfflineSince, r.hostClaimable, offline, copyLeases(r.spectatorLeases)}
 }
 func (r *Room) rollback(p *rollbackPoint, err *error) {
 	if p == nil || *err == nil {
@@ -131,6 +154,7 @@ func (r *Room) restore(p *rollbackPoint) {
 	r.voice, r.grant, r.grantGame, r.grantActor, r.voiceActor, r.voiceLease = p.voice, p.grant, p.grantGame, p.grantActor, p.voiceActor, p.lease
 	r.grantVersion, r.busy, r.used, r.restored = p.grantVersion, p.busy, p.used, p.restored
 	r.hostOfflineSince, r.hostClaimable = p.hostOfflineSince, p.hostClaimable
+	r.spectatorLeases = copyLeases(p.spectatorLeases)
 	for key, m := range r.members {
 		m.offlineSince = p.offlineSince[key]
 		r.members[key] = m
@@ -223,7 +247,7 @@ func OpenStore(path string, retention time.Duration) (*Store, error) {
 		`CREATE TABLE IF NOT EXISTS diagnostic_events (id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL UNIQUE,at TEXT NOT NULL,room_id TEXT NOT NULL,game_id TEXT NOT NULL,version INTEGER NOT NULL,kind TEXT NOT NULL,source TEXT NOT NULL,session_id TEXT NOT NULL,input_id TEXT NOT NULL,ref TEXT NOT NULL,text TEXT NOT NULL,action TEXT NOT NULL,code TEXT NOT NULL,duration_ms INTEGER NOT NULL)`,
 		`CREATE INDEX IF NOT EXISTS diagnostic_events_game ON diagnostic_events(game_id,id DESC)`,
 		`CREATE INDEX IF NOT EXISTS diagnostic_events_at ON diagnostic_events(at)`,
-		"PRAGMA user_version=6",
+		"PRAGMA user_version=7",
 	} {
 		if _, err = tx.Exec(query); err != nil {
 			tx.Rollback()
@@ -341,7 +365,7 @@ func (s *Store) load() error {
 			}
 			continue
 		}
-		r := &Room{instance: game.ID(), storage: s.storage, cache: map[string]cached{}, listeners: map[chan []byte]string{}, voice: "disconnected", voiceSettings: DefaultVoiceSettings()}
+		r := &Room{instance: game.ID(), storage: s.storage, cache: map[string]cached{}, listeners: map[chan []byte]string{}, voice: "disconnected", voiceSettings: DefaultVoiceSettings(), spectators: map[string]spectator{}, spectatorLeases: map[string]string{}, chatAt: map[string][]time.Time{}}
 		r.readRecord(p)
 		if r.status == "playing" && r.state.Phase != "finished" {
 			r.status = "paused"
@@ -402,7 +426,19 @@ func (s *Store) load() error {
 			s.sessions[key] = id
 		}
 	}
-	return sessions.Err()
+	if err = sessions.Err(); err != nil {
+		return err
+	}
+	for _, r := range s.rooms {
+		for session := range r.spectators {
+			if r.isMember(session) {
+				delete(r.spectators, session)
+				continue
+			}
+			s.audiences[session] = r.ID
+		}
+	}
+	return nil
 }
 func (s *Store) quarantine(id string, data []byte) error {
 	tx, err := s.storage.db.Begin()
@@ -478,6 +514,11 @@ func (s *Store) Discard(session, id string) error {
 	for key, current := range s.sessions {
 		if current == id {
 			delete(s.sessions, key)
+		}
+	}
+	for key, current := range s.audiences {
+		if current == id {
+			delete(s.audiences, key)
 		}
 	}
 	return nil
