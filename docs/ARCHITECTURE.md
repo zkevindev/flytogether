@@ -609,6 +609,6 @@ GET `/api/family` 返回本人档案、总记录数与最近50局；POST `/api/f
 
 `fly-experience`仅存本浏览器，合法值为board:auto/flat、motion:system/reduced；未知值回默认，系统偏好change事件与同浏览器storage变更实时同步。设置面板和两种棋盘分别lazy加载；共用BoardFrame/SVG布局，轻量入口不引入Three。立体切换为轻量时卸载FlightScene，执行原有几何/纹理/材质、RAF、observer与context清理，不重启Go棋局。
 
-有效减少动画取显式设置或系统偏好。CSS通过html[data-motion]禁用过渡/装饰，Three逐帧读取当前标志，骰子停止旋转、飞机直接到目标、合法/落点高亮不脉动，庆祝保留文字并不创建粒子。presentation仍按服务端真实事件先骰子后飞机，只缩短过渡，静态骰子等待确认。
+有效减少动画取显式设置或系统偏好。CSS通过html[data-motion]禁用过渡/装饰，Three逐帧读取当前标志，骰子停止旋转、飞机直接到目标、合法/落点高亮不脉动，庆祝保留文字并不创建粒子。presentation仍按服务端真实事件先骰子后飞机，只缩短过渡，键盘模式的静态骰子等待确认，语音和点击沿用自动继续。键盘/指针事件更新当前输入方式，真实用户转写到达时退出键盘确认模式，避免先按过Tab后纯语音被弹窗阻塞。
 
 所有入口保留原生按钮。useDialog统一showModal、Tab边界与异步焦点恢复；新焦点已经进入预览/控件时，旧cleanup不抢回。快捷键只在对局主区域且无弹窗/输入/按钮焦点及合法canAct状态下执行，数字先只读预览，Enter仍提交Go命令，不改变授权、版本或去重。页面跳转定位main，SVG与文字操作保留编号/状态辅助。

@@ -73,6 +73,6 @@ npm --prefix web run capture:docs
 
 ## 轻量、减少动画和键盘（#31）
 
-当前10张图已从 `b7dc761` 重拍，新增头部设置与棋盘键盘入口。新增 [accessibility/manifest.json](images/accessibility/manifest.json) 记录6张公网真实Chrome截图：显示设置、键盘操作后的平面棋盘、手机平面与设置、等待确认的静态真实骰子、自然结束后的结算。
+当前10张图已从 `9b6cb8d` 重拍，新增头部设置与棋盘键盘入口。新增 [accessibility/manifest.json](images/accessibility/manifest.json) 记录6张公网真实Chrome截图：显示设置、键盘操作后的平面棋盘、手机平面与设置、等待确认的静态真实骰子、自然结束后的结算。
 
 创建/设置/道具/骰子/预览/确认/暂停/结束通过Tab与原生按键完成；自然局的中间步通过正式命令和服务端随机数推进后打开真实结算，未注入位置或点数。截图保留可见焦点，手机头部按钮换行完整、未横向溢出；设置弹窗可向下滚动。麦克风请求0，手机是桌面Chrome视口，不冒充实体低端设备评测。

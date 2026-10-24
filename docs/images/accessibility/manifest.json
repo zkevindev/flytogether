@@ -1,12 +1,12 @@
 {
-  "captured_at": "2026-10-24T07:47:58.650407+00:00",
-  "app_commit": "b7dc761",
+  "captured_at": "2026-10-24T08:01:45.636196+00:00",
+  "app_commit": "9b6cb8d",
   "browser": "155.0.8059.85",
   "scope": "Actual deployed app in Chrome: keyboard-only core flow and settings, production random dice, SVG light board and natural result reached via formal commands. No microphone or injected game state. Phone images are responsive viewport checks, not physical low-end devices.",
   "captures": [
     {
       "file": "experience-settings.png",
-      "sha256": "1cdb70ad3e7bcb63959c881a7763082e337ce7f89f6757d022d8ea6cd2b2c642",
+      "sha256": "98a262ad065310c6eb6932143a8999dcf88d0d477f906042ac393e71f121fd66",
       "viewport": {
         "width": 1360,
         "height": 1000
@@ -24,7 +24,7 @@
     },
     {
       "file": "light-mobile.png",
-      "sha256": "325eb6b4a2069bb7782aded68a568264648785a66dc70f0b9b951980c70441f4",
+      "sha256": "51e4d75e60d9b819a7b2a5552c655c2bf427264304113a84d279dc5ae6286e45",
       "viewport": {
         "width": 390,
         "height": 844
@@ -33,7 +33,7 @@
     },
     {
       "file": "light-result.png",
-      "sha256": "fbd088e5a3338014a44db0abe6774388aa362656d53059757319426c157277a8",
+      "sha256": "1f2b94b69bd878ac04d15c588c8fb69714fc82bc7c9d48514299b932aa25e39a",
       "viewport": {
         "width": 1360,
         "height": 1000
@@ -51,7 +51,7 @@
     },
     {
       "file": "settings-mobile.png",
-      "sha256": "cb6c2f4aed5e3de8c68c2e5fe710df45f39022e49a8d20c4bfba98b6c5d27abb",
+      "sha256": "c35273fa7533b9f73772e02f16e8600963d728a6a6bfd85734f87b9481ed73f5",
       "viewport": {
         "width": 390,
         "height": 844
