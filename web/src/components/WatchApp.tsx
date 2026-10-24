@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { AirplaneTilt, ArrowClockwise, House, Microphone, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
 import { BoardLoader } from './BoardLoader';
 import { KeyMoveNarration } from './KeyMoveNarration';
@@ -14,7 +15,7 @@ import { initialPresentation, presentationReducer } from '../lib/presentation';
 
 const PropEffects = lazy(() => import('./PropEffects').then(module => ({ default: module.PropEffects })));
 
-export function WatchApp({ code, onExit }: { code: string; onExit: () => void }) {
+export function WatchApp({ code, onExit, displayOnly = false }: { code: string; onExit: () => void; displayOnly?: boolean }) {
   const { preferences, change, reducedMotion } = useExperience();
   const [room, setRoom] = useState<Room>();
   const [config, setConfig] = useState<Config>();
@@ -33,6 +34,7 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
   const voice = useRef<VoiceClient | undefined>(undefined);
   const gameRef = useRef('');
   const closedRef = useRef('');
+  const displayJoinAttempt = useRef('');
   roomRef.current = room;
   closedRef.current = closed;
   const dot = code.indexOf('.');
@@ -118,6 +120,15 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
       setError(e instanceof Error ? e.message : '加入观赛没有成功');
     } finally { setBusy(false); }
   };
+  useEffect(() => {
+    if (!displayOnly || !roomID || !token || room?.audience?.me || displayJoinAttempt.current === roomID) return;
+    displayJoinAttempt.current = roomID;
+    let ignore = false;
+    void api<Room>('/api/rooms/' + encodeURIComponent(roomID) + '/watch', { token, name: '家庭大屏' }).then(value => { if (!ignore) accept(value); }).catch(e => {
+      if (!ignore) setError(e instanceof Error ? e.message : '大屏连接观赛失败');
+    });
+    return () => { ignore = true; };
+  }, [accept, displayOnly, room?.audience?.me, roomID, token]);
   const leave = async () => {
     voice.current?.disconnect();
     try { await api('/api/rooms/' + roomID + '/watch/leave', {}); } catch { /* Local exit still returns home. */ }
@@ -132,13 +143,27 @@ export function WatchApp({ code, onExit }: { code: string; onExit: () => void })
     try { await client.connect(); } catch (e) { setError(e instanceof Error ? e.message : '观赛助手没有连上，仍可继续观看'); }
   };
 
-  if (!room?.audience?.me) return <div className="loading-page join-page"><AirplaneTilt size={48} weight="fill" /><h1>来看这一局</h1><p>填写昵称即可观看，不占比赛席位，也不能替选手操作。</p>{seatKept ? <p role="alert">{error} 请回到自己的对局页面。</p> : <form onSubmit={e => { e.preventDefault(); void join(); }}><label className="field-label" htmlFor="watch-name">你的昵称</label><input id="watch-name" className="room-name-input" maxLength={10} required value={name} onChange={e => setName(e.target.value)} /><button className="primary-button" disabled={busy || !roomID}>开始观赛</button></form>}{error && !seatKept && <p role="alert">{error}</p>}<button className="text-button" onClick={onExit}>返回首页</button></div>;
+  if (!room?.audience?.me) return displayOnly
+    ? <div className="living-screen-loading" role="status"><AirplaneTilt size={48} weight="fill" /><h1>正在连接家庭棋盘</h1><p>{error || '请稍候，大屏正在同步当前棋局。'}</p></div>
+    : <div className="loading-page join-page"><AirplaneTilt size={48} weight="fill" /><h1>来看这一局</h1><p>填写昵称即可观看，不占比赛席位，也不能替选手操作。</p>{seatKept ? <p role="alert">{error} 请回到自己的对局页面。</p> : <form onSubmit={e => { e.preventDefault(); void join(); }}><label className="field-label" htmlFor="watch-name">你的昵称</label><input id="watch-name" className="room-name-input" maxLength={10} required value={name} onChange={e => setName(e.target.value)} /><button className="primary-button" disabled={busy || !roomID}>开始观赛</button></form>}{error && !seatKept && <p role="alert">{error}</p>}<button className="text-button" onClick={onExit}>返回首页</button></div>;
 
-  const state = presentation.game || room.state;
+  const state = displayOnly ? room.state : presentation.game || room.state;
   const current = state.players[state.current];
   const winner = state.players.find(player => player.id === state.winner);
   const latestNarrated = latestKeyMove(state);
   const steps = state.history.slice(-6).filter(step => step.id !== latestNarrated?.id);
+  const lastRoll = [...state.history].reverse().find(event => event.kind === 'rolled' && event.dice_rolls?.length);
+  if (displayOnly) return <main className="living-room-screen" aria-label="家庭大屏棋盘">
+    <header className="living-screen-header"><strong>一起飞 <span>家庭大屏</span></strong><span className={connected ? 'screen-live' : 'screen-offline'}>{connected ? '实时同步中' : '正在连接'}</span></header>
+    <section className="living-screen-board" aria-label="只读棋盘">
+      <div className="living-screen-status"><div className="living-screen-turn"><PlayerMarker index={state.current} /><strong>{winner ? `${winner.name}获胜` : `${current.name}的回合`}</strong></div><div className="living-screen-meta"><span>{state.board.name}</span><span>{state.phase === 'move' ? `掷出 ${state.dice} 点` : state.phase === 'finished' ? '本局结束' : lastRoll ? `刚才掷出 ${lastRoll.dice_rolls!.join('、')} 点` : '等待掷骰'}</span><span>{room.status === 'paused' ? '比赛暂停' : room.status === 'waiting' ? '等待开局' : '比赛进行中'}</span></div></div>
+      <KeyMoveNarration game={state} />
+      <div className="living-screen-canvas"><BoardLoader light={preferences.board === 'flat'} reducedMotion={reducedMotion} game={state} disabled onPiece={() => {}} onRoll={() => {}} /></div>
+      <ol className="living-screen-steps" aria-label="最近棋步">{steps.slice(-4).map(step => <li key={step.id}>{step.text}</li>)}</ol>
+      <div className="living-screen-crew" style={{ '--seats': state.players.length } as CSSProperties}>{state.players.map((player, index) => <div key={player.id} className={state.current === index && state.phase !== 'finished' ? 'current' : ''}><strong><PlayerMarker index={index} />{player.name}{player.ai ? ' · 机器人' : ''}</strong><span>{player.pieces.filter(piece => piece.progress === state.board.finish).length} 架抵达</span></div>)}</div>
+    </section>
+    {closed && <p className="living-screen-notice" role="status">{closed}</p>}
+  </main>;
   return <div className="app-shell play-shell watch-shell">
     <a className="skip-link" href="#watch-main">跳到棋盘</a>
     <header className="site-header"><button className="brand brand-button" onClick={() => void leave()}><span className="brand-mark"><AirplaneTilt size={26} weight="fill" /></span><span className="brand-name">一起飞<span>观赛</span></span></button>
