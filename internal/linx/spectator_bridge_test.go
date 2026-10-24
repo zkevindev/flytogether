@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ func TestSpectatorBridgeCompletesPrivateTurnsAndRejectsLateTools(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	requests := make(chan map[string]any, 64)
+	var cancellations atomic.Int32
 	peers := make(chan *websocket.Conn, 1)
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		c, err := websocket.Accept(w, req, &websocket.AcceptOptions{Subprotocols: []string{"realtime"}})
@@ -44,6 +46,9 @@ func TestSpectatorBridgeCompletesPrivateTurnsAndRejectsLateTools(t *testing.T) {
 					peers <- c
 					announced = true
 				}
+			}
+			if e["type"] == "response.cancel" {
+				cancellations.Add(1)
 			}
 			select {
 			case requests <- e:
@@ -103,8 +108,10 @@ func TestSpectatorBridgeCompletesPrivateTurnsAndRejectsLateTools(t *testing.T) {
 	if len(tools) != 1 || tools[0].(map[string]any)["name"] != "get_game_state" {
 		t.Fatal("spectator tool list", tools)
 	}
-	input := func(id, text string) {
-		send(map[string]any{"type": "input_audio_buffer.speech_started"})
+	input := func(id, text string, adjacent ...bool) {
+		if len(adjacent) == 0 || !adjacent[0] {
+			send(map[string]any{"type": "input_audio_buffer.speech_started"})
+		}
 		send(map[string]any{"type": "conversation.item.input_audio_transcription.completed", "item_id": id, "transcript": text})
 		readUntil(t, ctx, browser, "stt")
 		update := spectatorRequest(t, ctx, requests, "session.update")
@@ -139,7 +146,15 @@ func TestSpectatorBridgeCompletesPrivateTurnsAndRejectsLateTools(t *testing.T) {
 	// A second normal question must complete even though spectators own no game grant.
 	input("two", "解释一下游戏规则")
 	created("answer-two")
+	beforeCancel := cancellations.Load()
+	input("two-fragment", "还有哪些道具规则", true)
+	created("answer-two-fragment")
+	if cancellations.Load() <= beforeCancel {
+		t.Fatal("adjacent ASR did not cancel old generation")
+	}
+	send(map[string]any{"type": "response.output_item.done", "response_id": "answer-two", "item": map[string]any{"type": "function_call", "name": "roll_dice", "call_id": "late-write", "arguments": "{}"}})
 	complete("answer-two")
+	complete("answer-two-fragment")
 	readUntil(t, ctx, browser, "response.done")
 	input("three", "介绍一下道具")
 	created("attempted-write")
