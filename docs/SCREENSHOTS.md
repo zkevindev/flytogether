@@ -96,3 +96,8 @@ npm --prefix web run capture:docs
 ## 暂离托管与回位（#38）
 
 `images/delegation/manifest.json`记录6张来源：5张从公网cb9cb4b实际邀请/确认/代玩/回位/真实60秒离线流程拍摄，1张为同版应用QA进程实际重启后恢复暂停。手机图验证outline按钮文字可见，390px为桌面视口；没有注入棋局、点数或语音。旧current10张为同屏普通流程，界面未受托管状态影响，继续明确保留05de003来源，不重写其版本标记。
+
+
+## 家人观赛（#39～#44）
+
+`images/audience/` 收录桌面立体、手机轻量、自然获胜和独立灵犀问答四张实际截图。来源提交、视口与 SHA-256 见 [manifest](images/audience/manifest.json)，复跑见 [QA-AUDIENCE](QA-AUDIENCE.md)。手机是桌面Chrome视口；语音图来自合成WAV经实际AudioWorklet、Go和真实灵犀，不能当成实体麦克风或真人听感。所有棋步与骰子由正式规则推进，未注入棋盘。截图不含真实部署地址或访问凭据。

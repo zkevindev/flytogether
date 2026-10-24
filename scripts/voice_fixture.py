@@ -9,7 +9,7 @@ import tempfile
 import wave
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--scenario', choices=['flight', 'lucky', 'coach', 'roll', 'boomerang', 'rescue', 'escort'], default='flight')
+parser.add_argument('--scenario', choices=['flight', 'lucky', 'coach', 'roll', 'boomerang', 'rescue', 'escort', 'audience-host', 'audience-a', 'audience-b'], default='flight')
 parser.add_argument('--output-dir', type=Path, required=True)
 args = parser.parse_args()
 if not shutil.which('say') or not shutil.which('ffmpeg'):
@@ -28,6 +28,12 @@ if args.scenario == 'lucky':
     phrases = [('帮我使用幸运骰', 10), ('不要掷骰子', 8)]
 if args.scenario in ['boomerang','rescue','escort']:
     phrases = [({'boomerang':'使用回旋镖攻击爸爸的小熊号','rescue':'使用救援卡救援小朋友的小熊号','escort':'使用团队护航'}[args.scenario],12)]
+if args.scenario == 'audience-host':
+    phrases = [('帮我使用幸运骰', 50), ('不要掷骰子', 20)]
+if args.scenario == 'audience-a':
+    phrases = [('我的暗号是蓝莓，现在轮到谁', 14), ('详细介绍飞行棋的所有规则', 4), ('停一下，现在轮到谁', 16), ('帮房主使用炸弹', 20)]
+if args.scenario == 'audience-b':
+    phrases = [('我的暗号是橘子，现在轮到谁', 16), ('谁更接近终点', 14), ('现在轮到谁', 25)]
 with tempfile.TemporaryDirectory(prefix='fly-voice-fixture-') as temp:
     source, target = Path(temp) / 'phrase.aiff', Path(temp) / 'phrase.pcm'
     for text, silence in phrases:

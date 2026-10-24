@@ -33,7 +33,13 @@
 
 观赛身份保存在当前浏览器。刷新可以回来，点退出只离开自己。房主更新链接后，旧链接不能再加入，已经在看的人不受影响。同配置再玩会清空互动消息，并断开观赛助手，需要重新提问。观众人数和加入频率由 `SPECTATOR_CAPACITY`、`SPECTATOR_JOINS_PER_MINUTE` 配置。观赛助手使用单独的连接数、会话时长 `SPECTATOR_SESSION_SECONDS` 和每日额度，不占用选手对讲名额。
 
+当前回合、飞机进度与最近棋步使用服务端事实解说；重连直接跟上最新棋盘。
+
 [观赛验收](docs/QA-AUDIENCE.md)。
+
+![独立观赛页面与家人互动](docs/images/audience/watch-desktop.png)
+
+[手机观赛页面](docs/images/audience/watch-mobile.png) · [独立灵犀问答](docs/images/audience/watch-private-voice.png)
 
 正常获胜后，骰子、飞行和撒花完成再展示结算，统计真实掷骰、起飞、抵达、送回和用卡。**同配置再玩一局**重置统计与道具库存；联网保留原房间和席位，重新准备，不需要重发邀请。中途结束直接返回首页，不生成冠军。
 

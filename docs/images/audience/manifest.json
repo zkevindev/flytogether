@@ -1,0 +1,42 @@
+{
+  "captured_on": "2026-10-24",
+  "scope": "Actual local Chrome, independent cookie roles and random legal game; phone images are desktop viewport, voice image uses synthetic WAV through real AudioWorklet/Go/Lingxi, not physical microphone or human hearing evidence",
+  "captures": [
+    {
+      "file": "watch-desktop.png",
+      "source_commit": "1217270e181ff15a9771e35ed2f3fa1bc7e76b65",
+      "sha256": "9cc44d036f0db22718aa3ba6ca5d05dd7cf0159868c304521252ea8d499be913",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      }
+    },
+    {
+      "file": "watch-mobile.png",
+      "source_commit": "1217270e181ff15a9771e35ed2f3fa1bc7e76b65",
+      "sha256": "a0b1f0f3fd1b00e4a7434194b7dbb772e7e6d76e0bb3fb4be9f6bfd3d0e6395b",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "file": "watch-result.png",
+      "source_commit": "1217270e181ff15a9771e35ed2f3fa1bc7e76b65",
+      "sha256": "439e7900fc14121fab48c6dc76858b487dd831db5f0e6a98930c3ea16dd7286e",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      }
+    },
+    {
+      "file": "watch-private-voice.png",
+      "source_commit": "3c882027a5783ceea9dbcf2c6b554e927dd86634",
+      "sha256": "5a5c9ce031a328e707cbb504bf99cb18c73e7ff895998ca01b369033a882385f",
+      "viewport": {
+        "width": 1360,
+        "height": 1000
+      }
+    }
+  ]
+}
