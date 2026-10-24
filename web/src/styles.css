@@ -593,3 +593,11 @@ html[data-motion="reduce"] .confetti-rain {display:none;}
 .pass-device-robot small{color:#5e687d}
 @media(max-width:700px){.pass-device-prompt{gap:11px;margin-bottom:10px;padding:12px 13px;border-radius:12px}.pass-device-prompt strong{font-size:19px}.pass-device-prompt small{font-size:14px}}
 @media (orientation:landscape) and (max-height:520px){.watch-shell .play-layout{grid-template-columns:minmax(0,1.4fr) minmax(220px,.8fr)}.watch-shell .board-stage{max-height:calc(100dvh - 96px)}.watch-shell .audience-chat{max-height:34dvh;overflow:auto}.watch-shell .voice-panel{max-height:34dvh;overflow:auto}}
+.replay-card { margin: 16px 0 20px; padding: 13px; border: 1px solid #d8e2d3; border-radius: 15px; background: #f8faf4; text-align: left; }
+.replay-card summary { cursor: pointer; color: #376e58; font-size: 14px; font-weight: 750; padding: 5px 3px; }
+.replay-card>p:first-of-type { margin: 9px 3px 12px; color: #788779; font-size: 11px; line-height: 1.6; }
+.replay-card img { display: block; width: min(100%, 440px); margin: 0 auto 13px; border-radius: 13px; box-shadow: 0 5px 18px #344e3020; }
+.replay-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.replay-card-actions button { min-height: 44px; padding: 8px 10px; font-size: 12px; }
+.replay-card-status { min-height: 18px; margin: 8px 3px 0; color: #627b58; font-size: 11px; text-align: center; }
+@media(max-width:480px) { .replay-card { padding: 10px; } .replay-card-actions { grid-template-columns: 1fr; } }
