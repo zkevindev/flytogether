@@ -705,6 +705,10 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			session := sessionInstructions["session"].(map[string]any)
 			session["instructions"] = session["instructions"].(string) + "棋局只读问答优先调用原生MCP读取当前状态、任务进度、规则与合法走法；MCP工具只读，不能执行棋局动作。需要操作时只能调用现有游戏工具，并等待服务端真实结果。" + companion.Instructions()
 			if factQuestion && mcpTool != nil {
+				// Some OpenAI-compatible Realtime providers only honor MCP tool
+				// selection from session.update. Set both the session default and
+				// the one-shot response choice, then restore auto on the next turn.
+				session["tool_choice"] = map[string]any{"type": "mcp", "server_label": gameMCPLabel, "name": factTool}
 				session["instructions"] = session["instructions"].(string) + "本轮是棋局事实查询，回答前必须调用原生MCP的" + factTool + "读取当前主题与玩法对应的事实；不得调用掷骰、走棋或道具等游戏操作工具。"
 			}
 			voiceText := gate.commandText(body.Transcript)
@@ -924,7 +928,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				delete(pendingMCP[responseID], event.ItemID)
 			}
 			trace(room.DiagnosticEvent{Kind: "mcp", InputID: responseInputs[responseID], Ref: event.ItemID, Action: "readonly_call", Code: code})
-			_ = sendBrowser(map[string]any{"type": "mcp_call_status", "status": code})
+			_ = sendBrowser(map[string]any{"type": "mcp_call_status", "status": code, "tool": realtimeMCPToolName(event.Raw)})
 			if e := continueMCPResponse(responseID); e != nil {
 				return e
 			}
@@ -961,7 +965,7 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 				}
 				delete(pendingMCP[responseID], itemID)
 				trace(room.DiagnosticEvent{Kind: "mcp", InputID: responseInputs[responseID], Ref: itemID, Action: "readonly_call", Code: "completed"})
-				_ = sendBrowser(map[string]any{"type": "mcp_call_status", "status": "completed"})
+				_ = sendBrowser(map[string]any{"type": "mcp_call_status", "status": "completed", "tool": body.Item.Name})
 				if e := continueMCPResponse(responseID); e != nil {
 					return e
 				}
@@ -1104,6 +1108,22 @@ func (b *Bridge) Serve(ctx context.Context, browser *websocket.Conn, r room.Game
 			}
 		}
 	}
+}
+
+func realtimeMCPToolName(raw json.RawMessage) string {
+	var event struct {
+		Name string `json:"name"`
+		Item struct {
+			Name string `json:"name"`
+		} `json:"item"`
+	}
+	if json.Unmarshal(raw, &event) != nil {
+		return ""
+	}
+	if event.Item.Name != "" {
+		return event.Item.Name
+	}
+	return event.Name
 }
 
 type realtimeEvent struct {

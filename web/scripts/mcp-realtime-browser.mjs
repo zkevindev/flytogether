@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 assert.ok(process.env.QA_BASE_URL && process.env.QA_AUDIO_FILE, 'Set QA_BASE_URL and QA_AUDIO_FILE');
 const mode = process.env.QA_MCP_MODE || 'coop';
 assert.ok(['quick', 'classic', 'coop'].includes(mode), 'QA_MCP_MODE must be quick, classic or coop');
+const expectedMCPTool = process.env.QA_MCP_EXPECT_TOOL || (mode === 'coop' ? 'get_mission_progress' : 'get_game_summary');
 const outputDir = process.env.QA_OUTPUT_DIR || 'test-results/mcp-realtime';
 await mkdir(outputDir, { recursive: true });
 const browser = await chromium.launch({
@@ -43,6 +44,7 @@ try {
           try { message = JSON.parse(event.data); } catch { return; }
           const record = { at: Date.now(), type: message.type };
           if (message.status) record.status = message.status;
+          if (message.tool) record.tool = message.tool;
           if (message.text || message.transcript) record.text = message.text || message.transcript;
           if (message.response?.status) record.responseStatus = message.response.status;
           if (message.item?.type) record.itemType = message.item.type;
@@ -103,7 +105,12 @@ try {
   const toolStatus = await page.evaluate(() => window.__mcpQA.events.findLast(e => e.type === 'mcp_status')?.status);
   assert.equal(toolStatus, 'loaded', `Realtime MCP tool import failed: ${JSON.stringify(await page.evaluate(() => window.__mcpQA.events))}`);
   await page.waitForFunction(() => window.__mcpQA.events.some(e => e.type === 'stt'), null, { timeout: 45000 });
-  await page.waitForFunction(() => window.__mcpQA.events.some(e => e.type === 'mcp_call_status' && e.status === 'completed'), null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__mcpQA.events.some(e => e.type === 'mcp_call_status' && ['completed', 'failed'].includes(e.status)), null, { timeout: 60000 }).catch(async error => {
+    const events = await page.evaluate(() => window.__mcpQA.events);
+    throw new Error(`Realtime did not finish an MCP call: ${JSON.stringify({ events, cause: error.message })}`);
+  });
+  const mcpCallStatus = await page.evaluate(() => window.__mcpQA.events.findLast(e => e.type === 'mcp_call_status')?.status);
+  assert.equal(mcpCallStatus, 'completed', `Realtime MCP call failed: ${JSON.stringify(await page.evaluate(() => window.__mcpQA.events))}`);
   await page.waitForFunction(() => window.__mcpQA.events.some(e => e.type === 'response.output_audio_transcript.done' || e.type === 'response.audio_transcript.done'), null, { timeout: 45000 });
   await page.getByRole('button', { name: '关闭对讲麦克风', exact: true }).click();
   await page.waitForFunction(() => window.__mcpQA.tracks.every(track => track.readyState === 'ended'));
@@ -115,6 +122,7 @@ try {
   else assert.match(userText, /轮到|谁|幸运骰|规则|飞机|走/);
   assert.ok(assistantText.length > 0, 'Realtime should produce a spoken answer after the MCP query');
   assert.ok(events.some(event => event.type === 'mcp_call_status' && event.status === 'completed'), 'Realtime must complete a real native MCP call, not only answer from context');
+  assert.ok(events.some(event => event.type === 'mcp_call_status' && event.status === 'completed' && event.tool === expectedMCPTool), `Realtime must call ${expectedMCPTool}: ${JSON.stringify(events)}`);
   const after = await snapshot();
   assert.equal(after.state.id, before.state.id);
   assert.equal(after.state.version, before.state.version, 'read-only MCP must not mutate the game');
@@ -132,6 +140,7 @@ try {
     game_version_unchanged: true,
     mcp_tools_loaded: true,
     mcp_call_completed: true,
+    mcp_tool: expectedMCPTool,
     recognized_query: userText,
     spoken_answer: assistantText,
     event_types: events.map(event => event.type),

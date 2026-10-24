@@ -38,6 +38,18 @@ func TestGameFactQuestionSelectsTheRelevantReadonlyTool(t *testing.T) {
 	}
 }
 
+func TestRealtimeMCPToolNameReadsProviderEventShapes(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{`{"name":"get_game_summary"}`, "get_game_summary"},
+		{`{"item":{"name":"get_legal_actions"}}`, "get_legal_actions"},
+		{`{"item":{"type":"mcp_call"}}`, ""},
+	} {
+		if got := realtimeMCPToolName([]byte(tc.raw)); got != tc.want {
+			t.Errorf("realtimeMCPToolName(%s) = %q, want %q", tc.raw, got, tc.want)
+		}
+	}
+}
+
 // protocolHarness crosses both actual WebSocket boundaries. All handlers are
 // joined before restoring the TLS client, including hijacked HTTP connections.
 type protocolHarness struct {
@@ -402,13 +414,15 @@ func TestBridgeRoutesGameFactsToTheMatchingReadonlyMCPTool(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := room.New(game.Options{Mode: tc.mode, Names: []string{"孩子", "家长"}})
 			h := newProtocolHarness(t, r, false, "quiet", "https://flytogether.example")
+			spectatorRequest(t, h.ctx, h.requests, "session.update") // initial handshake configuration
 			h.send(t, map[string]any{"type": "conversation.item.input_audio_transcription.completed", "item_id": "generic-fact", "transcript": tc.question})
 			readUntil(t, h.ctx, h.browser, "stt")
-			spectatorRequest(t, h.ctx, h.requests, "session.update")
+			update := spectatorRequest(t, h.ctx, h.requests, "session.update")
+			sessionChoice := update["session"].(map[string]any)["tool_choice"].(map[string]any)
 			request := spectatorRequest(t, h.ctx, h.requests, "response.create")
 			choice := request["response"].(map[string]any)["tool_choice"].(map[string]any)
-			if choice["type"] != "mcp" || choice["server_label"] != gameMCPLabel || choice["name"] != tc.want {
-				t.Fatalf("fact question must call %s, got %#v", tc.want, choice)
+			if sessionChoice["type"] != "mcp" || sessionChoice["server_label"] != gameMCPLabel || sessionChoice["name"] != tc.want || choice["type"] != "mcp" || choice["server_label"] != gameMCPLabel || choice["name"] != tc.want {
+				t.Fatalf("fact question must select %s for both session and response, got session=%#v response=%#v", tc.want, sessionChoice, choice)
 			}
 			state := protocolState(t, r)
 			if state.Version != 1 || state.Phase != "roll" {
