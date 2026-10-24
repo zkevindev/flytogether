@@ -4,6 +4,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 assert.ok(process.env.QA_BASE_URL && process.env.QA_AUDIO_FILE, 'Set QA_BASE_URL and QA_AUDIO_FILE');
+const mode = process.env.QA_MCP_MODE || 'coop';
+assert.ok(['quick', 'classic', 'coop'].includes(mode), 'QA_MCP_MODE must be quick, classic or coop');
 const outputDir = process.env.QA_OUTPUT_DIR || 'test-results/mcp-realtime';
 await mkdir(outputDir, { recursive: true });
 const browser = await chromium.launch({
@@ -74,16 +76,25 @@ try {
   const dialog = page.getByRole('dialog', { name: '创建家庭房间', exact: true });
   await dialog.getByRole('button', { name: '2 位', exact: true }).click();
   await dialog.getByRole('checkbox', { name: /添加机器人陪玩/ }).uncheck();
-  await dialog.getByRole('button', { name: /星河救援 · 合作挑战/ }).click();
-  await dialog.locator('#mission-card').selectOption('signal-network');
+  if (mode === 'coop') {
+    await dialog.getByRole('button', { name: /星河救援 · 合作挑战/ }).click();
+    await dialog.locator('#mission-card').selectOption('signal-network');
+  } else if (mode === 'classic') {
+    await dialog.getByRole('button', { name: /完整飞行/ }).click();
+  }
   await dialog.getByRole('button', { name: '创建并开始游戏', exact: true }).click();
-  await page.getByRole('region', { name: '星际救援任务' }).waitFor();
+  if (mode === 'coop') await page.getByRole('region', { name: '星际救援任务' }).waitFor();
 
   const snapshot = async () => (await (await context.request.get('/api/session')).json()).room;
   const before = await snapshot();
-  assert.equal(before.state.theme_id, 'star-rescue');
-  assert.equal(before.state.mission.id, 'signal-network');
-  assert.equal(before.state.mission.progress, 0);
+  assert.equal(before.state.mode, mode);
+  if (mode === 'coop') {
+    assert.equal(before.state.theme_id, 'star-rescue');
+    assert.equal(before.state.mission.id, 'signal-network');
+    assert.equal(before.state.mission.progress, 0);
+  } else {
+    assert.equal(before.state.mission, undefined, 'a standard mode should have no optional mission');
+  }
   assert.ok(before.state.version >= 1);
 
   await page.getByRole('checkbox', { name: '自动连接语音，直接说话', exact: true }).check();
@@ -100,21 +111,24 @@ try {
   const events = await page.evaluate(() => window.__mcpQA.events);
   const userText = events.find(event => event.type === 'stt')?.text || '';
   const assistantText = events.filter(event => /response\.(output_audio|audio)_transcript\.done|response\.output_text\.done/.test(event.type)).map(event => event.text || '').join('');
-  assert.match(userText, /任务|救援/);
+  if (mode === 'coop') assert.match(userText, /任务|救援/);
+  else assert.match(userText, /轮到|谁|幸运骰|规则|飞机|走/);
   assert.ok(assistantText.length > 0, 'Realtime should produce a spoken answer after the MCP query');
   assert.ok(events.some(event => event.type === 'mcp_call_status' && event.status === 'completed'), 'Realtime must complete a real native MCP call, not only answer from context');
   const after = await snapshot();
   assert.equal(after.state.id, before.state.id);
   assert.equal(after.state.version, before.state.version, 'read-only MCP must not mutate the game');
-  assert.equal(after.state.mission.progress, before.state.mission.progress);
+  assert.equal(after.state.mission?.progress, before.state.mission?.progress);
   assert.deepEqual(pageErrors, []);
 
   const result = {
     passed: true,
     game_id: before.state.id,
     room_id: before.id,
-    mission_id: before.state.mission.id,
-    mission_progress: after.state.mission.progress,
+    mode,
+    theme_id: before.state.theme_id || null,
+    mission_id: before.state.mission?.id || null,
+    mission_progress: after.state.mission?.progress ?? null,
     game_version_unchanged: true,
     mcp_tools_loaded: true,
     mcp_call_completed: true,

@@ -56,8 +56,8 @@ Issue #62 已把只读棋局查询接入灵矽 Realtime MCP；游戏动作仍由
 
 ## 本项目实现（#62）
 
-游戏语音会话现在可收到一个 Realtime 原生 `type: "mcp"` 工具配置。`MCP_PUBLIC_URL` 必须是可被灵矽访问的 HTTPS 源站；未配置时，HTTPS 部署会从 `PUBLIC_URL` 推导，纯本地 HTTP 开发不启用 MCP。灵矽 Realtime API Key 仍只留在 Go 服务端环境中；短时 MCP bearer 只发送给 Realtime 上游，不下发浏览器。
+游戏语音会话现在可收到一个 Realtime 原生 `type: "mcp"` 工具配置。MCP 绑定当前语音会话所在的对局，不按棋盘、模式或主题限制；当前轻快、完整飞行和合作模式均可查询。游戏摘要会返回模式、主题 ID、回合、玩家、棋子、统计和道具库存；没有合作任务的对局会明确返回“没有额外任务”。新增主题只要事实进入权威棋局状态，就可以由通用摘要、规则和合法走法 MCP 工具查询，不需要额外开一条主题专用连接。`MCP_PUBLIC_URL` 必须是可被灵矽访问的 HTTPS 源站；未配置时，HTTPS 部署会从 `PUBLIC_URL` 推导，纯本地 HTTP 开发不启用 MCP。灵矽 Realtime API Key 仍只留在 Go 服务端环境中；短时 MCP bearer 只发送给 Realtime 上游，不下发浏览器。
 
-Go MCP 服务只开放四项只读能力：`get_game_summary`、`get_mission_progress`、`get_game_rules`、`get_legal_actions`。授权绑定现有语音会话中的房间与玩家，设有过期时间、调用上限和撤销；房间会话失效时撤销令牌。MCP 查询通过房间快照读取事实，不产生骰子、道具、走棋或房间管理写操作。写动作仍由原 Realtime 游戏工具链调用 Go 规则服务。
+Go MCP 服务只开放四项只读能力：`get_game_summary`、`get_mission_progress`、`get_game_rules`、`get_legal_actions`。事实问题按语义选择摘要、任务、规则或合法走法工具，避免把“轮到谁”等普通问题误发给任务工具。授权绑定现有语音会话中的房间与玩家，设有过期时间、调用上限和撤销；房间会话失效时撤销令牌。MCP 查询通过房间快照读取事实，不产生骰子、道具、走棋或房间管理写操作。写动作仍由原 Realtime 游戏工具链调用 Go 规则服务。
 
 初始化会等工具导入完成再向浏览器确认语音握手（发现工具超时则保留语音连接，并提示只读工具不可用）。MCP 调用按 `item_id` 跟踪；若 Realtime 先发 `response.done`、之后才完成 MCP，则暂存本轮并在工具结果后续答。OpenAI Realtime 当前文档以 `response.output_item.done`（`item.type=mcp_call`）表示成功结果；桥接也兼容灵矽实测记录的 `response.mcp_call.completed` / `conversation.item.done` 事件形状。若同一回复还包含普通 Go 游戏函数调用，会先返回这些函数的真实结果，再等 MCP 完成后续答。工具失败时回复明确表示无法确认棋局事实，不拿模型猜测当结果。需要部署时，把 `MCP_PUBLIC_URL` 配为可访问的 HTTPS 源站；不要在 GitHub 或浏览器填写任何 API Key。

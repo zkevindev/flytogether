@@ -90,7 +90,7 @@ func (m *ReadonlyMCP) ToolConfig(token string) map[string]any {
 	if !m.Enabled() || token == "" {
 		return nil
 	}
-	return map[string]any{"type": "mcp", "server_label": gameMCPLabel, "server_url": m.URL, "authorization": token, "allowed_tools": []string{"get_game_summary", "get_mission_progress", "get_game_rules", "get_legal_actions"}, "require_approval": "never", "server_description": "Read-only facts for the current Fly Together cooperative rescue game. Never performs game actions."}
+	return map[string]any{"type": "mcp", "server_label": gameMCPLabel, "server_url": m.URL, "authorization": token, "allowed_tools": []string{"get_game_summary", "get_mission_progress", "get_game_rules", "get_legal_actions"}, "require_approval": "never", "server_description": "Read-only facts for the current Fly Together game, theme and optional mission. Never performs game actions."}
 }
 
 func mcpAuthorizationToken(header string) string {
@@ -148,7 +148,7 @@ func (m *ReadonlyMCP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type noArguments struct{}
 
 func newGameMCPServer(g room.GameSession) *mcp.Server {
-	server := mcp.NewServer(&mcp.Implementation{Name: "flytogether-game", Title: "一起飞棋局助手", Version: "1"}, &mcp.ServerOptions{Instructions: "这些工具只读当前语音会话绑定的棋局。请准确简短地说明当前棋局、任务进度、规则或 Go 服务提供的合法走法摘要。不得宣称执行掷骰、移动或使用道具；所有操作必须由现有棋盘授权流程执行。"})
+	server := mcp.NewServer(&mcp.Implementation{Name: "flytogether-game", Title: "一起飞棋局助手", Version: "1"}, &mcp.ServerOptions{Instructions: "这些工具只读当前语音会话绑定的棋局、主题和可选任务。请准确简短地说明当前对局状态、已选主题、任务进度、规则或 Go 服务提供的合法走法摘要；没有任务卡时要明确说明没有额外任务。不得宣称执行掷骰、移动或使用道具；所有操作必须由现有棋盘授权流程执行。"})
 	add := func(name, description string, selectText func(game.State, room.View) any) {
 		mcp.AddTool(server, &mcp.Tool{Name: name, Description: description}, func(ctx context.Context, req *mcp.CallToolRequest, _ noArguments) (*mcp.CallToolResult, any, error) {
 			view := g.Snapshot()
@@ -177,7 +177,7 @@ func newGameMCPServer(g room.GameSession) *mcp.Server {
 					airborne++
 				}
 			}
-			players = append(players, map[string]any{"id": p.ID, "name": p.Name, "arrived": arrived, "airborne": airborne, "hangar": hangar, "rolls": p.Stats.Rolls, "takeoffs": p.Stats.Takeoffs})
+			players = append(players, map[string]any{"id": p.ID, "name": p.Name, "arrived": arrived, "airborne": airborne, "hangar": hangar, "rolls": p.Stats.Rolls, "takeoffs": p.Stats.Takeoffs, "captures": p.Stats.Captures, "props_used": p.Stats.PropsUsed, "props_inventory": p.Props})
 		}
 		current := "未知"
 		if s.Current >= 0 && s.Current < len(s.Players) {

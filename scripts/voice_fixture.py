@@ -9,7 +9,7 @@ import tempfile
 import wave
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--scenario', choices=['flight', 'lucky', 'coach', 'roll', 'boomerang', 'rescue', 'escort', 'audience-host', 'audience-a', 'audience-b', 'mcp'], default='flight')
+parser.add_argument('--scenario', choices=['flight', 'lucky', 'coach', 'roll', 'boomerang', 'rescue', 'escort', 'audience-host', 'audience-a', 'audience-b', 'mcp', 'mcp-summary', 'mcp-rules', 'mcp-legal'], default='flight')
 parser.add_argument('--output-dir', type=Path, required=True)
 args = parser.parse_args()
 if not shutil.which('say') or not shutil.which('ffmpeg'):
@@ -37,6 +37,12 @@ if args.scenario == 'audience-b':
 if args.scenario == 'mcp':
     # Give the real Realtime response time to finish before Chrome loops the WAV.
     phrases = [('请查一下本局星际救援任务卡的目标和当前进展', 60)]
+if args.scenario == 'mcp-summary':
+    phrases = [('现在轮到谁掷骰子', 60)]
+if args.scenario == 'mcp-rules':
+    phrases = [('幸运骰的规则是什么', 60)]
+if args.scenario == 'mcp-legal':
+    phrases = [('现在有哪些飞机可以走', 60)]
 with tempfile.TemporaryDirectory(prefix='fly-voice-fixture-') as temp:
     source, target = Path(temp) / 'phrase.aiff', Path(temp) / 'phrase.pcm'
     for text, silence in phrases:

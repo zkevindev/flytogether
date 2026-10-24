@@ -117,6 +117,58 @@ func TestRealtimeMCPConfigIsScopedAndReadOnly(t *testing.T) {
 	}
 }
 
+func TestReadonlyMCPReadsGenericGameFactsWithOrWithoutMission(t *testing.T) {
+	for _, mode := range []string{"quick", "classic", "coop"} {
+		t.Run(mode, func(t *testing.T) {
+			state := game.New(game.Options{Mode: mode, Names: []string{"孩子", "家长"}})
+			r := room.New(game.Options{Mode: mode, Names: []string{"孩子", "家长"}})
+			server := newGameMCPServer(r)
+			handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, DisableLocalhostProtection: true})
+			httpServer := httptest.NewServer(handler)
+			defer httpServer.Close()
+			client := mcp.NewClient(&mcp.Implementation{Name: "generic-game-test", Version: "1"}, nil)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			connected, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: httpServer.URL, DisableStandaloneSSE: true}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer connected.Close()
+			for tool, err := range connected.Tools(ctx, nil) {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if tool.Name == "get_game_summary" {
+					result, callErr := connected.CallTool(ctx, &mcp.CallToolParams{Name: tool.Name, Arguments: map[string]any{}})
+					if callErr != nil {
+						t.Fatal(callErr)
+					}
+					var summary map[string]any
+					if err := json.Unmarshal([]byte(result.Content[0].(*mcp.TextContent).Text), &summary); err != nil {
+						t.Fatal(err)
+					}
+					if summary["mode"] != mode || summary["theme_id"] != state.ThemeID || summary["current_player"] != state.Players[0].Name {
+						t.Fatalf("generic game summary mismatch: %#v, want mode=%s theme=%s", summary, mode, state.ThemeID)
+					}
+				}
+				if tool.Name == "get_mission_progress" {
+					result, callErr := connected.CallTool(ctx, &mcp.CallToolParams{Name: tool.Name, Arguments: map[string]any{}})
+					if callErr != nil {
+						t.Fatal(callErr)
+					}
+					var mission map[string]any
+					if err := json.Unmarshal([]byte(result.Content[0].(*mcp.TextContent).Text), &mission); err != nil {
+						t.Fatal(err)
+					}
+					if mission["selected"] != false {
+						t.Fatalf("a standard game without an optional mission must report that clearly: %#v", mission)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestMCPAuthorizationTokenAcceptsProviderBearerNormalization(t *testing.T) {
 	for _, header := range []string{"short-lived-token", "Bearer short-lived-token", "Bearer Bearer short-lived-token", "bearer BEARER short-lived-token"} {
 		if token := mcpAuthorizationToken(header); token != "short-lived-token" {
