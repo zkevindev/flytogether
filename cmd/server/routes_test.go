@@ -232,6 +232,7 @@ func TestRegisterRoutesServesHealthConfigAndStaticApp(t *testing.T) {
 		{"GET", "/", 200, "family board"},
 		{"HEAD", "/", 200, ""},
 		{"GET", "/play", 200, "family board"},
+		{"GET", "/product", 200, "family board"},
 		{"GET", "/admin", 200, "family board"},
 		{"GET", "/assets/app.js", 200, "console.log"},
 		{"GET", "/missing", 404, ""},

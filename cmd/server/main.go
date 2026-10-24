@@ -229,7 +229,7 @@ func staticHandler(webDir string) http.HandlerFunc {
 			http.ServeFile(w, r, p)
 			return
 		}
-		if r.URL.Path != "/" && r.URL.Path != "/play" && r.URL.Path != "/admin" {
+		if r.URL.Path != "/" && r.URL.Path != "/play" && r.URL.Path != "/product" && r.URL.Path != "/admin" {
 			http.NotFound(w, r)
 			return
 		}

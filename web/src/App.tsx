@@ -18,6 +18,7 @@ import type { CompanionPreferences, Config, Family, Game, GameEvent, Options, Pi
 import { cuesFor, Sfx } from './lib/sfx';
 import { AudienceChat, AudienceHost } from './components/Audience';
 import { WatchApp } from './components/WatchApp';
+const ProductPage = lazy(() => import('./components/ProductPage').then(module => ({ default: module.ProductPage })));
 import { VoiceClient } from './lib/voice';
 import { initialPresentation, presentationReducer } from './lib/presentation';
 
@@ -57,14 +58,14 @@ export default function App() {
   const [family,setFamily] = useState<Family>({profiles:[],matches:[],total:0});
   const [joinError, setJoinError] = useState('');
   const [resultDismissed, setResultDismissed] = useState('');
-  const [screen, setScreen] = useState<'home' | 'play'>(() => location.pathname === '/play' ? 'play' : 'home');
-  const navigate = useCallback((next: 'home' | 'play') => {
-    history.pushState({}, '', next === 'play' ? '/play' : '/');
+  const [screen, setScreen] = useState<'home' | 'play' | 'product'>(() => location.pathname === '/play' ? 'play' : location.pathname === '/product' ? 'product' : 'home');
+  const navigate = useCallback((next: 'home' | 'play' | 'product') => {
+    history.pushState({}, '', next === 'play' ? '/play' : next === 'product' ? '/product' : '/');
     setScreen(next);
     window.scrollTo(0, 0);
   }, []);
   useEffect(() => {
-    const update = () => setScreen(location.pathname === '/play' ? 'play' : 'home');
+    const update = () => setScreen(location.pathname === '/play' ? 'play' : location.pathname === '/product' ? 'product' : 'home');
     addEventListener('popstate', update);
     return () => removeEventListener('popstate', update);
   }, []);
@@ -136,10 +137,10 @@ export default function App() {
     } catch (error) { setFatal(error instanceof Error ? error.message : '暂时无法连接游戏'); }
     finally { setLoading(false); loadingRef.current = false; }
   }, [accept, invite, watch]);
-  useEffect(() => { void load(); return () => { voice.current?.disconnect(); }; }, [load]);
+  useEffect(() => { if (screen !== 'product') void load(); return () => { voice.current?.disconnect(); }; }, [load, screen === 'product']);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(''), 4500); return () => clearTimeout(id); }, [toast]);
   useEffect(() => {
-    if (!room?.id) return;
+    if (!room?.id || screen === 'product') return;
     let stopped = false, socket: WebSocket, timer: ReturnType<typeof setTimeout>;
     const connect = () => {
       if (stopped || !navigator.onLine) { setConnected(false); return; }
@@ -154,7 +155,7 @@ export default function App() {
     addEventListener('offline', offline); addEventListener('online', online);
     connect();
     return () => { stopped = true; removeEventListener('offline', offline); removeEventListener('online', online); clearTimeout(timer); socket?.close(); setConnected(false); };
-  }, [room?.id, accept]);
+  }, [room?.id, accept, screen === 'product']);
 
   const state = room?.state;
   const current = state?.players[state.current];
@@ -418,6 +419,7 @@ export default function App() {
     try { await api('/api/rooms/' + room.id + '/leave', {}); voice.current?.disconnect(); navigate('home'); void load(); }
     catch(e) { setToast(e instanceof Error ? e.message : '离开失败'); }
   };
+  if (screen === 'product' && !watch) return <Suspense fallback={<div className="loading-page"><AirplaneTilt size={36} /><p>正在铺开家庭棋盘…</p></div>}><ProductPage onHome={() => navigate('home')} onStart={() => { navigate('home'); openSetup(true); }} /></Suspense>;
   if (watch) return <WatchApp code={watch} onExit={() => { history.pushState({}, '', '/'); setWatch(''); }} />;
   if (invite && !loading) return <div className="loading-page join-page"><AirplaneTilt size={48} weight="fill" /><h1>朋友邀你一起飞</h1><p>输入昵称，领取自己的飞行员席位。原浏览器重新打开邀请会回到原席位。</p><form onSubmit={e => { e.preventDefault(); void joinRoom(); }}><ProfilePicker profiles={family.profiles} value={joinProfile} label="选择我的家庭档案" onChange={p=>{setJoinProfile(p?.id||'');if(p)setJoinName(p.name);}} /><label className="field-label" htmlFor="join-name">你的昵称</label><input id="join-name" className="room-name-input" maxLength={10} required value={joinName} onChange={e => {setJoinName(e.target.value);setJoinProfile('');}} /><button className="primary-button" disabled={busy}>加入房间 <ArrowRight /></button></form>{joinError && <p role="alert">{joinError}</p>}<button className="text-button" onClick={() => { setInvite(''); navigate('home'); }}>返回首页</button></div>;
   if (loading) return <div className="loading-page"><AirplaneTilt className="loading-plane" weight="fill" /><h1>正在准备家庭机场</h1><p>把棋盘铺好，快乐马上起飞。</p></div>;
@@ -439,6 +441,7 @@ export default function App() {
             {host && lifecycle !== 'ended' && <button className="text-button" disabled={busy} onClick={() => setModal('end')} aria-label="结束游戏"><Stop /><span className="desktop-label">结束游戏</span><span className="mobile-label">结束</span></button>}
             <button className="icon-button" aria-label={masterMuted ? '恢复声音' : '总静音'} aria-pressed={masterMuted} onClick={() => changeMasterMute(!masterMuted)}>{!masterMuted ? <SpeakerHigh /> : <SpeakerSlash />}</button>
           </>}
+          {screen === 'home' && <button className="text-button" onClick={() => navigate('product')}>产品介绍</button>}
           <button className="text-button" aria-label="新手指南" onClick={() => setTutorialOpen(true)}><Sparkle size={18} /><span className="desktop-label">新手指南</span><span className="mobile-label">新手</span></button>
           <button className="text-button rules-button" aria-label="玩法" onClick={() => setModal('rules')}><Question size={18} /><span>玩法</span></button>
         </div>
