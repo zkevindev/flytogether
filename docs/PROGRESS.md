@@ -1,7 +1,7 @@
 # 一起飞 · 项目进展
 
 - 更新日期：2026-10-25（Asia/Shanghai）
-- 当前阶段：P1与星河救援已交付；Issue #62 已完成；正在通过 #69 收尾组合回归矩阵、隔离稳定性模拟、备份与发布回滚演练
+- 当前阶段：Issue #62 与综合验收 Issue #69 均已完成；组合回归、隔离稳定性模拟及备份/回滚演练已合并到 main。后续按家庭试玩反馈维护产品
 - 比赛安排：三天两晚，一人开发
 - 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
 
@@ -14,7 +14,8 @@
 | M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | 已关闭；真实亲子/实体手机验收由用户确认完成；细分的蜂窝切换、OS后台和声学数据属于单独现场证据 | [PR #58](https://github.com/zkevindev/flytogether/pull/58) · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 | 产品化 1.0 | [#17](https://github.com/zkevindev/flytogether/issues/17) | 星河救援合作挑战和首轮试玩平衡流程已合并；跨家庭玩法/道具反馈仍在收集 | [PR #59](https://github.com/zkevindev/flytogether/pull/59) · merge `29e4019` · [PLAYTEST-BALANCE](PLAYTEST-BALANCE.md) |
 | 星际救援与 Realtime MCP | [#62](https://github.com/zkevindev/flytogether/issues/62) | 主题、任务卡和观赛进度修复已合并；跨玩法读工具和 session 级工具选择已合并，补充真实调用工具名回归 | [PR #63](https://github.com/zkevindev/flytogether/pull/63) · [PR #64](https://github.com/zkevindev/flytogether/pull/64) · [PR #65](https://github.com/zkevindev/flytogether/pull/65) · [PR #66](https://github.com/zkevindev/flytogether/pull/66) · [PR #67](https://github.com/zkevindev/flytogether/pull/67) · [PR #68](https://github.com/zkevindev/flytogether/pull/68) |
-| 综合验收矩阵与恢复演练 | [#69](https://github.com/zkevindev/flytogether/issues/69) | 本机隔离验收完成：组合矩阵、噪声/回声 PCM 边界模拟、WAL 备份与软链回滚演练；真实现场限制另行标明 | [PR #70](https://github.com/zkevindev/flytogether/pull/70) · [QA-ACCEPTANCE](QA-ACCEPTANCE.md) · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
+| 综合验收矩阵与恢复演练 | [#69](https://github.com/zkevindev/flytogether/issues/69) | 已完成并关闭；隔离验收通过，真实现场限制另行标明 | [PR #70](https://github.com/zkevindev/flytogether/pull/70) · [QA-ACCEPTANCE](QA-ACCEPTANCE.md) · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
+| README 与文档导航整理 | [#71](https://github.com/zkevindev/flytogether/issues/71) | README、玩家指南、开发指南和目录已整理，链接待 PR 检查 | [PR #72](https://github.com/zkevindev/flytogether/pull/72) · [文档目录](README.md) |
 | 自定义语音唤醒（历史） | [#4](https://github.com/zkevindev/flytogether/issues/4) | 历史验收已完成，当前交互由 #14 直接对话替代 | [a85e63b](https://github.com/zkevindev/flytogether/commit/a85e63b)、[87a0d09](https://github.com/zkevindev/flytogether/commit/87a0d09)，直接 main |
 | 棋盘重做 | [#5](https://github.com/zkevindev/flytogether/issues/5) | 四角机场、连续彩色航线、中央骰子、放大和手机布局已实现并演示 | 直接 main，提交回链见 Issue |
 | 家庭道具 | [#6](https://github.com/zkevindev/flytogether/issues/6) | 三种道具、库存、AI 与语音用卡已实现 | [37b1a7c](https://github.com/zkevindev/flytogether/commit/37b1a7c)，界面提交见 Issue |
@@ -43,13 +44,17 @@
 
 ## 当前下一步
 
-1. 显示/键盘首版已交付，继续收集规则和道具配比反馈，按需选择下一种玩法。
-2. #69 收尾综合矩阵和恢复流程；专项真实蜂窝/OS后台/声学量化不是自动化验收的前提，若实际测量则按 QA 手册记录设备和边界。
-3. 每个可验收改动单独开分支和 PR；合并后更新 Issue，部署与截图同步维护。
+1. 根据家庭试玩反馈继续调整规则和道具配比，先记录样本与问题，再决定是否改变默认规则。
+2. 真实蜂窝切换、OS 后台冻结和现场声学测量属于设备现场证据；有实际测量时再按 QA 手册记录，不作为 #69 自动验收的遗留项。
+3. 每个新功能切片单独开分支和 PR；合并后更新对应 Issue，并同步维护部署说明与产品截图。
 
 灵矽密钥不能进入仓库、浏览器构建产物或聊天记录。服务器地址、SSH 凭据和真实部署域名均保存在仓库外的本机配置中。
 
 当前源码以 [main](https://github.com/zkevindev/flytogether/tree/main) 为基线。新改动按单 Issue、小 PR 流程提交；本机 `.env` 与服务器 `/etc/flytogether.env` 配置语音变量，真实值不提交到 Git。
+
+## 历史与专项验收记录
+
+以下内容用于追溯早期范围、决策和逐项交付过程。它不是当前待办清单；当前功能状态以 [README](../README.md) 与 [玩法指南](USER-GUIDE.md) 为准，下一阶段计划以 [ROADMAP](ROADMAP.md) 为准，详细验证证据以各 QA 文档为准。
 
 ## 设计决策
 
