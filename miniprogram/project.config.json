@@ -1,0 +1,9 @@
+{
+  "description": "FlyTogether internal mini-program pilot",
+  "miniprogramRoot": "./",
+  "compileType": "miniprogram",
+  "libVersion": "3.8.12",
+  "appid": "touristappid",
+  "projectname": "flytogether-miniprogram",
+  "condition": {}
+}

@@ -7,6 +7,7 @@
 | 你想做什么 | 从这里开始 | 继续阅读 |
 | --- | --- | --- |
 | 了解和试玩游戏 | [仓库首页](../README.md) | [玩法指南](USER-GUIDE.md)、[截图说明](SCREENSHOTS.md) |
+| 准备微信小程序体验版内测 | [小程序内测说明](MINIPROGRAM-PILOT.md) | AppID、体验成员、业务域名和真机语音验收 |
 | 本地启动、测试或部署 | [开发、测试与部署](DEVELOPMENT.md) | [CI 与覆盖率](CI.md)、[存档与恢复](SAVES.md)、[演示与发布手册](DEMO-RUNBOOK.md) |
 | 理解系统怎么工作 | [架构设计](ARCHITECTURE.md) | [灵矽 Realtime/MCP 接入核对](LINGXI-MCP.md)、[管理后台](ADMIN.md) |
 | 查看当前状态或后续计划 | [项目进展](PROGRESS.md) | [产品路线图](ROADMAP.md)、[试玩与平衡记录](PLAYTEST-BALANCE.md) |

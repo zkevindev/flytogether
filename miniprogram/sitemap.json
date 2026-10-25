@@ -1,0 +1,4 @@
+{
+  "desc": "FlyTogether mini-program pilot",
+  "rules": [{ "action": "allow", "page": "*" }]
+}

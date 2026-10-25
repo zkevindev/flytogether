@@ -37,6 +37,7 @@ go run ./cmd/server
 
 - [架构设计](docs/ARCHITECTURE.md)
 - [项目进展](docs/PROGRESS.md)
+- [微信小程序小范围内测](docs/MINIPROGRAM-PILOT.md)
 - [产品路线图](docs/ROADMAP.md)
 - [演示与发布手册](docs/DEMO-RUNBOOK.md)
 
