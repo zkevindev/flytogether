@@ -1,6 +1,6 @@
 # 当前界面截图与维护
 
-README 使用 [`images/current/`](images/current/) 中从真实应用重新截取的图片。每次拍摄的时间、应用提交、Chrome 版本、视口与文件 SHA-256 记录在 [manifest.json](images/current/manifest.json)，不记录真实服务器地址、Cookie、密钥或录音。
+README 首屏使用 [`images/product/product-hero.png`](images/product/product-hero.png)，并提供产品介绍页的[桌面完整截图](images/product/product-desktop.png)和[手机完整截图](images/product/product-mobile.png)。这三张是产品页的玩法预览图，不代表正在进行的真实棋局；来源提交、视口和 SHA-256 见[产品页截图清单](images/product/manifest.json)。对局首页、棋盘和控件等当前运行界面截图保存在 [`images/current/`](images/current/)；其拍摄时间、应用提交、Chrome 版本、视口与哈希见 [当前界面清单](images/current/manifest.json)。截图不记录真实服务器地址、Cookie、密钥或录音。
 
 ## 图片对应的实际流程
 

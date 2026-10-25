@@ -5,7 +5,9 @@
 
 **一起飞**是一款面向家庭的语音飞行棋：支持同屏和免注册联网对局，灵矽负责自然对话与讲解，Go 服务负责骰子、规则校验和棋局状态。没有语音凭据也能完整点击游玩。
 
-![一起飞当前大棋盘对局页](docs/images/current/play-desktop.png)
+![一起飞产品介绍页首屏，展示家庭飞行棋的产品玩法预览](docs/images/product/product-hero.png)
+
+产品介绍页完整截图：[桌面版](docs/images/product/product-desktop.png) · [手机版](docs/images/product/product-mobile.png) · [截图来源与版本](docs/SCREENSHOTS.md)
 
 ## 产品概览
 
