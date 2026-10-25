@@ -45,3 +45,7 @@ __pycache__/
 
 # Local test and coverage artifacts
 /test-results/
+
+# WeChat Mini Program local app/domain configuration
+/miniprogram/config.js
+/miniprogram/project.private.config.json

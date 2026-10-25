@@ -1,0 +1,39 @@
+page {
+  height: 100%;
+}
+
+.fallback {
+  box-sizing: border-box;
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 32rpx;
+}
+
+.card {
+  width: 100%;
+  padding: 40rpx;
+  border: 1rpx solid #374151;
+  border-radius: 28rpx;
+  background: #1f2937;
+}
+
+.title {
+  margin-bottom: 20rpx;
+  font-size: 38rpx;
+  font-weight: 700;
+}
+
+.message {
+  color: #d1d5db;
+  font-size: 30rpx;
+  line-height: 1.6;
+}
+
+.hint {
+  margin-top: 28rpx;
+  color: #9ca3af;
+  font-size: 24rpx;
+  line-height: 1.5;
+}

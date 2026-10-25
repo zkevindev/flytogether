@@ -1,0 +1,9 @@
+<web-view wx:if="{{url && !issue}}" src="{{url}}" binderror="onWebViewError" />
+
+<view wx:else class="fallback">
+  <view class="card">
+    <view class="title">一起飞暂时无法打开</view>
+    <view class="message">{{issue || '请稍后重试。'}}</view>
+    <view class="hint">如果你是项目维护者，请查看 docs/MINIPROGRAM-PILOT.md。</view>
+  </view>
+</view>

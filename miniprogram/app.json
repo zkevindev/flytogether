@@ -1,0 +1,13 @@
+{
+  "pages": [
+    "pages/game/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "一起飞",
+    "navigationBarBackgroundColor": "#111827",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#111827"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}
