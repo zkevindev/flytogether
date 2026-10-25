@@ -40,7 +40,7 @@ try {
   const setup = hp.getByRole('dialog', { name: '创建家庭房间' });
   await setup.getByRole('checkbox', { name: /多人联网邀请房间/ }).check();
   const toggle = setup.getByRole('checkbox', { name: /添加机器人陪玩/ }); assert.equal(await toggle.isEnabled(), true); await toggle.check();
-  await setup.getByRole('button', { name: '3 位', exact: true }).click(); await setup.getByRole('button', { name: /挑战/ }).click();
+  await setup.getByRole('button', { name: '3 位', exact: true }).click(); await setup.getByRole('button', { name: /^挑战 规划走法/ }).click();
   await setup.getByRole('textbox', { name: '第 1 位飞行员昵称' }).fill('房主');
   await setup.getByText('2 位真人 + 1 位机器人', { exact: false }).waitFor();
   await setup.getByText('灵矽语音助手不占席位', { exact: false }).waitFor();

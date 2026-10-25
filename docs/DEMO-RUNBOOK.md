@@ -1,6 +1,6 @@
 # 演示与发布运行手册（#3）
 
-这份手册用于三天两晚 Hackathon 的现场演示和小版本发布。它不代表没有执行过的噪声、回声、切网或长时间真人监听验收已经通过；这些仍由 [Issue #3](https://github.com/zkevindev/flytogether/issues/3) 跟踪。
+这份手册用于 Hackathon 的现场演示和小版本发布。每次演示前的复选清单是逐场填写模板；自动模拟、用户确认的家庭/实体手机验收与尚未记录的现场专项严格分开。综合矩阵与模拟结果见 [QA-ACCEPTANCE](QA-ACCEPTANCE.md)；真实切网和声学数据只能在对应现场记录表填写。
 
 ## 三分钟产品讲解
 
@@ -16,6 +16,8 @@
 | 2:40–3:00 | 续玩与结算 | 展示首页保存/续玩，或用一局已经自然结束的记录展示统计与回顾卡；手动结束不伪造胜者。 |
 
 ### 开场前准备
+
+以下复选框用于每次正式演示前填写，不表示尚未执行的项目被默认视为已通过。
 
 - [ ] 选用比赛专用测试房间与昵称，不使用家庭真实个人资料；确认演示完可删除测试房间。
 - [ ] 一台主持设备和一台访客/大屏设备已连到同一网络；大屏浏览器不登录主持人的玩家席位。
@@ -48,11 +50,19 @@ python3 scripts/save_backup.py \
 
 脚本拒绝覆盖、使用 SQLite backup API 一并读取 WAL 中已提交数据、执行 `quick_check`，并以 `600` 权限写入。备份输出应位于加密或权限受控的目录；应单独记录备份时间、程序提交和 schema 版本，不把数据库复制到本仓库。
 
+本地隔离恢复演练：
+
+```sh
+python3 scripts/recovery_simulation.py
+```
+
+它会创建含未 checkpoint WAL 数据的临时 SQLite 文件，验证备份包含提交行、完整性为 `ok`、权限是 `600`，并验证拒绝覆盖旧备份。演练不会读取线上数据库或修改本机正式存档。
+
 恢复前须确认使用与备份 schema 兼容的程序版本。服务停止后保留当前 `.db`、`-wal`、`-shm` 现场，再恢复备份、设置服务属主/权限，启动后检查 `/healthz`、`/readyz` 与原浏览器会话。完整恢复命令和身份边界见 [SAVES.md](SAVES.md)。备份不是回滚测试；现场恢复前先在隔离副本演练。
 
 ## 发布与回滚
 
-仓库的 [部署脚本](../scripts/deploy.py) 通过仓库外配置构建并上传版本目录，更新 `current` 符号链接，重启 systemd，并检查本机 `/healthz`。脚本**不会自动回滚**失败版本，也不会自动备份/恢复数据库。公网变更需由已获授权的发布者操作，PR 合并本身不触发部署。
+仓库的 [部署脚本](../scripts/deploy.py) 通过仓库外配置构建并上传版本目录，使用 `current.next` 加 `mv -T` 原子切换 `current` 符号链接，重启 systemd，并检查本机 `/healthz`。脚本**不会自动回滚**失败版本，也不会自动备份/恢复数据库。公网变更需由已获授权的发布者操作，PR 合并本身不触发部署。
 
 发布记录至少保存：
 
@@ -62,25 +72,36 @@ python3 scripts/save_backup.py \
 
 若新程序健康检查失败，不要反复部署或删除数据库。先停止服务并保存故障日志及数据库现场；恢复必须按以下顺序由发布者执行：
 
-1. 确认上一个发布目录和一份与其兼容的数据库备份仍可读。
-2. 停止 `flytogether`，另存当前 `.db`、`-wal` 和 `-shm` 文件；不要在服务运行时覆盖数据库。
-3. 将 `current` 指回上一个已验证的发布目录。若新版本已经升级 schema，先恢复发布前数据库备份；不能让旧程序直接打开新 schema。
-4. 检查数据库属主和 `600` 权限，启动服务，验证 `/healthz` 与 `/readyz`，再用原浏览器确认房间/棋局快照。
-5. 记录回滚提交、数据库备份标识和失败症状；不在公共 Issue 粘贴日志中的凭据或真实玩家资料。
+1. 发布前把 `readlink -f /opt/flytogether/current` 的结果（良好版本目录）和候选提交写入受限发布记录；确认上一个发布目录与兼容数据库备份仍可读。
+2. 若候选程序仍在运行，先 `systemctl stop flytogether`，另存当前 `.db`、`-wal` 和 `-shm` 文件；不要在服务运行时覆盖数据库。
+3. 只回退应用且数据库 schema 兼容时，将 `GOOD_RELEASE` 替换为发布记录中已验证的完整 release 路径，再执行原子软链切换：
+
+   ```sh
+   APP_ROOT=/opt/flytogether
+   GOOD_RELEASE=/opt/flytogether/releases/替换为已验证的版本目录名
+   test -x "$GOOD_RELEASE/server"
+   ln -sfn "$GOOD_RELEASE" "$APP_ROOT/current.next"
+   mv -Tf "$APP_ROOT/current.next" "$APP_ROOT/current"
+   systemctl start flytogether
+   ```
+
+4. 若候选版已升级数据库 schema，必须在服务停止时按 [SAVES.md](SAVES.md) 先保留失败现场、恢复发布前数据库备份，再切换旧版本并启动；不能让旧程序直接打开新 schema。
+5. 检查数据库属主和 `600` 权限，验证 `/healthz` 与 `/readyz`，再用原浏览器确认房间/棋局快照。健康失败时保留日志和数据现场，不循环部署。
+6. 记录回滚提交、release 目录、数据库备份标识和失败症状；不在公共 Issue 粘贴日志中的凭据或真实玩家资料。
 
 回滚会回到备份时刻，之后的对局写入可能不在恢复数据中。当前安装脚本没有自动蓝绿切换、探活失败自动恢复、定期异地备份或自动恢复演练，发布前必须为这些边界留出操作时间。
 
 ## 代码、依赖和素材来源
 
 - 项目采用 MIT License，许可证全文见仓库根目录 [`LICENSE`](../LICENSE)。
-- `web/public/` 当前的项目自有静态文件是 `favicon.svg` 与 `pcm-capture.js`；棋盘、布局和音效由项目代码生成，没有随仓库捆绑的照片、真人录音或外部字体文件。
-- 图标通过 `@phosphor-icons/react` 引入；其他直接/传递依赖以 `web/package-lock.json` 与 `go.mod`、`go.sum` 锁定。它们声明的许可证应在正式分发前导出并复核，必要时随发行包附第三方声明。本仓库当前未生成完整 SBOM/NOTICE 清单。
+- 运行时 Go 模块与前端 production 包的版本、许可标识及上游许可全文已汇总到 [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)，原始依赖版本由 `go.mod`、`go.sum` 和 `web/package-lock.json` 锁定；更改运行时依赖后运行 `python3 scripts/refresh-third-party-notices.py` 刷新归档。
+- `web/public/` 当前的项目自有静态文件是 `favicon.svg` 与 `pcm-capture.js`；棋盘、布局和音效由项目代码生成，没有随仓库捆绑的照片、真人录音或外部字体文件。图标通过已归档许可的 `@phosphor-icons/react` 引入。
 - 灵矽 API 是运行时第三方服务，不随发行包提供其模型或音频资产；使用需遵守服务商的条款与配置边界。API Key 仅由服务端环境配置读取。
 - 新增图片、音效、字体、视频或代码时，在引入 PR 记录原始 URL/仓库、版本/作者、许可证、改动方式和最终文件路径；没有明确授权的素材不得用于公开发行。
 
 ## 自动模拟验收与现场边界
 
-2026-10-24，在本机隔离 Go 服务、独立 SQLite 数据库和 Chrome 中完成可重复模拟。复跑方式：构建前端并启动本机服务，然后执行：
+2026-10-24 至 2026-10-25，在本机隔离 Go 服务、独立 SQLite 数据库和 Chrome 中完成可重复模拟。席位/AI/道具组合矩阵、页面生命周期、长时 PCM 处理、噪声/回声编码边界、WAL 备份及软链回退演练见 [QA-ACCEPTANCE](QA-ACCEPTANCE.md)。复跑方式：构建前端并启动本机服务，然后执行：
 
 ```sh
 QA_BASE_URL=http://127.0.0.1:19096 npm --prefix web run test:lifecycle:simulation

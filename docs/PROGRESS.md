@@ -1,7 +1,7 @@
 # 一起飞 · 项目进展
 
 - 更新日期：2026-10-25（Asia/Shanghai）
-- 当前阶段：P1陪玩风格/频率、亲子/经典预设与按需棋盘已部署；用户确认亲子/实体手机完成；家庭档案/真实跨局历史已交付；轻量棋盘/减少动画/键盘首版已交付；星河救援合作挑战已合并；玩法平衡继续收集真实家庭反馈
+- 当前阶段：P1与星河救援已交付；Issue #62 已完成；正在通过 #69 收尾组合回归矩阵、隔离稳定性模拟、备份与发布回滚演练
 - 比赛安排：三天两晚，一人开发
 - 公开仓库：[zkevindev/flytogether](https://github.com/zkevindev/flytogether)
 
@@ -11,9 +11,10 @@
 | --- | --- | --- | --- |
 | M1：Realtime 语音接入 | [#1](https://github.com/zkevindev/flytogether/issues/1) | 已验证 Bearer 鉴权、合成中文语音查询、掷骰和实际选子起飞 | 直接提交 main，未创建 PR |
 | M2：家庭飞行棋玩法 | [#2](https://github.com/zkevindev/flytogether/issues/2) | 点击玩法和三种棋盘已同步到 main；实际浏览器演示通过 | 本轮直接同步 main，未创建 PR；后续改动按切片关联 |
-| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | PR #58 已合并；浏览器断网恢复、可见性事件和 30 分钟累计回复队列模拟已完成；真实手机切网/后台/声学与灵矽长连仍待现场 | [PR #58](https://github.com/zkevindev/flytogether/pull/58) · merge `802c893` · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
+| M3：试玩与比赛交付 | [#3](https://github.com/zkevindev/flytogether/issues/3) | 已关闭；真实亲子/实体手机验收由用户确认完成；细分的蜂窝切换、OS后台和声学数据属于单独现场证据 | [PR #58](https://github.com/zkevindev/flytogether/pull/58) · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 | 产品化 1.0 | [#17](https://github.com/zkevindev/flytogether/issues/17) | 星河救援合作挑战和首轮试玩平衡流程已合并；跨家庭玩法/道具反馈仍在收集 | [PR #59](https://github.com/zkevindev/flytogether/pull/59) · merge `29e4019` · [PLAYTEST-BALANCE](PLAYTEST-BALANCE.md) |
 | 星际救援与 Realtime MCP | [#62](https://github.com/zkevindev/flytogether/issues/62) | 主题、任务卡和观赛进度修复已合并；跨玩法读工具和 session 级工具选择已合并，补充真实调用工具名回归 | [PR #63](https://github.com/zkevindev/flytogether/pull/63) · [PR #64](https://github.com/zkevindev/flytogether/pull/64) · [PR #65](https://github.com/zkevindev/flytogether/pull/65) · [PR #66](https://github.com/zkevindev/flytogether/pull/66) · [PR #67](https://github.com/zkevindev/flytogether/pull/67) · [PR #68](https://github.com/zkevindev/flytogether/pull/68) |
+| 综合验收矩阵与恢复演练 | [#69](https://github.com/zkevindev/flytogether/issues/69) | 本机隔离验收完成：组合矩阵、噪声/回声 PCM 边界模拟、WAL 备份与软链回滚演练；真实现场限制另行标明 | [PR #70](https://github.com/zkevindev/flytogether/pull/70) · [QA-ACCEPTANCE](QA-ACCEPTANCE.md) · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 | 自定义语音唤醒（历史） | [#4](https://github.com/zkevindev/flytogether/issues/4) | 历史验收已完成，当前交互由 #14 直接对话替代 | [a85e63b](https://github.com/zkevindev/flytogether/commit/a85e63b)、[87a0d09](https://github.com/zkevindev/flytogether/commit/87a0d09)，直接 main |
 | 棋盘重做 | [#5](https://github.com/zkevindev/flytogether/issues/5) | 四角机场、连续彩色航线、中央骰子、放大和手机布局已实现并演示 | 直接 main，提交回链见 Issue |
 | 家庭道具 | [#6](https://github.com/zkevindev/flytogether/issues/6) | 三种道具、库存、AI 与语音用卡已实现 | [37b1a7c](https://github.com/zkevindev/flytogether/commit/37b1a7c)，界面提交见 Issue |
@@ -38,12 +39,12 @@
 | 起飞卡、加速卡、幸运骰 | 规则和真实语音已验证 | 语音用起飞卡后实际掷 1 点并起飞；幸运骰 4/3 取 4；加速卡按真实点数 +2 生成合法走法 |
 | 星河救援合作挑战 | 已合并并完成自动试玩 | 2～4 席各送达一架后全队获胜；同屏、邀请、战绩、观赛、语音与回顾卡一致；[试玩/平衡记录](PLAYTEST-BALANCE.md) |
 | 真实家庭试玩与实体手机 | 已由用户确认完成 | 用户 2026-10-24 明确确认，详见 #3/#17 |
-| 专项稳定性与三分钟比赛交付 | 模拟项已完成；现场项继续跟踪 | 浏览器断网恢复、页面可见性事件、累计 30 分钟合成回复压力测试已通过；真实手机后台挂起、Wi-Fi/蜂窝切换、声学环境及真实灵矽长连仍需现场记录，详见 [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
+| 专项稳定性与三分钟比赛交付 | 自动模拟与手册已完成；现场信号质量可按需补录 | 本地隔离服务完成真人/AI/道具矩阵、离线恢复、页面可见性、噪声/回声 PCM 帧与 30 分钟合成队列模拟；真实 OS 后台冻结、运营商切网、声学识别仍需现场设备才能验证，详见 [QA-ACCEPTANCE](QA-ACCEPTANCE.md) |
 
 ## 当前下一步
 
 1. 显示/键盘首版已交付，继续收集规则和道具配比反馈，按需选择下一种玩法。
-2. #3 跟踪长时间、切网与噪声专项及比赛交付资料；真实亲子和实体手机已由用户确认完成。
+2. #69 收尾综合矩阵和恢复流程；专项真实蜂窝/OS后台/声学量化不是自动化验收的前提，若实际测量则按 QA 手册记录设备和边界。
 3. 每个可验收改动单独开分支和 PR；合并后更新 Issue，部署与截图同步维护。
 
 灵矽密钥不能进入仓库、浏览器构建产物或聊天记录。服务器地址、SSH 凭据和真实部署域名均保存在仓库外的本机配置中。
@@ -76,9 +77,10 @@
 - [x] 起飞缺少有效骰子时不修改棋局，回复说明需要先掷骰子。
 - [x] 自定义唤醒词可保存并在刷新后恢复，不重新开局。
 - [x] 默认和自定义唤醒、唤醒前无操作、连续对话、30 秒超时和手动待唤醒通过合成音频联调。
-- [ ] 浏览器真实麦克风、扬声器播放和 VAD 打断通过试玩。
-- [ ] 断线、重连、新局及迟到响应在真实语音环境通过联调。
-- [ ] 完成家庭试玩及比赛演示。
+- [x] 浏览器真实麦克风、扬声器播放和播报中插话通过用户实机试玩；用户确认旧播报停止并回答当前玩家。
+- [x] 真实平台断线重连、语音动作提交与受控迟到事件隔离已联调；另有离线/可见性/音频暂停模拟。
+- [x] 家庭试玩及实体手机验收已由用户确认；三分钟比赛讲解与无语音点击备用流程写入手册。
+- [ ] 实际比赛现场演示与运营商切网、OS后台冻结、真实噪声/回声/说话距离的定量记录：设备现场项，不由模拟脚本代填。
 
 ## 语音回归方法与范围
 

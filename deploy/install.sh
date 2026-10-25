@@ -18,7 +18,8 @@ tar -xzf "$RELEASE_ARCHIVE" -C "$APP_ROOT/releases/$RELEASE_ID"
 find "$APP_ROOT/releases/$RELEASE_ID/web" -type d -exec chmod 755 {} +
 find "$APP_ROOT/releases/$RELEASE_ID/web" -type f -exec chmod 644 {} +
 chmod 755 "$APP_ROOT/releases/$RELEASE_ID/server"
-ln -sfn "$APP_ROOT/releases/$RELEASE_ID" "$APP_ROOT/current"
+ln -sfn "$APP_ROOT/releases/$RELEASE_ID" "$APP_ROOT/current.next"
+mv -Tf "$APP_ROOT/current.next" "$APP_ROOT/current"
 install -d -o flytogether -g flytogether -m 750 /var/lib/flytogether
 
 # Preserve existing Linx credentials while updating only public application settings.

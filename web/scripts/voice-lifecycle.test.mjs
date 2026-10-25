@@ -43,6 +43,17 @@ function setup(getUserMedia){
 async function connected(){const t=setup();const p=t.client.connect();await tick();sockets[0].emit({type:'hello'});await p;return {...t,ws:sockets[0]};}
 const audio=id=>({type:'response.output_audio.delta',response_id:id,delta:'AAAAAA=='});
 
+test('microphone requests mono capture with browser echo and noise processing enabled',async()=>{
+ let constraints;
+ const t=setup(async value=>{constraints=value;return {getTracks:()=>[track]};});
+ const pending=t.client.connect();
+ await tick();
+ assert.deepEqual(constraints,{audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+ sockets[0].emit({type:'hello'});
+ await pending;
+ t.client.disconnect();
+});
+
 test('disconnect while microphone permission is pending stops late stream and never opens a socket',async()=>{
  let release;const pending=new Promise(resolve=>{release=resolve;});const t=setup(()=>pending);
  const p=t.client.connect();await tick();t.client.disconnect();release({getTracks:()=>[track]});await p;
