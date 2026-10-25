@@ -27,6 +27,8 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
       - run: go vet ./...
+      - name: Rehearse isolated save backup and release rollback
+        run: python3 scripts/recovery_simulation.py
       - name: Race tests with statement coverage
         run: |
           mkdir -p test-results
