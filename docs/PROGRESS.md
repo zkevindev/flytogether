@@ -17,7 +17,7 @@
 | 综合验收矩阵与恢复演练 | [#69](https://github.com/zkevindev/flytogether/issues/69) | 已完成并关闭；隔离验收通过，真实现场限制另行标明 | [PR #70](https://github.com/zkevindev/flytogether/pull/70) · [QA-ACCEPTANCE](QA-ACCEPTANCE.md) · [DEMO-RUNBOOK](DEMO-RUNBOOK.md) |
 | README 与文档导航整理 | [#71](https://github.com/zkevindev/flytogether/issues/71) | README、玩家指南、开发指南和目录已整理，链接待 PR 检查 | [PR #72](https://github.com/zkevindev/flytogether/pull/72) · [文档目录](README.md) |
 | README 产品页截图 | [#73](https://github.com/zkevindev/flytogether/issues/73) | README 使用产品页首屏图，并提供桌面/手机完整截图入口 | [PR #74](https://github.com/zkevindev/flytogether/pull/74) · [SCREENSHOTS](SCREENSHOTS.md) |
-| 微信小程序小范围内测入口 | [#75](https://github.com/zkevindev/flytogether/issues/75) | 新增复用现有 H5 的 web-view 壳、本机私有地址配置和体验版/域名/真机验收说明 | 实现分支 `codex/miniprogram-pilot-shell` · PR 待创建 |
+| 微信小程序小范围内测入口 | [#75](https://github.com/zkevindev/flytogether/issues/75) | 新增复用现有 H5 的 web-view 壳、本机私有地址配置和体验版/域名/真机验收说明 | 实现分支 `codex/miniprogram-pilot-shell` · [PR #76](https://github.com/zkevindev/flytogether/pull/76) · CI 已通过 |
 | 自定义语音唤醒（历史） | [#4](https://github.com/zkevindev/flytogether/issues/4) | 历史验收已完成，当前交互由 #14 直接对话替代 | [a85e63b](https://github.com/zkevindev/flytogether/commit/a85e63b)、[87a0d09](https://github.com/zkevindev/flytogether/commit/87a0d09)，直接 main |
 | 棋盘重做 | [#5](https://github.com/zkevindev/flytogether/issues/5) | 四角机场、连续彩色航线、中央骰子、放大和手机布局已实现并演示 | 直接 main，提交回链见 Issue |
 | 家庭道具 | [#6](https://github.com/zkevindev/flytogether/issues/6) | 三种道具、库存、AI 与语音用卡已实现 | [37b1a7c](https://github.com/zkevindev/flytogether/commit/37b1a7c)，界面提交见 Issue |
